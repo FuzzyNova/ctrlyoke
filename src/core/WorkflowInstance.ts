@@ -53,6 +53,7 @@ import {
   WorkflowRuntimeTransition,
   WorkflowSummary,
   type WorktreeRunProjection,
+  type WorktreeCompletionResult,
   DynamicQueueConfig,
   deriveWorkflowFinalStepSummary,
   type RunRef,
@@ -171,6 +172,7 @@ import { CoordinationParticipantRegistry } from "./orchestration/ExecutionRootCo
 import {
   WorktreeManager,
   prepareParentCheckoutForWorktreeChild,
+  type CompleteManagedRunOptions,
   type WorktreeInfo,
   type WorktreeSetupRunner,
 } from "./orchestration/WorktreeManager";
@@ -393,6 +395,14 @@ export class WorkflowInstance
    * script step.
    */
   private activeWorktreeSetupRunner: ScriptProcessRunner | undefined;
+  /**
+   * Armed only while a managed worktree settles (`settleManagedWorktree`).
+   * Stop aborts it so a lane queued behind a sibling's settlement or merge
+   * ends that wait at once instead of after `WORKTREE_MERGE_LEASE_WAIT_MS`.
+   * A stop that arrived before settlement began leaves the settlement alone:
+   * a stopped managed run still lands its work.
+   */
+  private activeWorktreeSettlementAbort: AbortController | undefined;
   /** Deduplicates overlapping eager working-file creation requests */
   private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
@@ -3066,6 +3076,21 @@ export class WorkflowInstance
     // reach it. Kill its process tree first, whichever stop path follows.
     void this.activeWorktreeSetupRunner?.cancel();
 
+    // A lane settling its managed worktree may be queued behind a sibling's
+    // settlement or merge (D4d); end that wait. A run that has already
+    // ended has nothing else to stop, and must not be driven back through
+    // the cancellation path below.
+    const settlementAbort = this.activeWorktreeSettlementAbort;
+    if (settlementAbort) {
+      settlementAbort.abort();
+      if (!ACTIVE_EXECUTION_STATES.has(this.workflowRuntime.status)) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] stop() during managed worktree settlement - ended its wait`
+        );
+        return;
+      }
+    }
+
     // Stopped while a start/resume is still in setup: no step has been
     // dispatched, so nothing is cancelled and nothing is skipped. The current
     // step stays pending for the next Continue; the startup sees the stop
@@ -5491,7 +5516,7 @@ export class WorkflowInstance
 
     if (worktree.mode === WORKTREE_MODES.MANAGED) {
       try {
-        await this.worktreeManager.completeManagedRun(worktree, {
+        await this.settleManagedWorktree(worktree, {
           merge: settlement?.merge === true,
           keep: settlement?.keep === true,
           artifactsClean: true,
@@ -5797,6 +5822,32 @@ export class WorkflowInstance
     return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
   }
 
+  /**
+   * `completeManagedRun` with a stop-abortable wait: while it runs, `stop()`
+   * aborts `activeWorktreeSettlementAbort`, which ends a wait for the
+   * repository-wide mutation lock or a sibling's merge lease (D4d).
+   */
+  private async settleManagedWorktree(
+    worktree: WorktreeInfo,
+    options: Omit<CompleteManagedRunOptions, "signal">
+  ): Promise<WorktreeCompletionResult> {
+    const abort = new AbortController();
+    this.activeWorktreeSettlementAbort = abort;
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] Settling managed worktree ${worktree.branchName} (merge=${options.merge === true})`
+    );
+    try {
+      return await this.worktreeManager.completeManagedRun(worktree, {
+        ...options,
+        signal: abort.signal,
+      });
+    } finally {
+      if (this.activeWorktreeSettlementAbort === abort) {
+        this.activeWorktreeSettlementAbort = undefined;
+      }
+    }
+  }
+
   private async settleActiveExecutionWorktree(
     terminalWorktreeRun: boolean,
     managedTerminalRun: boolean,
@@ -5810,7 +5861,7 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(worktree);
       if (managedTerminalRun) {
         try {
-          await this.worktreeManager.completeManagedRun(worktree, {
+          await this.settleManagedWorktree(worktree, {
             merge:
               this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
               this.worktreeResolution.config.merge === true,

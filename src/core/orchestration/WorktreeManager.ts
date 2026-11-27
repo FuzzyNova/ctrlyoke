@@ -51,6 +51,11 @@ import {
   type WorktreeRootResolution,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import {
+  FileLockAbortedError,
+  FileLockTimeoutError,
+} from "../../utils/FileLockUtils";
+import { waitForRetryDelay } from "../../utils/RetryUtils";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
@@ -390,10 +395,33 @@ export interface WorktreeManagerOptions {
   mergeOperations?: Partial<WorktreeMergeOperations>;
   /** Process-level seam for setup; reporters are supplied by workflow owners. */
   worktreeSetupRunner?: WorktreeSetupRunner;
-  /** Sibling merge-lease wait budget (D4d); tests shrink it. */
+  /**
+   * Sibling merge wait budget (D4d): the merge-lease backoff and a chained
+   * `merge: true` settlement's mutation-lock wait. Tests shrink it.
+   */
   mergeLeaseWaitMs?: number;
-  /** Backoff sleep for the sibling merge-lease wait; tests may fake it. */
-  sleep?: (ms: number) => Promise<void>;
+  /**
+   * Mutation-lock wait for every other settlement; `undefined` keeps the
+   * `withFileLock` default (5 s). Tests shrink it.
+   */
+  mutationLockTimeoutMs?: number;
+  /**
+   * Backoff sleep for the sibling merge-lease wait; tests may fake it. It
+   * should wake early when `signal` aborts; the loop rechecks it after.
+   */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+}
+
+/** The message a settlement or merge reports when its wait was stopped. */
+const STOPPED_WAITING_FOR_SIBLING_MESSAGE =
+  "Stopped while waiting for another lane's settlement or merge into the same checkout; this lane's branch and worktree are kept.";
+
+/** A stop ended the D4d sibling merge-lease wait before the lease was free. */
+class MergeLeaseWaitStoppedError extends Error {
+  constructor() {
+    super(STOPPED_WAITING_FOR_SIBLING_MESSAGE);
+    this.name = "MergeLeaseWaitStoppedError";
+  }
 }
 
 /** First backoff delay of the D4d sibling merge-lease wait; it doubles. */
@@ -401,8 +429,8 @@ const MERGE_LEASE_WAIT_INITIAL_DELAY_MS = 250;
 /** Largest backoff delay of the D4d sibling merge-lease wait. */
 const MERGE_LEASE_WAIT_MAX_DELAY_MS = 2_000;
 
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  await waitForRetryDelay(ms, signal);
 }
 
 export interface WorktreeMergeOperations {
@@ -545,6 +573,18 @@ export interface CompleteManagedRunOptions {
   /** The integration cleanup barrier must pass before Git is touched. */
   artifactsClean?: boolean;
   cleanupMessage?: string;
+  /**
+   * Ends a settlement's waits (the repository-wide mutation lock and the
+   * D4d sibling merge-lease backoff), never an operation already under way.
+   * A wait it ends reports `blocked` and keeps the branch and checkout.
+   */
+  signal?: AbortSignal;
+}
+
+/** Options for {@link WorktreeManager.mergeManagedWorktree}. */
+export interface MergeManagedWorktreeOptions {
+  /** Ends the D4d sibling merge-lease wait; the merge reports `blocked`. */
+  signal?: AbortSignal;
 }
 
 export type WorktreeMergeOutcome = Exclude<
@@ -754,13 +794,15 @@ export class WorktreeManager {
   private readonly mergeOperations: WorktreeMergeOperations;
   private readonly worktreeSetupRunner: WorktreeSetupRunner;
   private readonly mergeLeaseWaitMs: number;
-  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly mutationLockTimeoutMs: number | undefined;
+  private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   public constructor(private readonly options: WorktreeManagerOptions = {}) {
     this.leaseManager = options.leaseManager ?? new ExecutionRootLeaseManager();
     this.now = options.now ?? Date.now;
     this.mergeLeaseWaitMs =
       options.mergeLeaseWaitMs ?? WORKTREE_MERGE_LEASE_WAIT_MS;
+    this.mutationLockTimeoutMs = options.mutationLockTimeoutMs;
     this.sleep = options.sleep ?? defaultSleep;
     this.mergeOperations = {
       fastForward: mergeFastForward,
@@ -1026,6 +1068,9 @@ export class WorktreeManager {
       };
     };
 
+    // Whether the mutation lock was taken: a lock error before then means
+    // this settlement never got its turn, so nothing landed or merged.
+    let mutationLockHeld = false;
     try {
       if (
         info.mode !== WORKTREE_MODES.MANAGED ||
@@ -1047,15 +1092,22 @@ export class WorktreeManager {
       // lane whose `merge: true` lands seconds after another's queues here
       // behind the whole settlement (landing, merge, removal), not only at
       // the merge lease. A delegated merging lane waits the same budget as
-      // the merge-lease wait instead of the 5 s default.
-      const mutationLockOptions =
+      // the merge-lease wait instead of the 5 s default. A stop ends either
+      // wait at once (`options.signal`).
+      const siblingMergeWait = Boolean(
         options.merge && info.delegationChain?.length
-          ? { timeoutMs: this.mergeLeaseWaitMs }
-          : undefined;
+      );
+      const mutationLockOptions = {
+        timeoutMs: siblingMergeWait
+          ? this.mergeLeaseWaitMs
+          : this.mutationLockTimeoutMs,
+        signal: options.signal,
+      };
 
       return await withWorktreeMutationLock(
         commonDirectory,
         async () => {
+          mutationLockHeld = true;
           const record = await this.tryReadRecord(recordPath);
           if (!record || record.branchName !== info.branchName) {
             return blocked(
@@ -1174,7 +1226,9 @@ export class WorktreeManager {
           });
 
           const mergeResult = options.merge
-            ? await this.mergeManagedWorktree(info)
+            ? await this.mergeManagedWorktree(info, {
+                signal: options.signal,
+              })
             : undefined;
           if (mergeResult) {
             await this.persistRuntime({
@@ -1220,6 +1274,22 @@ export class WorktreeManager {
         mutationLockOptions
       );
     } catch (error) {
+      if (
+        !mutationLockHeld &&
+        (error instanceof FileLockAbortedError ||
+          error instanceof FileLockTimeoutError)
+      ) {
+        // Stopped, or out of time, while queued behind another settlement:
+        // nothing landed, and a merging lane's merge did not happen either,
+        // which D4e records as data.
+        return blocked(
+          error instanceof FileLockAbortedError
+            ? STOPPED_WAITING_FOR_SIBLING_MESSAGE
+            : getErrorMessage(error),
+          WORKTREE_BRANCH_STATES.PRESENT,
+          options.merge ? WORKTREE_MERGE_OUTCOMES.BLOCKED : undefined
+        );
+      }
       return blocked(getErrorMessage(error));
     } finally {
       await info.lease?.release().catch(() => undefined);
@@ -1232,7 +1302,8 @@ export class WorktreeManager {
    * reuse the same guarded operation once merge actions are exposed.
    */
   public async mergeManagedWorktree(
-    info: WorktreeInfo
+    info: WorktreeInfo,
+    options: MergeManagedWorktreeOptions = {}
   ): Promise<WorktreeMergeResult> {
     const guard = async (): Promise<string | undefined> => {
       if (!info.targetBranch) {
@@ -1271,25 +1342,31 @@ export class WorktreeManager {
 
     let sourceLease: ExecutionLeaseHandle;
     try {
-      sourceLease = await this.acquireMergeLease({
-        mode: "exclusive-worktree",
-        purpose: EXECUTION_LEASE_PURPOSES.MERGE,
-        stateRoot: info.lease?.stateRoot ?? info.executionWorkspace.stateRoot,
-        executionRoot: info.sourceCheckoutRoot,
-        workflowKey: info.workflowKey,
-        runRef: info.runRef,
-        runner: info.lease?.runner ?? "vscode",
-        instanceId: info.lease?.instanceId ?? crypto.randomUUID(),
-        // D4d rule 1: a child's blocked ancestors' leases on the checkout it
-        // merges into (its parent's) do not refuse the merge. Rule 2 does not
-        // apply, so a sibling still editing that checkout does. No chain (a
-        // top-level run) keeps the fail-fast conflict.
-        ...(delegationChain ? { delegationChain } : {}),
-      });
+      sourceLease = await this.acquireMergeLease(
+        {
+          mode: "exclusive-worktree",
+          purpose: EXECUTION_LEASE_PURPOSES.MERGE,
+          stateRoot: info.lease?.stateRoot ?? info.executionWorkspace.stateRoot,
+          executionRoot: info.sourceCheckoutRoot,
+          workflowKey: info.workflowKey,
+          runRef: info.runRef,
+          runner: info.lease?.runner ?? "vscode",
+          instanceId: info.lease?.instanceId ?? crypto.randomUUID(),
+          // D4d rule 1: a child's blocked ancestors' leases on the checkout it
+          // merges into (its parent's) do not refuse the merge. Rule 2 does not
+          // apply, so a sibling still editing that checkout does. No chain (a
+          // top-level run) keeps the fail-fast conflict.
+          ...(delegationChain ? { delegationChain } : {}),
+        },
+        options.signal
+      );
     } catch (error) {
       return {
         mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
-        message: `Merge blocked: ${getErrorMessage(error)}`,
+        message:
+          error instanceof MergeLeaseWaitStoppedError
+            ? STOPPED_WAITING_FOR_SIBLING_MESSAGE
+            : `Merge blocked: ${getErrorMessage(error)}`,
       };
     }
 
@@ -1316,10 +1393,12 @@ export class WorktreeManager {
    * live lease is another merge lease with the same immediate delegator; it
    * retries with backoff (250 ms, doubling, capped at 2 s) for at most
    * `mergeLeaseWaitMs`, then rethrows the last conflict. Any other conflict
-   * or error is thrown at once, so every other caller stays fail-fast.
+   * or error is thrown at once, so every other caller stays fail-fast. An
+   * abort of `signal` ends the wait with {@link MergeLeaseWaitStoppedError}.
    */
   private async acquireMergeLease(
-    request: ExecutionLeaseRequest
+    request: ExecutionLeaseRequest,
+    signal: AbortSignal | undefined
   ): Promise<ExecutionLeaseHandle> {
     let attempt: () => Promise<ExecutionLeaseHandle> = () =>
       this.leaseManager.acquire(request);
@@ -1344,7 +1423,9 @@ export class WorktreeManager {
             `waited ${this.mergeLeaseWaitMs / 1000}s for a sibling lane's merge. ${error.message}`
           );
         }
-        await this.sleep(Math.min(delay, remaining));
+        if (signal?.aborted) throw new MergeLeaseWaitStoppedError();
+        await this.sleep(Math.min(delay, remaining), signal);
+        if (signal?.aborted) throw new MergeLeaseWaitStoppedError();
         delay = Math.min(delay * 2, MERGE_LEASE_WAIT_MAX_DELAY_MS);
         attempt = error.retry;
       }

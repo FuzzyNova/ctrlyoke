@@ -32,6 +32,7 @@ import {
   bareNameDirectoryRoot,
   previewWorktreePlacement,
   createWorktreeDirectoryName,
+  withWorktreeMutationLock,
 } from "../../utils/WorktreeUtils";
 import {
   EXECUTION_LEASE_PURPOSES,
@@ -1284,6 +1285,190 @@ suite("WorktreeManager", function () {
       assert.ok(files.includes("a.txt") && files.includes("b.txt"));
       assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
     } finally {
+      await release();
+    }
+  });
+
+  /**
+   * Hold the repository-wide worktree mutation lock, as a sibling lane's
+   * settlement does, until `release()`.
+   */
+  async function holdMutationLock(repository: string): Promise<{
+    release: () => Promise<void>;
+  }> {
+    const commonDirectory = await gitCommonDir(repository);
+    assert.ok(commonDirectory, "the repository has a Git common directory");
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => (openGate = resolve));
+    let signalHeld!: () => void;
+    const held = new Promise<void>((resolve) => (signalHeld = resolve));
+    const holder = withWorktreeMutationLock(commonDirectory, async () => {
+      signalHeld();
+      await gate;
+    });
+    await held;
+    return {
+      release: async () => {
+        openGate();
+        await holder;
+      },
+    };
+  }
+
+  /**
+   * A manager whose short mutation-lock timeout is 200 ms, so "longer than
+   * the short timeout" costs a second, not the 5 s default. `mergeLeaseWaitMs`
+   * is far past the suite timeout, so a wait that should have been short, or
+   * should have been stopped, fails the case instead of passing late.
+   */
+  function shortLockManager(parent: string): WorktreeManager {
+    return new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async () => undefined,
+      mutationLockTimeoutMs: SHORT_LOCK_TIMEOUT_MS,
+      mergeLeaseWaitMs: 600_000,
+    });
+  }
+  const SHORT_LOCK_TIMEOUT_MS = 200;
+
+  test("D4d: a merging lane queued behind a sibling holding the mutation lock past the short timeout still lands", async () => {
+    const { parent, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-lock-wait");
+    const lock = await holdMutationLock(repository);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      let settled = false;
+      const settlement = shortLockManager(parent)
+        .completeManagedRun(laneB, { merge: true })
+        .finally(() => (settled = true));
+      // Five times the short timeout: with it, the settlement would already
+      // have ended blocked ("Timed out waiting for lock").
+      await new Promise((resolve) =>
+        setTimeout(resolve, SHORT_LOCK_TIMEOUT_MS * 5)
+      );
+      assert.strictEqual(settled, false, "still queued on the sibling's lock");
+      await lock.release();
+      const result = await settlement;
+      assert.strictEqual(
+        result.landingOutcome,
+        "landed",
+        String(result.message)
+      );
+      assert.strictEqual(
+        result.mergeOutcome,
+        "fast-forward",
+        String(result.message)
+      );
+      assert.ok(
+        gitOutput(repository, "ls-files").split("\n").includes("b.txt")
+      );
+    } finally {
+      await lock.release();
+      await release();
+    }
+  });
+
+  test("D4d: a chained settlement without merge keeps the short mutation-lock timeout", async () => {
+    const { parent, repository, laneA, release } =
+      await parentWithTwoLanes("d4d-lock-no-merge");
+    const lock = await holdMutationLock(repository);
+    try {
+      const result = await shortLockManager(parent).completeManagedRun(laneA, {
+        merge: false,
+      });
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(result.mergeOutcome, undefined);
+      assert.match(result.message ?? "", /Timed out waiting for lock/);
+    } finally {
+      await lock.release();
+      await release();
+    }
+  });
+
+  test("D4d: a top-level settlement with merge keeps the short mutation-lock timeout", async () => {
+    const { parent, repository } = await makeRepository("d4d-lock-chainless");
+    const run = await ensureManaged(manager(parent), repository);
+    const lock = await holdMutationLock(repository);
+    try {
+      const result = await shortLockManager(parent).completeManagedRun(run, {
+        merge: true,
+      });
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(
+        result.mergeOutcome,
+        "blocked",
+        "a merge that never got its turn is recorded as blocked"
+      );
+      assert.match(result.message ?? "", /Timed out waiting for lock/);
+    } finally {
+      await lock.release();
+      await run.lease.release().catch(() => undefined);
+    }
+  });
+
+  test("D4d: stopping a lane queued on the mutation lock ends its wait with the merge blocked", async () => {
+    const { parent, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-lock-abort");
+    const lock = await holdMutationLock(repository);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const updates: string[] = [];
+      const stop = new AbortController();
+      const settlement = new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async (patch) => {
+          updates.push(`${patch.lifecycleState}:${patch.mergeOutcome}`);
+        },
+        mergeLeaseWaitMs: 600_000,
+      }).completeManagedRun(laneB, { merge: true, signal: stop.signal });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      stop.abort();
+      // Awaited while the lock is still held: only the abort can end it.
+      const result = await settlement;
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.strictEqual(result.directoryOutcome, "kept");
+      assert.match(result.message ?? "", /Stopped while waiting/);
+      assert.ok(updates.includes("blocked:blocked"), updates.join(", "));
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+      assert.strictEqual(
+        gitOutput(laneB.worktreePath, "log", "-1", "--format=%s"),
+        "lane b",
+        "the lane's work stays on its branch"
+      );
+    } finally {
+      await lock.release();
+      await release();
+    }
+  });
+
+  test("D4d: stopping a merge waiting on a sibling's merge lease ends the backoff", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-lease-abort");
+    const sibling = await siblingMergeLease(repository, [
+      parentLease.ownerToken,
+    ]);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const stop = new AbortController();
+      // The real backoff sleep: it must wake on the abort, not finish its
+      // delay, and the budget is far past the suite timeout.
+      const merge = new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        mergeLeaseWaitMs: 600_000,
+      }).mergeManagedWorktree(laneB, { signal: stop.signal });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      stop.abort();
+      const result = await merge;
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.match(result.message ?? "", /Stopped while waiting/);
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await sibling.release();
       await release();
     }
   });

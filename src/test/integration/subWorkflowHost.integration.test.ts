@@ -31,7 +31,11 @@ import {
   type WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
-import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
+import {
+  gitCommonDir,
+  setGitTimeoutOverridesForTests,
+} from "../../utils/GitUtils";
+import { withWorktreeMutationLock } from "../../utils/WorktreeUtils";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
@@ -5664,6 +5668,114 @@ suite("Sub-workflow host end to end", () => {
       restoreEnvironmentValues(environment);
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("stopping the parent ends a merging lane's wait for the worktree mutation lock", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-d4d-lock-stop-");
+    // Gate files live outside the repository so they never dirty the
+    // parent's checkout the lane merges into.
+    const gates = makeTempDir("ctrlyoke-d4d-lock-stop-gates-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const log = captureLog();
+    let releaseLock: (() => Promise<void>) | undefined;
+    try {
+      initGitRepository(workspace);
+      // Signals it started, then waits for `<name>-go` before writing.
+      await fs.writeFile(
+        path.join(workspace, "gated-lane.js"),
+        [
+          "const fs = require('fs');",
+          "const path = require('path');",
+          "const [name, gates] = process.argv.slice(2);",
+          "fs.writeFileSync(path.join(gates, name + '-started'), '');",
+          "const timer = setInterval(() => {",
+          "  if (!fs.existsSync(path.join(gates, name + '-go'))) return;",
+          "  clearInterval(timer);",
+          "  fs.writeFileSync(name + '.txt', name);",
+          "}, 20);",
+        ].join("\n")
+      );
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Stopped lane",
+        steps: [
+          inlineLane(
+            "Lane A",
+            `node gated-lane.js a ${JSON.stringify(gates)}`,
+            {
+              worktree: { mode: "managed", merge: true },
+            }
+          ),
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(gates, "a-started"));
+
+      // A sibling's settlement holds the lock from here on.
+      const commonDirectory = await gitCommonDir(workspace);
+      assert.ok(commonDirectory);
+      let openGate!: () => void;
+      const gate = new Promise<void>((resolve) => (openGate = resolve));
+      let signalHeld!: () => void;
+      const held = new Promise<void>((resolve) => (signalHeld = resolve));
+      const holder = withWorktreeMutationLock(commonDirectory, async () => {
+        signalHeld();
+        await gate;
+      });
+      releaseLock = async () => {
+        openGate();
+        await holder;
+      };
+      await held;
+
+      await fs.writeFile(path.join(gates, "a-go"), "");
+      await waitFor("the lane to start settling its worktree", () =>
+        log.lines.some((line) =>
+          line.message.includes("Settling managed worktree")
+        )
+      );
+      await parent.stop();
+      // Awaited while the lock is still held: with no abort the lane would
+      // wait out WORKTREE_MERGE_LEASE_WAIT_MS (120 s), past this test's
+      // own timeout.
+      await execution;
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      const lane = laneChildOf(instances, parent, 0);
+      assert.ok(lane, "the lane has a child instance");
+      const laneWorktree = await worktreeRuntimeOf(lane);
+      assert.strictEqual(laneWorktree.mergeOutcome, "blocked");
+      assert.match(String(laneWorktree.message), /Stopped while waiting/);
+      await assert.rejects(fs.stat(path.join(workspace, "a.txt")), /ENOENT/);
+      assert.ok(
+        !log.lines.some((line) => line.message.includes(STOP_FALLBACK_WARNING)),
+        "stop settled without the 10 s fallback"
+      );
+    } finally {
+      log.restore();
+      await releaseLock?.();
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(gates);
       removeTempDir(`${workspace}.worktrees`);
     }
   });

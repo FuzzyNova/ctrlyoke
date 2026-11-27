@@ -4,6 +4,7 @@ import { isTransientSharingError } from "./AtomicFileUtils";
 import { Log } from "./Log";
 import { NODE_ERROR_CODES } from "../types/DashboardConstants";
 import { getErrnoCode, hasErrnoCode } from "./ErrorUtils";
+import { waitForRetryDelay } from "./RetryUtils";
 
 const LOCK_FILE_EXTENSION = ".lock";
 const RELEASED_LOCK_SUFFIX = ".released";
@@ -11,15 +12,22 @@ const LOCK_TIMEOUT_MS = 5000;
 const LOCK_RETRY_DELAY_MS = 50;
 const LOCK_STALE_MS = 30000;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /** Thrown by {@link withFileLock} when a lock isn't acquired within its timeout. */
 export class FileLockTimeoutError extends Error {
   constructor(lockPath: string) {
     super(`Timed out waiting for lock: ${lockPath}`);
     this.name = "FileLockTimeoutError";
+  }
+}
+
+/**
+ * Thrown by {@link withFileLock} when its `signal` aborts while it waits for
+ * a held lock. The action never ran and nothing is left behind.
+ */
+export class FileLockAbortedError extends Error {
+  constructor(lockPath: string) {
+    super(`Stopped waiting for lock: ${lockPath}`);
+    this.name = "FileLockAbortedError";
   }
 }
 
@@ -55,6 +63,13 @@ export interface FileLockOptions {
   waitWhileHolderAlive?: boolean;
   /** Hard limit for acquisition when waitWhileHolderAlive is enabled. */
   maxWaitMs?: number;
+  /**
+   * Ends the wait for the lock, never the attempt: the first attempt always
+   * runs, so a free lock is taken even with an aborted signal, but once the
+   * lock is found held an abort throws {@link FileLockAbortedError} instead
+   * of retrying until the timeout. It never interrupts the action.
+   */
+  signal?: AbortSignal;
   /** Injectable for tests; nothing in production passes these. */
   open?: (lockPath: string, flags: "wx") => Promise<fs.FileHandle>;
   rename?: (source: string, destination: string) => Promise<void>;
@@ -86,7 +101,8 @@ async function acquireLock(
   ops: LockFileOperations,
   staleMs: number,
   waitWhileHolderAlive: boolean,
-  maxWaitMs: number | undefined
+  maxWaitMs: number | undefined,
+  signal: AbortSignal | undefined
 ): Promise<string> {
   const startTime = Date.now();
   const timeoutAt = startTime + timeoutMs;
@@ -100,8 +116,13 @@ async function acquireLock(
   // for someone else, and the timeout can easily pass during the reclaim's
   // own stat/rename/unlink round trips.
   let reclaimedStaleLock = false;
+  let attempted = false;
 
   while (Date.now() < ceilingAt) {
+    if (attempted && signal?.aborted) {
+      throw new FileLockAbortedError(lockPath);
+    }
+    attempted = true;
     const mayRetryPastTimeout =
       reclaimedStaleLock || (waitWhileHolderAlive && sawLiveHolder);
     reclaimedStaleLock = false;
@@ -123,7 +144,7 @@ async function acquireLock(
       // The lock is being handed over, not denied: wait and retry.
       if (isTransientSharingError(error)) {
         lastSharingError = error;
-        await sleep(LOCK_RETRY_DELAY_MS);
+        await waitForRetryDelay(LOCK_RETRY_DELAY_MS, signal);
         continue;
       }
       if (!hasErrnoCode(error, NODE_ERROR_CODES.EEXIST)) {
@@ -193,7 +214,7 @@ async function acquireLock(
         // Other stat errors shouldn't happen, but continue trying
       }
 
-      await sleep(LOCK_RETRY_DELAY_MS);
+      await waitForRetryDelay(LOCK_RETRY_DELAY_MS, signal);
     }
   }
 
@@ -281,7 +302,8 @@ export async function withFileLock<T>(
     ops,
     staleMs,
     options?.waitWhileHolderAlive ?? false,
-    options?.maxWaitMs
+    options?.maxWaitMs,
+    options?.signal
   );
   const heartbeat = setInterval(() => {
     void ops

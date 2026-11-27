@@ -94,7 +94,11 @@ export interface RetryOptions {
   signal?: AbortSignal;
 }
 
-async function waitForRetryDelay(
+/**
+ * Wait `delayMs`, ending early when `signal` aborts. Resolves `true` when the
+ * full delay elapsed and `false` when the signal ended it; it never rejects.
+ */
+export async function waitForRetryDelay(
   delayMs: number,
   signal?: AbortSignal
 ): Promise<boolean> {

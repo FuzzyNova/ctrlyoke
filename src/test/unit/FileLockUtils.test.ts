@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import {
+  FileLockAbortedError,
   FileLockTimeoutError,
   FileLockUnavailableError,
   withFileLock,
@@ -510,6 +511,94 @@ suite("FileLockUtils", () => {
         }),
         FileLockTimeoutError
       );
+    });
+  });
+
+  suite("signal", () => {
+    /** Hold `target`'s lock until the returned release is called. */
+    async function holdLock(target: string): Promise<() => Promise<void>> {
+      let openGate!: () => void;
+      const gate = new Promise<void>((resolve) => (openGate = resolve));
+      let signalHeld!: () => void;
+      const held = new Promise<void>((resolve) => (signalHeld = resolve));
+      const holder = withFileLock(target, async () => {
+        signalHeld();
+        await gate;
+      });
+      await held;
+      return async () => {
+        openGate();
+        await holder;
+      };
+    }
+
+    test("an abort ends the wait for a held lock without running the action", async () => {
+      const target = tempTarget();
+      const release = await holdLock(target);
+      try {
+        const stop = new AbortController();
+        let ran = false;
+        // The timeout is far past the suite's, so only the abort ends it.
+        const waiter = withFileLock(
+          target,
+          async () => {
+            ran = true;
+          },
+          { timeoutMs: 600_000, signal: stop.signal }
+        );
+        setTimeout(() => stop.abort(), 100);
+        await assert.rejects(waiter, FileLockAbortedError);
+        assert.strictEqual(ran, false);
+        // The holder still owns its lock.
+        await assert.rejects(
+          withFileLock(target, async () => undefined, { timeoutMs: 100 }),
+          FileLockTimeoutError
+        );
+      } finally {
+        await release();
+      }
+      assert.strictEqual(await withFileLock(target, async () => 1), 1);
+    });
+
+    test("an already-aborted signal still takes a free lock but never waits for a held one", async () => {
+      const target = tempTarget();
+      const stop = new AbortController();
+      stop.abort();
+      assert.strictEqual(
+        await withFileLock(target, async () => "free", {
+          signal: stop.signal,
+        }),
+        "free"
+      );
+      const release = await holdLock(target);
+      try {
+        await assert.rejects(
+          withFileLock(target, async () => undefined, {
+            timeoutMs: 600_000,
+            signal: stop.signal,
+          }),
+          FileLockAbortedError
+        );
+      } finally {
+        await release();
+      }
+      await assert.rejects(fs.stat(`${target}.lock`), /ENOENT/);
+    });
+
+    test("an abort after acquisition does not interrupt the action", async () => {
+      const target = tempTarget();
+      const stop = new AbortController();
+      const result = await withFileLock(
+        target,
+        async () => {
+          stop.abort();
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return "finished";
+        },
+        { signal: stop.signal }
+      );
+      assert.strictEqual(result, "finished");
+      await assert.rejects(fs.stat(`${target}.lock`), /ENOENT/);
     });
   });
 });

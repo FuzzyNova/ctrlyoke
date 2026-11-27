@@ -14,7 +14,7 @@ import {
   type GitWorktreeEntry,
   validateBranchName,
 } from "./GitUtils";
-import { withFileLock } from "./FileLockUtils";
+import { withFileLock, type FileLockOptions } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { pathsEqual } from "./PathCasing";
@@ -755,7 +755,7 @@ export async function evaluateWorkspaceEligibility(
 export async function withWorktreeMutationLock<T>(
   commonDirectory: string,
   action: () => Promise<T>,
-  options?: { timeoutMs?: number }
+  options?: Pick<FileLockOptions, "timeoutMs" | "signal">
 ): Promise<T> {
   const resolvedCommonDirectory =
     await resolveThroughNearestExistingAncestor(commonDirectory);
