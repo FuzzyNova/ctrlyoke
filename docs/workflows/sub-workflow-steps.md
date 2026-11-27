@@ -374,6 +374,28 @@ The step goes onto the workflow the dashboard panel is showing:
   the run continues with it.
 - Otherwise it is added to the queue like any other step.
 
+In the dashboard, the same action is in three places. Each one asks for the
+file, through VS Code's file picker in the panel or a workspace file list in
+the browser dashboard, and puts the step on the workflow you are viewing:
+
+- **New → Queue as Sub-workflow…**, while a workflow is open.
+- In the workspace viewer, right-click a workflow file and choose **Queue as
+  Sub-workflow**.
+- In the workflow dropdown, right-click the run you are viewing and choose
+  **Queue Workflow to Run Next…** while it runs, pauses or once it has
+  finished. The item is offered only on that run's row, so open a run before
+  queuing onto it.
+
+To run a file beside the step that is running now instead of after it, choose
+**Run Workflow Alongside Current Step…** from the same right-click menu while
+the run is running. The step joins the parallel group that is running, or
+turns the running step into a new group with `failFast: false`, and follows
+the [parallel sub-workflow rules](#parallel-sub-workflow-steps): a child that
+sets `merge: true` is refused beside a member that edits the run's checkout,
+and a child naming a named worktree already in use fails when it starts. It is
+unavailable while the run is in its final step, or when
+`queue.maxParallelSteps` is 1.
+
 The step's `workflow` path is relative to the workspace when the file is
 inside it (in a multi-root workspace, prefixed with the folder name when the
 file is outside the first folder), and absolute otherwise. ctrlyoke reads the

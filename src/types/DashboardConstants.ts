@@ -5497,6 +5497,42 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
     "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
 } as const;
 
+/**
+ * Dashboard entry points that queue a workflow file as one sub-workflow step
+ * (`APPEND_FILE` with `appendMode: subWorkflow`): the workflow dropdown's row
+ * menu, the New split button and the workspace viewer's file menus.
+ */
+export const SUB_WORKFLOW_QUEUE_LABELS = {
+  queueNext: "Queue Workflow to Run Next…",
+  queueNextTitle:
+    "Pick a workflow file to run as a child run after this run's queued steps",
+  runAlongside: "Run Workflow Alongside Current Step…",
+  runAlongsideTitle:
+    "Pick a workflow file to run as a child run beside the step running now",
+  queueAsSubWorkflow: "Queue as Sub-workflow…",
+  queueAsSubWorkflowTitle:
+    "Add one step that runs a workflow file as a child run, instead of copying its steps",
+  queueFileAsSubWorkflow: "Queue as Sub-workflow",
+  queueFileAsSubWorkflowTitle:
+    "Add one step that runs this file as a child run, instead of copying its steps",
+  pickerTitle: "Queue Workflow File as Sub-workflow",
+  pickerAlongsideTitle: "Run Workflow File Alongside Current Step",
+  pickerAction: "Queue Sub-workflow",
+  pickerAlongsideAction: "Run Alongside",
+  externalRun:
+    "This run is executing in another process; only Run Alongside can reach it",
+} as const;
+
+/**
+ * Why a step cannot be started beside the running one. Shared by the prompt
+ * editor's Run menu and "Run Workflow Alongside Current Step…", which the
+ * backend refuses for the same reasons.
+ */
+export const PARALLEL_DISPATCH_REFUSALS = {
+  finalStep: "The final step can't run in parallel",
+  widthOne: "Parallel width is 1 — raise `queue.maxParallelSteps`",
+} as const;
+
 export const OUTPUT_ACTIVITY_KINDS = {
   TEXT: "text",
   STRUCTURED: "structured",
@@ -5837,6 +5873,7 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
   QUEUE: "queue",
+  QUEUE_SUB_WORKFLOW: "queue-sub-workflow",
   IMPORT_RUN: "import-run",
 } as const;
 

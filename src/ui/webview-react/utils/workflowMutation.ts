@@ -1,9 +1,13 @@
 import { useUiStore } from "../store/uiStore";
 import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
 import {
+  APPEND_MODES,
+  QUEUE_POSITION,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type QueuePosition,
 } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES } from "@/types/messages";
 import { notifyUser } from "@utils/notifyUser";
 
 interface MessageTarget {
@@ -102,4 +106,22 @@ export function postRunLifecycleMutation(
     expectedDescriptorRevision: state.displayedDescriptorRevision,
   });
   return true;
+}
+
+/**
+ * Queue a workflow file as one sub-workflow step on the displayed workflow
+ * (`APPEND_FILE` with `appendMode: subWorkflow`). Without a `filePath` the
+ * extension opens its native file picker; hosted callers pick through
+ * `WorkflowFilePickerModal` first and pass the path.
+ */
+export function postSubWorkflowAppend(
+  target: MessageTarget,
+  options: { filePath?: string; position?: QueuePosition } = {}
+): void {
+  postWorkflowDefinitionMutation(target, {
+    type: MESSAGE_TYPES.APPEND_FILE,
+    ...(options.filePath ? { filePath: options.filePath } : {}),
+    appendMode: APPEND_MODES.SUB_WORKFLOW,
+    position: options.position ?? QUEUE_POSITION.END,
+  });
 }

@@ -3,6 +3,7 @@ import {
   EDITOR_TARGET_KINDS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  PARALLEL_DISPATCH_REFUSALS,
 } from "@root/types/DashboardConstants";
 import { useSteerTargets } from "@hooks/useSteerTargets";
 import {
@@ -21,8 +22,6 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { getStepDraftContent } from "@utils/stepDraftContent";
 
 const NO_STEP_RUNNING = "No step is running";
-const FINAL_STEP_UNSUPPORTED = "The final step can't run in parallel";
-const WIDTH_ONE = "Parallel width is 1 — raise `queue.maxParallelSteps`";
 const WORKFLOW_PAUSING = "Workflow is pausing";
 const NEW_WORKFLOW_TITLE =
   "Starts a separate workflow with default settings and this prompt";
@@ -146,7 +145,7 @@ export function useRunDispatchTargets(
       parallelDisabledReason === undefined &&
       finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP
     ) {
-      parallelDisabledReason = FINAL_STEP_UNSUPPORTED;
+      parallelDisabledReason = PARALLEL_DISPATCH_REFUSALS.finalStep;
     } else if (
       parallelDisabledReason === undefined &&
       activeStepIndices.length === 0
@@ -156,7 +155,7 @@ export function useRunDispatchTargets(
       parallelDisabledReason === undefined &&
       effectiveParallelGroupWidth <= 1
     ) {
-      parallelDisabledReason = WIDTH_ONE;
+      parallelDisabledReason = PARALLEL_DISPATCH_REFUSALS.widthOne;
     }
 
     return {

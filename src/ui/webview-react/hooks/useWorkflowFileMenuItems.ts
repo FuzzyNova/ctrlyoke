@@ -4,13 +4,19 @@ import { sendMessage } from "@messaging/sendMessage";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
+import {
+  postSubWorkflowAppend,
+  postWorkflowDefinitionMutation,
+} from "../utils/workflowMutation";
 import { getCtrlYokeFileKind } from "@root/utils/WorkflowFileKind";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  SUB_WORKFLOW_QUEUE_LABELS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 /**
- * Builds the Run/Load/Queue workflow actions shared by the workspace editor
- * and explorer context menus. Returns no entries for a non-workflow file, so
+ * Builds the Run/Load/Queue/Queue-as-sub-workflow actions shared by the
+ * workspace editor and explorer context menus. Returns no entries for a non-workflow file, so
  * callers can splice the result in unconditionally.
  */
 export function useWorkflowFileMenuItems(): (
@@ -53,6 +59,13 @@ export function useWorkflowFileMenuItems(): (
               type: MESSAGE_TYPES.APPEND_FILE,
               filePath,
             }),
+        },
+        {
+          label: SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflow,
+          icon: "codicon-list-tree",
+          disabled: false,
+          title: SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflowTitle,
+          onClick: () => postSubWorkflowAppend(vscode, { filePath }),
         },
       ];
     },

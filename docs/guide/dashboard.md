@@ -36,9 +36,12 @@ From left to right:
 
 - **New**: start a blank workflow. Its menu also has **New From Template...**,
   **Load from File...**, **Queue from File...** (appends a file's steps to this
-  workflow) and **Duplicate Workflow…**. While you view a run, the last two read
-  **Append and Continue from File...** and **Duplicate This Run as New
-  Workflow…**.
+  workflow), **Queue as Sub-workflow…** (adds one step that runs a file as a
+  child run; see
+  [Queuing a workflow file as a sub-workflow](/workflows/sub-workflow-steps#queuing-a-workflow-file-as-a-sub-workflow))
+  and **Duplicate Workflow…**. While you view a run, **Queue from File...** and
+  **Duplicate Workflow…** read **Append and Continue from File...** and
+  **Duplicate This Run as New Workflow…**.
 - **Save workflow**: save the workflow as a `.ctrlyoke.yaml` or `.ctrlyoke.json`
   file, or as a template.
 - **Undo** and **Redo**: undo edits to the workflow definition. The chevron shows
@@ -251,6 +254,15 @@ Right-click a workflow or run for:
 
 - **New Run (Don't Start)**: create the next run from these steps and settings
   without running it, so you can edit it first.
+- **Queue Workflow to Run Next…**: pick a workflow file and add one step that
+  runs it as a child run after the run's queued steps. A finished, stopped or
+  failed run continues with it. Offered for the run you're viewing while it
+  runs, pauses or once it has finished.
+- **Run Workflow Alongside Current Step…**: pick a workflow file and run it as
+  a child run beside the step running now. Offered for the run you're viewing
+  while it runs; unavailable in its final step or when `queue.maxParallelSteps`
+  is 1. See
+  [Queuing a workflow file as a sub-workflow](/workflows/sub-workflow-steps#queuing-a-workflow-file-as-a-sub-workflow).
 - **Dry Run**: preview exactly what each step would send to its harness,
   without running anything. Offered only for the workflow you're viewing. See
   [Dry Run](/guide/dry-run).

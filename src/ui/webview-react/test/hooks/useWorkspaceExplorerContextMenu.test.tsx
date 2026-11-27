@@ -12,6 +12,11 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { MESSAGE_TYPES } from "@/types/messages";
+import {
+  APPEND_MODES,
+  QUEUE_POSITION,
+  SUB_WORKFLOW_QUEUE_LABELS,
+} from "@root/types/DashboardConstants";
 
 const apiMocks = vi.hoisted(() => ({
   workspaceCopyEntry: vi.fn(),
@@ -97,7 +102,12 @@ describe("useWorkspaceExplorerContextMenu file history", () => {
 });
 
 describe("useWorkspaceExplorerContextMenu workflow actions", () => {
-  const workflowLabels = ["Run Workflow", "Load Workflow", "Queue Workflow"];
+  const workflowLabels = [
+    "Run Workflow",
+    "Load Workflow",
+    "Queue Workflow",
+    SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflow,
+  ];
 
   it("offers workflow actions for a workflow file and loads it", () => {
     render(
@@ -120,6 +130,32 @@ describe("useWorkspaceExplorerContextMenu workflow actions", () => {
     });
   });
 
+  it("queues a workflow file as one sub-workflow step", () => {
+    postMessage.mockClear();
+    render(
+      <TestHarness
+        entry={{
+          name: "verify.ctrlyoke.yaml",
+          path: "flows\\verify.ctrlyoke.yaml",
+          kind: "file",
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflow,
+      })
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: "flows/verify.ctrlyoke.yaml",
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.END,
+    });
+  });
+
   it.each([
     { name: "file.ts", path: "src/file.ts", kind: "file" as const },
     { name: "flows", path: "flows", kind: "directory" as const },
@@ -128,7 +164,7 @@ describe("useWorkspaceExplorerContextMenu workflow actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     for (const label of workflowLabels)
       expect(
-        screen.queryByRole("button", { name: label })
+        screen.queryByRole("menuitem", { name: label })
       ).not.toBeInTheDocument();
   });
 });

@@ -6,7 +6,13 @@ vi.hoisted(() => {
 });
 
 import { WorkflowControls } from "@components/workflow/WorkflowControls";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  APPEND_MODES,
+  MESSAGE_TYPES,
+  QUEUE_POSITION,
+  SUB_WORKFLOW_QUEUE_LABELS,
+} from "@root/types/DashboardConstants";
+import { useWorkflowStore } from "@store/workflowStore";
 
 const postMessage = vi.fn();
 
@@ -53,6 +59,37 @@ describe("WorkflowControls bundle load choice in hosted mode", () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.LOAD_WORKFLOW,
       filePath: "runs/demo.ctrlyokerun/workflow.ctrlyoke.json",
+    });
+  });
+
+  it("queues a picked file as a sub-workflow", () => {
+    useWorkflowStore.setState({ fileName: "/path/to/workflow.yaml" });
+    render(<WorkflowControls />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
+    fireEvent.click(
+      screen.getByRole("option", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflow,
+      })
+    );
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(SUB_WORKFLOW_QUEUE_LABELS.pickerTitle)
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Or enter a path"), {
+      target: { value: "flows/verify.ctrlyoke.yaml" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.pickerAction,
+      })
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: "flows/verify.ctrlyoke.yaml",
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.END,
     });
   });
 });

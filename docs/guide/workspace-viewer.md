@@ -64,8 +64,9 @@ Right-click a file or folder (long-press on a phone) for:
 - **Add File to ctrlyoke** / **Add Directory to ctrlyoke**, which adds a
   reference to the prompt editor
 - **View File History**, which opens the file's commits in Source Control
-- for workflow files: **Run Workflow**, **Load Workflow** and **Queue Workflow**
-  (**Append and Continue Workflow** while you view a run)
+- for workflow files: **Run Workflow**, **Load Workflow**, **Queue Workflow**
+  (**Append and Continue Workflow** while you view a run) and **Queue as
+  Sub-workflow**, which adds one step that runs the file as a child run
 - **Delete**
 
 ::: danger
