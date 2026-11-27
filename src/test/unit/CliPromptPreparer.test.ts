@@ -1773,7 +1773,7 @@ suite("CliPromptPreparer", () => {
         promptIndex: 0,
         allPrompts: [{ prompt: "please inspect files" } as PromptStep],
         resolvePriorContextItems: async () => [
-          { index: 0, text: "hello", detail: "full" },
+          { index: 0, stepKind: "prompt", text: "hello", detail: "full" },
         ],
       } as WorkflowContext,
       { priorContext: "allPrevious" } as any,
@@ -1820,7 +1820,14 @@ suite("CliPromptPreparer", () => {
         ],
         resolvePriorContextItems: async (contexts) => {
           capturedInlineRefCount = contexts.length;
-          return [{ index: 0, text: "prior output", detail: "full" }];
+          return [
+            {
+              index: 0,
+              stepKind: "prompt",
+              text: "prior output",
+              detail: "full",
+            },
+          ];
         },
       } as WorkflowContext,
       undefined,
@@ -1923,7 +1930,12 @@ suite("CliPromptPreparer", () => {
       isSimplePrompt: () => false,
       buildPriorContextXmlFromItems: (items) => {
         assert.deepStrictEqual(items, [
-          { index: 0, text: "prior output", detail: "full" },
+          {
+            index: 0,
+            stepKind: "prompt",
+            text: "prior output",
+            detail: "full",
+          },
         ]);
         return priorContextXml;
       },
@@ -1951,7 +1963,12 @@ suite("CliPromptPreparer", () => {
           { prompt: "continue from prior output" } as PromptStep,
         ],
         resolvePriorContextItems: async () => [
-          { index: 0, text: "prior output", detail: "full" },
+          {
+            index: 0,
+            stepKind: "prompt",
+            text: "prior output",
+            detail: "full",
+          },
         ],
       } as WorkflowContext,
       { priorContext: "allPrevious" } as any,

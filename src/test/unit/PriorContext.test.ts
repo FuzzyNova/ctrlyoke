@@ -20,6 +20,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.PROMPT,
         name: "plan",
         prompt: "plan it",
         text: "answer",
@@ -27,6 +28,7 @@ suite("prior-context XML", () => {
       },
       {
         index: 1,
+        stepKind: "script",
         name: "test",
         text: "pass\n0",
         detail: "full",
@@ -39,6 +41,7 @@ suite("prior-context XML", () => {
       },
       {
         index: 2,
+        stepKind: "prompt" as const,
         text: "final answer",
         detail: "full",
         type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
@@ -162,6 +165,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.PROMPT,
         name: "parent",
         prompt: "parent prompt",
         text: childText,
@@ -180,6 +184,15 @@ suite("prior-context XML", () => {
           },
           children: Array.from({ length: 30 }, (_, index) => ({
             index,
+            stepKind: STEP_TYPES.PROMPT,
+            ...(index === 0
+              ? {
+                  containingRun: {
+                    workflowKey: "child&key",
+                    runRef: 'run"child',
+                  },
+                }
+              : {}),
             name: `child ${index}`,
             prompt: `prompt ${index}`,
             text: childText,
@@ -197,7 +210,7 @@ suite("prior-context XML", () => {
     );
     assert.match(
       xml,
-      /<step index="1" name="child 0" detail="summary" omitted="all"/
+      /<step index="1" name="child 0" detail="summary"[^>]*omitted="all"/
     );
     assert.ok(xml.includes("prompt 29"), "the last child summary is retained");
     assert.ok(!xml.includes('name="lane" detail="summary" omitted="all"'));
@@ -208,6 +221,12 @@ suite("prior-context XML", () => {
     assert.ok(
       omittedChildCount > 0,
       `omitted child count: ${omittedChildCount}`
+    );
+    assert.ok(
+      xml.includes(
+        'readOutput="read_output { run: { workflowKey: child&amp;key, runRef: run&quot;child }, indices: [0] }"'
+      ),
+      xml
     );
   });
 
@@ -233,6 +252,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         detail: "full",
         scriptOutput,
@@ -257,6 +277,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         detail: "full",
         scriptOutput,
@@ -283,6 +304,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         scriptOutput,
         detail: "full",
@@ -310,6 +332,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "prompt",
         text: "ok",
         detail: "full",
         type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
@@ -327,12 +350,18 @@ suite("prior-context XML", () => {
 
   test("leaves steps without a verdict unchanged", () => {
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, prompt: "plan it", text: "answer", detail: "full" },
+      {
+        index: 0,
+        stepKind: "prompt",
+        prompt: "plan it",
+        text: "answer",
+        detail: "full",
+      },
       {
         index: 1,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         scriptOutput,
-        stepKind: STEP_TYPES.SCRIPT,
         detail: "full",
       },
     ]);
@@ -347,6 +376,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "prompt",
         detail: "full",
         transcript: [
           {
@@ -451,6 +481,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "prompt",
         detail: "summary",
         prompt,
         transcript: [
@@ -494,6 +525,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "script",
         detail: "summary",
         scriptOutput: { command: "npm test", stdout, stderr: "", exitCode: 0 },
       },
@@ -516,9 +548,16 @@ suite("prior-context XML", () => {
       ) + 3;
     const fullText = "f".repeat(PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES);
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, name: "full step", text: fullText, detail: "full" },
+      {
+        index: 0,
+        stepKind: "prompt",
+        name: "full step",
+        text: fullText,
+        detail: "full",
+      },
       ...Array.from({ length: stepCount }, (_, offset) => ({
         index: offset + 1,
+        stepKind: "prompt" as const,
         name: `step ${offset + 1}`,
         prompt: `prompt ${offset + 1}`,
         text: stepText,
@@ -552,12 +591,14 @@ suite("prior-context XML", () => {
     const text = "s".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
     const queueItems = Array.from({ length: 30 }, (_, index) => ({
       index,
+      stepKind: STEP_TYPES.PROMPT,
       name: `queue ${index}`,
       text,
       detail: "summary" as const,
     }));
     const finalItems = Array.from({ length: 3 }, (_, index) => ({
       index,
+      stepKind: STEP_TYPES.PROMPT,
       name: `pass ${index}`,
       text,
       detail: "summary" as const,
@@ -576,12 +617,19 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       ...Array.from({ length: 27 }, (_, index) => ({
         index,
+        stepKind: STEP_TYPES.PROMPT,
         name: `addressed ${index}`,
         text,
         detail: "summary" as const,
         importedRun: true,
       })),
-      { index: 0, name: "current", text, detail: "summary" },
+      {
+        index: 0,
+        stepKind: "prompt",
+        name: "current",
+        text,
+        detail: "summary",
+      },
     ]);
 
     assert.match(xml, /name="addressed 0"[^>]*omitted="all"/);

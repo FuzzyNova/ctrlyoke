@@ -4,7 +4,6 @@ import {
   SubWorkflowOutput,
   type WorkflowStepType,
   assertNever,
-  getStepType,
   type FailureKind,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
@@ -88,7 +87,9 @@ export type PriorContextItem = {
   importedRun?: boolean;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
-  stepKind?: WorkflowStepType;
+  stepKind: WorkflowStepType;
+  /** Address of the run that contains this item; present only for nested items. */
+  containingRun?: { workflowKey: string; runRef: string };
   /** Child run output, when its history directory is still available. */
   subWorkflow?: { output: SubWorkflowOutput; children?: PriorContextItem[] };
   workflowPath?: string;
@@ -120,7 +121,7 @@ export interface PriorContextFileChange {
 function summarizePriorContextItem(item: PriorContextItem): PriorContextItem {
   if (item.detail !== PRIOR_CONTEXT_DETAILS.SUMMARY) return item;
   const summary: PriorContextItem = { ...item };
-  const stepKind = getStepType({ type: item.stepKind });
+  const stepKind = item.stepKind;
   switch (stepKind) {
     case STEP_TYPES.WORKFLOW:
       if (item.subWorkflow?.children)
@@ -312,7 +313,7 @@ export function buildPriorContextXmlFromItems(
 
 /** The `<step>` element's attributes, shared by a rendered and an omitted step. */
 function priorContextStepAttributes(item: PriorContextItem): string {
-  const stepKind = getStepType({ type: item.stepKind });
+  const stepKind = item.stepKind;
   let stepTypeAttr = "";
   switch (stepKind) {
     case STEP_TYPES.PROMPT:
@@ -397,9 +398,9 @@ function applySummaryBudget(
     if (total <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES) break;
     const bytes = utf8Bytes(positions[position].xml);
     const item = positions[position].item;
-    const runHint = item.subWorkflow?.output
+    const runHint = item.containingRun
       ? ` readOutput="${escapeXmlAttribute(
-          `read_output { run: { workflowKey: ${item.subWorkflow.output.childWorkflowKey}, runRef: ${item.subWorkflow.output.childRunRef} } }`
+          `read_output { run: { workflowKey: ${item.containingRun.workflowKey}, runRef: ${item.containingRun.runRef} }, indices: [${item.index}] }`
         )}"`
       : "";
     const stub = `<step ${priorContextStepAttributes(item)}${runHint} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
@@ -423,63 +424,75 @@ function renderPriorContextStep(item: PriorContextItem): string {
   const earlierAttempts = item.earlierAttempts
     ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
     : "";
-  if (item.subWorkflow) {
-    const output = item.subWorkflow.output;
-    const attrs = [
-      ["workflow", item.workflowPath],
-      ["workflowKey", output.childWorkflowKey],
-      ["runRef", output.childRunRef],
-      ["outcome", output.outcome.status],
-    ]
-      .filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string"
-      )
-      .map(([name, value]) => ` ${name}="${escapeXmlAttribute(value)}"`)
-      .join("");
-    const worktree = output.worktree
-      ? `<worktree${[
-          ["mode", output.worktree.mode],
-          ["branch", output.worktree.branchName],
-          ["base", output.worktree.baseCommit],
-          ["tip", output.worktree.finalBranchTip],
-          [
-            "filesChanged",
-            output.worktree.changedFileCount === undefined
-              ? undefined
-              : String(output.worktree.changedFileCount),
-          ],
-        ]
-          .filter((entry): entry is [string, string] => entry[1] !== undefined)
-          .map(([key, value]) => ` ${key}="${escapeXmlAttribute(value)}"`)
-          .join("")}/>\n`
-      : "";
-    const merge = output.worktree?.mergeOutcome
-      ? `<merge result="${escapeXmlAttribute(output.worktree.mergeOutcome)}">${(output.worktree.conflictFiles ?? []).map(escapeXmlAttribute).join("\n")}</merge>\n`
-      : "";
-    const children =
-      item.subWorkflow.children?.map(renderPriorContextStep).join("\n") ??
-      // The child's history is gone or unreadable, so no read_output hint:
-      // that call would fail against the same missing run.
-      "<childRunUnavailable/>";
-    return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
-  }
-  if (item.scriptOutput) {
-    const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
-    const stdoutSection = item.scriptOutput.stdout.trim()
-      ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
-      : "";
-    const stderrSection = item.scriptOutput.stderr.trim()
-      ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
-      : "";
-    const exitCodeSection =
-      item.scriptOutput.exitCode !== undefined
-        ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+  switch (item.stepKind) {
+    case STEP_TYPES.WORKFLOW: {
+      if (!item.subWorkflow) return `<step ${attributes}/>`;
+      const output = item.subWorkflow.output;
+      const attrs = [
+        ["workflow", item.workflowPath],
+        ["workflowKey", output.childWorkflowKey],
+        ["runRef", output.childRunRef],
+        ["outcome", output.outcome.status],
+      ]
+        .filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string"
+        )
+        .map(([name, value]) => ` ${name}="${escapeXmlAttribute(value)}"`)
+        .join("");
+      const worktree = output.worktree
+        ? `<worktree${[
+            ["mode", output.worktree.mode],
+            ["branch", output.worktree.branchName],
+            ["base", output.worktree.baseCommit],
+            ["tip", output.worktree.finalBranchTip],
+            [
+              "filesChanged",
+              output.worktree.changedFileCount === undefined
+                ? undefined
+                : String(output.worktree.changedFileCount),
+            ],
+          ]
+            .filter(
+              (entry): entry is [string, string] => entry[1] !== undefined
+            )
+            .map(([key, value]) => ` ${key}="${escapeXmlAttribute(value)}"`)
+            .join("")}/>\n`
         : "";
-    const filesChanged =
-      item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
-        ? `${renderFilesChanged(item.filesChanged)}\n`
+      const merge = output.worktree?.mergeOutcome
+        ? `<merge result="${escapeXmlAttribute(output.worktree.mergeOutcome)}">${(output.worktree.conflictFiles ?? []).map(escapeXmlAttribute).join("\n")}</merge>\n`
         : "";
-    return `<step ${attributes}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
+      const children =
+        item.subWorkflow.children?.map(renderPriorContextStep).join("\n") ??
+        // The child's history is gone or unreadable, so no read_output hint:
+        // that call would fail against the same missing run.
+        "<childRunUnavailable/>";
+      return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
+    }
+    case STEP_TYPES.SCRIPT: {
+      if (item.scriptOutput) {
+        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+        const stdoutSection = item.scriptOutput.stdout.trim()
+          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+          : "";
+        const stderrSection = item.scriptOutput.stderr.trim()
+          ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
+          : "";
+        const exitCodeSection =
+          item.scriptOutput.exitCode !== undefined
+            ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+            : "";
+        const filesChanged =
+          item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+            ? `${renderFilesChanged(item.filesChanged)}\n`
+            : "";
+        return `<step ${attributes}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
+      }
+      break;
+    }
+    case STEP_TYPES.PROMPT:
+      break;
+    default:
+      assertNever(item.stepKind, "renderPriorContextStep");
   }
   const promptSection = item.prompt
     ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`

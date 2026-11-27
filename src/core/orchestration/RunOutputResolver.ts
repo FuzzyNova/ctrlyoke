@@ -17,6 +17,7 @@ import {
   CLI_EVENT_TYPES,
   DIFF_CHANGE_TYPES,
   FINAL_STEP_PHASES,
+  STEP_TYPES,
   PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
@@ -1128,7 +1129,7 @@ export class RunOutputResolver {
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number,
     options: RunOutputProjectionOptions,
-    visitedSubWorkflows: Set<string> = new Set()
+    visitedSubWorkflows?: Set<string>
   ): Promise<PriorContextItem[]> {
     // Steps with no output are skipped when selecting the most recent N, so
     // previous selectors resolve every earlier candidate before selecting.
@@ -1436,7 +1437,7 @@ export class RunOutputResolver {
         const targetKey = outputTargetKey(value.target);
         const common = {
           index,
-          ...(step ? { stepKind: getStepType(step) } : {}),
+          stepKind: step ? getStepType(step) : STEP_TYPES.PROMPT,
           type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
           // Set below, once the latest pass with output is known.
           detail: merged.allFinalStepsDetail,
@@ -1492,7 +1493,10 @@ export class RunOutputResolver {
     return this.resolveSubWorkflowChildren(
       deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]),
       options,
-      visitedSubWorkflows
+      visitedSubWorkflows ??
+        new Set([
+          `${path.basename(path.dirname(path.dirname(manifestPath)))}/${path.basename(path.dirname(manifestPath))}`,
+        ])
     );
   }
 
@@ -1524,10 +1528,21 @@ export class RunOutputResolver {
           item.detail,
           childVisited
         );
+        for (const child of item.subWorkflow.children)
+          child.containingRun = {
+            workflowKey: childWorkflowKey,
+            runRef: childRunRef,
+          };
       } catch (error) {
-        Log.debug(
-          `[RunOutputResolver] Child run unavailable: ${String(error)}`
-        );
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          Log.debug(
+            `[RunOutputResolver] Child run unavailable: ${String(error)}`
+          );
+        } else {
+          Log.warn(
+            `[RunOutputResolver] Child run unreadable: ${String(error)}`
+          );
+        }
       }
     }
     return items;
@@ -1538,7 +1553,7 @@ export class RunOutputResolver {
     manifestPath: string,
     options: RunOutputProjectionOptions,
     detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL,
-    visitedSubWorkflows: Set<string> = new Set()
+    visitedSubWorkflows?: Set<string>
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
     for await (const event of this.stream(manifestPath)) {
@@ -1563,7 +1578,10 @@ export class RunOutputResolver {
       })),
       maxIndex + 1,
       options,
-      visitedSubWorkflows
+      visitedSubWorkflows ??
+        new Set([
+          `${path.basename(path.dirname(path.dirname(manifestPath)))}/${path.basename(path.dirname(manifestPath))}`,
+        ])
     );
   }
 

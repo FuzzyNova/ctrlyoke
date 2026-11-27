@@ -115,9 +115,9 @@ prior context.
 
 When a step needs more detail than prior context includes, call MCP
 `read_output` with the child's `workflowKey` and `runRef` from the workflow
-step metadata. `workflow_status` accepts the same `run` object to list the
-child's steps first. Both tools accept only runs started by this workflow's
-sub-workflow steps, including descendants at any depth; `indices`, `cursor`,
+step's `childRun` metadata. `workflow_status` accepts the same `run` object to list the
+child's steps first. Both tools accept this attached run itself and runs started by
+this workflow's sub-workflow steps, including descendants at any depth; `indices`, `cursor`,
 `limit`, and `tail` work as usual.
 
 ```json

@@ -1,6 +1,7 @@
 import type {
   PromptFile,
   ParsedPromptFile,
+  QueueState,
   RunRef,
   WorkingFileWorktreeRuntime,
   WorkflowKey,
@@ -92,10 +93,10 @@ export interface SubWorkflowResult {
 /** Narrow instance surface needed by SubWorkflowLauncher. */
 export interface SubWorkflowInstance {
   readonly promptQueue: {
-    getState(): import("./CtrlYokeTypes").QueueState;
-    onDidChangeState(
-      listener: (state: import("./CtrlYokeTypes").QueueState) => void
-    ): { dispose(): void };
+    getState(): QueueState;
+    onDidChangeState(listener: (state: QueueState) => void): {
+      dispose(): void;
+    };
     getWorkflowFile(): PromptFile & {
       _runtime?: { worktree?: WorkingFileWorktreeRuntime };
     };

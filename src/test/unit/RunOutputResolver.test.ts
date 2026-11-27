@@ -1359,7 +1359,13 @@ suite("RunOutputResolver", () => {
       11,
       EXECUTION_STATES.COMPLETED,
       1,
-      { workflowName: "grandchild", steps: [{ prompt: "grandchild prompt" }] }
+      {
+        workflowName: "grandchild",
+        steps: [
+          { prompt: "grandchild prompt" },
+          { type: "workflow", workflow: "nested/root.yaml" },
+        ],
+      }
     );
     await recorder.appendEvents(grandchildManifest, [
       {
@@ -1392,6 +1398,19 @@ suite("RunOutputResolver", () => {
             elapsed: 1,
             isStreaming: false,
           },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 14,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          childWorkflowKey: "resolver-workflow" as never,
+          childRunRef: path.basename(runDirectory) as never,
+          outcome: { status: "completed" },
         },
       },
     ]);
@@ -1469,6 +1488,8 @@ suite("RunOutputResolver", () => {
     assert.match(xml, /workflow="waves\/child\.yaml"/);
     assert.ok(!xml.includes("/private/absolute"), xml);
     assert.ok(xml.includes("grandchild response"), xml);
+    assert.ok(xml.includes("<childRunUnavailable/>"), xml);
+    assert.strictEqual(xml.split("grandchild response").length - 1, 1, xml);
     const preview = await PriorContextPreviewBuilder.buildPreview(
       "previous",
       1,

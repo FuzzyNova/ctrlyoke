@@ -1455,6 +1455,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(status.metadata.runDirectory.startsWith(".."), false);
     assert.strictEqual(output.workflowKey, own.workflowKey);
     assert.strictEqual(output.outputs[0].responseText, "own output");
+    const explicitlyAttached = responseJson(
+      await server.invokeTool("read_output", {
+        run: { workflowKey: own.workflowKey, runRef: own.runRef },
+        indices: [0],
+      })
+    );
+    assert.strictEqual(
+      explicitlyAttached.outputs[0].responseText,
+      "own output"
+    );
   });
 
   test("reads child and grandchild output and status through run without changing paging", async () => {
@@ -1471,6 +1481,53 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         stepId: "parent-step",
       },
     });
+    const parentFile = JSON.parse(
+      await fs.readFile(parent.runFilePath, "utf8")
+    ) as WorkingFile;
+    parentFile.steps = [{ type: STEP_TYPES.WORKFLOW, workflow: "child.yaml" }];
+    await writeTrustedRunFile(parent.runFilePath, parentFile);
+    const parentManifest = WorkflowPaths.manifestPath(
+      workspaceRoot,
+      parent.workflowKey,
+      parent.runRef
+    );
+    const recorder = new TimelineRecorder();
+    await recorder.updateManifest(parentManifest, (manifest) => ({
+      ...manifest,
+      workflowId: parent.workflowKey,
+      initialDefinition: {
+        workflowName: "desc-parent",
+        steps: [{ type: STEP_TYPES.WORKFLOW, workflow: "child.yaml" }],
+      },
+    }));
+    await recorder.appendEvents(parentManifest, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 1,
+        definitionRevision: 1,
+        payload: {
+          kind: "ai",
+          startReason: "initial",
+          prompt: "sub-workflow",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 2,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 1,
+        definitionRevision: 1,
+        payload: {
+          childWorkflowKey: child.workflowKey,
+          childRunRef: child.runRef,
+          outcome: { status: "completed" },
+        },
+      },
+    ]);
     const grandchild = await createRun(
       "desc-grandchild",
       "2026-02-03T00-00-00-000Z",
@@ -1487,11 +1544,43 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     const status = responseJson(
       await server.invokeTool("workflow_status", {
+        run: { workflowKey: parent.workflowKey, runRef: parent.runRef },
+      })
+    );
+    assert.strictEqual(status.metadata.workflowKey, parent.workflowKey);
+    assert.deepStrictEqual(
+      status.steps[0].childRun,
+      {
+        workflowKey: child.workflowKey,
+        runRef: child.runRef,
+        outcome: { status: "completed" },
+      },
+      JSON.stringify(status.steps[0])
+    );
+    const parentStepOutput = responseJson(
+      await server.invokeTool("read_output", {
+        run: { workflowKey: parent.workflowKey, runRef: parent.runRef },
+        indices: [0],
+      })
+    );
+    assert.ok(
+      parentStepOutput.outputs[0].responseText.includes(
+        `workflowKey="${child.workflowKey}"`
+      )
+    );
+    assert.ok(
+      parentStepOutput.outputs[0].responseText.includes("child response text")
+    );
+    const descendantStatus = responseJson(
+      await server.invokeTool("workflow_status", {
         run: { workflowKey: child.workflowKey, runRef: child.runRef },
       })
     );
-    assert.strictEqual(status.metadata.workflowKey, child.workflowKey);
-    assert.strictEqual(status.steps.length, 2);
+    assert.strictEqual(
+      descendantStatus.metadata.workflowKey,
+      child.workflowKey
+    );
+    assert.strictEqual(descendantStatus.steps.length, 2);
 
     const childOutput = responseJson(
       await server.invokeTool("read_output", {
@@ -1547,10 +1636,43 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
     await assert.rejects(
       () =>
+        server.invokeTool("read_output", {
+          run: { workflowKey: "../outside", runRef: parent.runRef },
+        }),
+      /must be this workflow or a descendant started by one of its sub-workflow steps/
+    );
+    await assert.rejects(
+      () =>
         server.invokeTool("workflow_status", {
           run: { workflowKey: parent.workflowKey, runRef: "bad-run-ref" },
         }),
       /must be this workflow or a descendant started by one of its sub-workflow steps/
+    );
+
+    const finalPhaseChild = await createRun(
+      "scope-final-child",
+      "2026-03-08T00-00-00-000Z",
+      {
+        parentRun: {
+          workflowKey: parent.workflowKey,
+          runRef: parent.runRef,
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex: 0,
+        },
+      }
+    );
+    const finalPhaseOutput = responseJson(
+      await server.invokeTool("read_output", {
+        run: {
+          workflowKey: finalPhaseChild.workflowKey,
+          runRef: finalPhaseChild.runRef,
+        },
+        indices: [0],
+      })
+    );
+    assert.strictEqual(
+      finalPhaseOutput.outputs[0].responseText,
+      "output-scope-final-child"
     );
     await assert.rejects(
       () =>

@@ -39,8 +39,12 @@ import type {
   WorkflowStep,
   WorkingFile,
   CoordinationParticipant,
+  SubWorkflowOutput,
 } from "./types/CtrlYokeTypes";
-import type { WorkflowRunManifest } from "./types/WorkflowTimelineTypes";
+import {
+  TIMELINE_EVENT_TYPES,
+  type WorkflowRunManifest,
+} from "./types/WorkflowTimelineTypes";
 import {
   assertNever,
   getStepType,
@@ -142,6 +146,7 @@ import {
   LOGS_DIR,
   QUEUE_POSITION,
   STEP_TYPES,
+  PRIOR_CONTEXT_DETAILS,
   SCRIPT_STEP_COPY_FIELDS,
   PROMPT_PROPERTIES,
   STEP_STATUS,
@@ -177,6 +182,9 @@ import {
   type ResolvedParallelItem,
 } from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
+import { buildPriorContextXmlFromItems } from "./core/HarnessIntegration";
+import type { PriorContextItem } from "./core/HarnessIntegration";
+import { TimelineRecorder } from "./core/orchestration/TimelineRecorder";
 import { getStepOutputText } from "./utils/StepOutputText";
 import {
   pageOutputText,
@@ -1403,6 +1411,26 @@ export class CtrlYokeMCPServer {
     const workflowExecutionMode =
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
+    const manifestPath = WorkflowPaths.manifestPath(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef
+    );
+    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
+    try {
+      for (const event of await new TimelineRecorder().readEvents(
+        manifestPath
+      )) {
+        if (
+          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+          event.target.kind === FINAL_STEP_PHASES.QUEUE
+        ) {
+          subWorkflowOutputs.set(event.target.stepIndex, event.payload);
+        }
+      }
+    } catch {
+      // The timeline is the durable source; absent history simply omits output metadata.
+    }
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -1437,6 +1465,19 @@ export class CtrlYokeMCPServer {
         model: effective?.model,
         sessionId: isPromptStep(p) ? (p.sessionId ?? null) : null,
         resumeSession: effective?.resumeSession ?? false,
+        ...(getStepType(p) === STEP_TYPES.WORKFLOW &&
+        subWorkflowOutputs.has(index)
+          ? (() => {
+              const output = subWorkflowOutputs.get(index)!;
+              return {
+                childRun: {
+                  workflowKey: output.childWorkflowKey,
+                  runRef: output.childRunRef,
+                  outcome: output.outcome,
+                },
+              };
+            })()
+          : {}),
       };
     });
 
@@ -2133,19 +2174,25 @@ export class CtrlYokeMCPServer {
       runtime.finalStep?.phase
     );
 
+    const attachedAddress = this.requireRunAddress(MCP_READ_OUTPUT_TOOL_NAME);
+    // Parallel sub-workflow members do not exist yet; rounds 6–7 must restrict
+    // a group member to runs its own step started.
+    const groupBoundary =
+      selected.workflowKey === attachedAddress.workflowKey &&
+      selected.runRef === attachedAddress.runRef
+        ? context.groupStartBoundary
+        : undefined;
     const defaultIndices =
-      context.groupStartBoundary === undefined
+      groupBoundary === undefined
         ? allSteps.map((_, i) => i)
-        : allSteps
-            .map((_, i) => i)
-            .filter((index) => index < context.groupStartBoundary!);
+        : allSteps.map((_, i) => i).filter((index) => index < groupBoundary!);
     const requestedIndices: number[] =
       args.indices !== undefined && args.indices.length > 0
         ? args.indices
         : defaultIndices;
     if (
-      context.groupStartBoundary !== undefined &&
-      requestedIndices.some((index) => index >= context.groupStartBoundary!)
+      groupBoundary !== undefined &&
+      requestedIndices.some((index) => index >= groupBoundary)
     ) {
       throw new Error(
         `${MCP_READ_OUTPUT_TOOL_NAME}: group members may only read output before the group's start boundary`
@@ -2178,32 +2225,86 @@ export class CtrlYokeMCPServer {
             .map((stepIndex) => ({ kind: "queue" as const, stepIndex }))
         )
       : new Map();
-    const outputs = requestedIndices
-      .filter((i) => i >= 0 && i < allSteps.length)
-      .map((i) => {
-        const p = allSteps[i];
-        const resolvedOutput = resolved.get(queueTargetKey(i));
-        const fullResponseText = resolvedOutput
-          ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
-          : null;
-        const baseOutput = {
-          index: i,
-          ...stepOutputContent(p),
-          status: stepStatuses[i],
-          responseText: fullResponseText,
-        };
-
-        if (!paging || fullResponseText === null) {
-          return baseOutput;
+    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
+    const manifestPath = WorkflowPaths.manifestPath(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef
+    );
+    try {
+      for (const event of await new TimelineRecorder().readEvents(
+        manifestPath
+      )) {
+        if (
+          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+          event.target.kind === FINAL_STEP_PHASES.QUEUE
+        ) {
+          subWorkflowOutputs.set(event.target.stepIndex, event.payload);
         }
+      }
+    } catch {
+      // The regular output projection below remains available if history is missing.
+    }
+    const outputs = await Promise.all(
+      requestedIndices
+        .filter((i) => i >= 0 && i < allSteps.length)
+        .map(async (i) => {
+          const p = allSteps[i];
+          const resolvedOutput = resolved.get(queueTargetKey(i));
+          let workflowItem: PriorContextItem | undefined;
+          const subWorkflowOutput = subWorkflowOutputs.get(i);
+          if (isSubWorkflowStep(p) && subWorkflowOutput) {
+            let children: PriorContextItem[] | undefined;
+            try {
+              children = await resolver.resolveAllPriorContextItems(
+                WorkflowPaths.manifestPath(
+                  this.workspaceRoot,
+                  subWorkflowOutput.childWorkflowKey,
+                  subWorkflowOutput.childRunRef
+                ),
+                { workspaceRoot: this.workspaceRoot }
+              );
+            } catch {
+              // Shared rendering emits childRunUnavailable for unavailable history.
+            }
+            workflowItem = {
+              index: i,
+              ...(p.name ? { name: p.name } : {}),
+              stepKind: STEP_TYPES.WORKFLOW,
+              detail: PRIOR_CONTEXT_DETAILS.FULL,
+              ...(typeof p.workflow === "string"
+                ? { workflowPath: p.workflow }
+                : {}),
+              subWorkflow: {
+                output: subWorkflowOutput,
+                ...(children ? { children } : {}),
+              },
+            };
+          }
+          const fullResponseText = workflowItem
+            ? buildPriorContextXmlFromItems([workflowItem])
+            : resolvedOutput
+              ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
+              : null;
+          const baseOutput = {
+            index: i,
+            ...stepOutputContent(p),
+            status: stepStatuses[i],
+            responseText: fullResponseText,
+          };
 
-        const page = pageOutputText(fullResponseText, paging);
-        return {
-          ...baseOutput,
-          responseText: page.text,
-          ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
-        };
-      });
+          if (!paging || fullResponseText === null) {
+            return baseOutput;
+          }
+
+          const page = pageOutputText(fullResponseText, paging);
+          return {
+            ...baseOutput,
+            responseText: page.text,
+            ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+          };
+        })
+    );
 
     return {
       content: [
