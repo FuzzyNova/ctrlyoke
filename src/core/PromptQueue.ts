@@ -968,10 +968,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * waiting on, so it re-runs whatever its kind. A finalStep pass needs no
    * rewind; a stopped pass is re-entered at the same `loopIndex`.
    *
-   * A stopped parallel group joins before the run stops, so the step before
-   * `currentIndex` is the group's last member. Its cancelled workflow members
-   * with a recorded child are rewound for the same reason, and the run
-   * re-enters the group, whose settled members are recovered as they are.
+   * A parallel group is re-entered when the run stopped at its join (the
+   * step before `currentIndex` is its last member) or inside it (a host
+   * restart settles every in-flight member CANCELLED and leaves the head
+   * within the group). Either way the decision is read from persisted state
+   * alone: the group's cancelled members that the rule above re-runs return
+   * to pending — every cancelled member under `anyStepKind`, otherwise only
+   * workflow members with a recorded child — and the run re-enters the group
+   * at its start, whose settled members are recovered as they are.
    */
   public async rewindCancelledStepForContinuation(
     options: { anyStepKind?: boolean } = {}
@@ -979,27 +983,25 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     if (this.stateMachine.status !== EXECUTION_STATES.STOPPED) {
       return false;
     }
-    const index = this.state.currentIndex - 1;
-    const isCancelledChildStep = (candidate: number): boolean => {
-      const candidateStep = this.state.steps[candidate];
-      return (
-        candidateStep !== undefined &&
-        isSubWorkflowStep(candidateStep) &&
-        !!candidateStep._runtime?.childRunRef &&
-        this.state.results[candidate]?.status === STEP_STATUS.CANCELLED
-      );
-    };
-    const group = this.state.parallelGroups.find(
-      (candidate) =>
-        index >= candidate.startIndex && index <= candidate.endIndex
+    const head = this.state.currentIndex;
+    const index = head - 1;
+    const isRewound = (candidate: number): boolean =>
+      options.anyStepKind
+        ? this.state.results[candidate]?.status === STEP_STATUS.CANCELLED
+        : this.isCancelledChildRunStep(candidate);
+    const joinedGroup = this.state.parallelGroups.find(
+      (candidate) => candidate.endIndex === index
     );
-    if (group) {
-      if (group.endIndex !== index) return false;
+    const openGroup = this.state.parallelGroups.find(
+      (candidate) => head >= candidate.startIndex && head <= candidate.endIndex
+    );
+    for (const group of [joinedGroup, openGroup]) {
+      if (!group) continue;
       const members: number[] = [];
       for (let member = group.startIndex; member <= group.endIndex; member++) {
-        if (isCancelledChildStep(member)) members.push(member);
+        if (isRewound(member)) members.push(member);
       }
-      if (members.length === 0) return false;
+      if (members.length === 0) continue;
       this.state.currentIndex = group.startIndex;
       for (const member of members) this.resetStepForRetry(member, false);
       this.emitStateChange();
@@ -1009,9 +1011,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const step = this.state.steps[index];
     if (
       !step ||
-      (options.anyStepKind
-        ? this.state.results[index]?.status !== STEP_STATUS.CANCELLED
-        : !isCancelledChildStep(index))
+      this.state.parallelGroups.some(
+        (group) => index >= group.startIndex && index <= group.endIndex
+      ) ||
+      !isRewound(index)
     ) {
       return false;
     }
@@ -1020,6 +1023,21 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.emitStateChange();
     await this.updateWorkingFile();
     return true;
+  }
+
+  /**
+   * Whether the queue step at `index` is a workflow step whose recorded child
+   * run was cancelled: the persisted shape a top-level continue reattaches
+   * through D6 instead of moving past it.
+   */
+  public isCancelledChildRunStep(index: number): boolean {
+    const step = this.state.steps[index];
+    return (
+      step !== undefined &&
+      isSubWorkflowStep(step) &&
+      !!step._runtime?.childRunRef &&
+      this.state.results[index]?.status === STEP_STATUS.CANCELLED
+    );
   }
 
   /**

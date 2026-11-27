@@ -1249,6 +1249,33 @@ export class WorkflowExecutor {
     return result;
   }
 
+  /** Whether `target` is a queue step inside a parallel group right now. */
+  private isParallelGroupMemberTarget(target: ExecutionTarget): boolean {
+    if (target.kind !== FINAL_STEP_PHASES.QUEUE) return false;
+    return this.promptQueue
+      .getState()
+      .parallelGroups.some(
+        (group) =>
+          target.stepIndex >= group.startIndex &&
+          target.stepIndex <= group.endIndex
+      );
+  }
+
+  /**
+   * Consume the record that `outcome`'s member had its child stopped
+   * directly, marking a CANCELLED outcome to stop the workflow at the join.
+   */
+  private withStopsWorkflowAtJoin(
+    outcome: StepExecutionOutcome
+  ): StepExecutionOutcome {
+    const stopsAtJoin = this.membersStoppingWorkflowAtJoin.delete(
+      getExecutionTargetRunKey(outcome.target)
+    );
+    return stopsAtJoin && outcome.status === PROMPT_TERMINAL_STATUS.CANCELLED
+      ? { ...outcome, stopsWorkflowAtJoin: true }
+      : outcome;
+  }
+
   private getRecoveredGroupOutcome(
     stepIndex: number
   ): StepExecutionOutcome | undefined {
@@ -1256,7 +1283,10 @@ export class WorkflowExecutor {
     if (step?._runtime?.completedAt === undefined) {
       return undefined;
     }
-    return {
+    // A promoted anchor that settled before any group run existed (width 1,
+    // or no live context) hands its direct stop to the group the queue loop
+    // starts next. Across a restart the continue rewind reattaches it instead.
+    return this.withStopsWorkflowAtJoin({
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
       status: step._runtime.terminalStatus ?? PROMPT_TERMINAL_STATUS.COMPLETED,
       ...(step._runtime.failureMessage
@@ -1265,7 +1295,7 @@ export class WorkflowExecutor {
       ...(step._runtime.terminalFailure === false
         ? { terminalFailure: false }
         : {}),
-    };
+    });
   }
 
   private async executeParallelGroup(
@@ -1499,10 +1529,7 @@ export class WorkflowExecutor {
               groupEffectiveWidth: options.effectiveWidth,
             }
           );
-          return this.membersStoppingWorkflowAtJoin.has(runKey) &&
-            outcome.status === PROMPT_TERMINAL_STATUS.CANCELLED
-            ? { ...outcome, stopsWorkflowAtJoin: true }
-            : outcome;
+          return this.withStopsWorkflowAtJoin(outcome);
         } finally {
           this.targetExecutionErrors.delete(runKey);
           this.membersStoppingWorkflowAtJoin.delete(runKey);
@@ -2141,7 +2168,10 @@ export class WorkflowExecutor {
         settlement.promotedGroup.id
       );
       if (promoted && stepId) {
-        await promoted.run.settleAdoptedMember(stepId, outcome);
+        await promoted.run.settleAdoptedMember(
+          stepId,
+          this.withStopsWorkflowAtJoin(outcome)
+        );
         const groupOutcome = await this.finishParallelGroupRun(
           promoted.run,
           promoted.outcome,
@@ -3271,10 +3301,13 @@ export class WorkflowExecutor {
     // the parent (fail-fast, a parent stop) is a sibling cancellation the
     // group already handles, and a lane whose child was stopped directly
     // stops the parent only once its siblings settle and the group joins.
-    const groupMember = preflightMember !== undefined;
+    // Membership is read from the step's group when it settles, not from
+    // `preflightMember`: an ad-hoc promotion's adopted anchor runs on the
+    // sequential path with no preflight, yet is a member like any other.
     const settleCancelled = (
       cancelledBy: SubWorkflowCancellationSource = SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
     ) => {
+      const groupMember = this.isParallelGroupMemberTarget(target);
       if (
         groupMember &&
         cancelledBy === SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD

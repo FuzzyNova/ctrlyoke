@@ -208,7 +208,7 @@ export class ParallelGroupRun<TContext extends object> {
     ) {
       this.failFastTriggered = true;
       await this.closeAdmission();
-      await this.cancelRunning();
+      await this.cancelRunning({ includeAdopted: true });
     } else if (this.runStarted) {
       this.startAvailableWorkers();
     }
@@ -643,11 +643,13 @@ export class ParallelGroupRun<TContext extends object> {
     ) {
       this.failFastTriggered = true;
       await this.closeAdmission();
-      await this.cancelRunning(
-        outcome.target.kind === FINAL_STEP_PHASES.QUEUE
-          ? this.findStepIdForTarget(outcome.target)
-          : undefined
-      );
+      await this.cancelRunning({
+        exceptStepId:
+          outcome.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? this.findStepIdForTarget(outcome.target)
+            : undefined,
+        includeAdopted: true,
+      });
     }
   }
 
@@ -664,12 +666,32 @@ export class ParallelGroupRun<TContext extends object> {
     return undefined;
   }
 
-  private async cancelRunning(exceptStepId?: string): Promise<void> {
+  /**
+   * Cancel the members this run dispatched. Fail-fast also cancels adopted
+   * members: they are siblings like any other, but run outside this run's
+   * abort signal. A stop of the whole workflow already reaches an adopted
+   * member through the path that owns it, so it is not cancelled twice.
+   */
+  private async cancelRunning(
+    options: { exceptStepId?: string; includeAdopted?: boolean } = {}
+  ): Promise<void> {
     this.abortController.abort();
+    const targets = [...this.running.entries()]
+      .filter(([stepId]) => stepId !== options.exceptStepId)
+      .map(([, member]) => member.target);
+    if (options.includeAdopted) {
+      for (const stepId of this.adopted) {
+        const resolved = this.options.resolveStepById(stepId);
+        if (resolved) {
+          targets.push({
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: resolved.stepIndex,
+          });
+        }
+      }
+    }
     await Promise.allSettled(
-      [...this.running.entries()]
-        .filter(([stepId]) => stepId !== exceptStepId)
-        .map(([, member]) => this.options.cancelTarget?.(member.target))
+      targets.map((target) => this.options.cancelTarget?.(target))
     );
   }
 

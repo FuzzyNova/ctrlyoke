@@ -63,6 +63,73 @@ async function startQueueExecution(queue: PromptQueue): Promise<void> {
   }
 }
 
+/** Steps for the group-rewind tests: `before`, a group of two lanes and a prompt member, `after`. */
+function laneGroupQueue(): PromptQueue {
+  const lane = (childRunRef: string) =>
+    ({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "child.ctrlyoke.yaml",
+      _runtime: { childWorkflowKey: "child-key", childRunRef },
+    }) as unknown as NonNullable<PromptFile["steps"]>[number];
+  const queue = new PromptQueue();
+  queue.loadPrompts({
+    steps: [
+      { prompt: "before" },
+      lane("run-2026-11-27T10-00-00-000Z"),
+      lane("run-2026-11-27T10-00-01-000Z"),
+      { prompt: "cancelled prompt member" },
+      { prompt: "after" },
+    ],
+    parallelGroups: [
+      { id: "lanes", startIndex: 1, endIndex: 3, failFast: false },
+    ],
+  });
+  return queue;
+}
+
+const queueTarget = (stepIndex: number) =>
+  ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex }) as const;
+
+/** The group-rewind queue stopped with `before` done and the head at the group. */
+async function stopLaneGroupQueue(
+  settleGroup: (queue: PromptQueue) => Promise<void>
+): Promise<PromptQueue> {
+  const queue = laneGroupQueue();
+  await startQueueExecution(queue);
+  await queue.commitStepOutcomeAndAdvance({
+    target: queueTarget(0),
+    status: PROMPT_TERMINAL_STATUS.COMPLETED,
+  });
+  queue.getRuntimeStateMachine().requestStop();
+  await settleGroup(queue);
+  queue.getRuntimeStateMachine().confirmStopped();
+  await queue.commitRuntimeTransition({ persist: false });
+  return queue;
+}
+
+/** Stopped at the group's join: lane 1 completed, the rest cancelled. */
+function stoppedAtGroupJoin(): Promise<PromptQueue> {
+  return stopLaneGroupQueue(async (queue) => {
+    await queue.commitParallelGroupJoin(queue.getState().parallelGroups[0], [
+      { target: queueTarget(1), status: PROMPT_TERMINAL_STATUS.COMPLETED },
+      { target: queueTarget(2), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+      { target: queueTarget(3), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+    ]);
+  });
+}
+
+/** Stopped inside the group, every member cancelled and the group unjoined. */
+function stoppedInsideGroup(): Promise<PromptQueue> {
+  return stopLaneGroupQueue(async (queue) => {
+    for (const stepIndex of [1, 2, 3]) {
+      await queue.persistStepOutcome({
+        target: queueTarget(stepIndex),
+        status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      });
+    }
+  });
+}
+
 async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
   if (queue.getRuntimeStateMachine().pause()) {
     queue.getRuntimeStateMachine().confirmPaused();
@@ -1870,41 +1937,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("a stopped run re-enters its joined group to rewind the group's cancelled workflow members only", async () => {
-      const lane = (childRunRef: string) =>
-        ({
-          type: STEP_TYPES.WORKFLOW,
-          workflow: "child.ctrlyoke.yaml",
-          _runtime: { childWorkflowKey: "child-key", childRunRef },
-        }) as unknown as NonNullable<PromptFile["steps"]>[number];
-      const stopped = new PromptQueue();
-      stopped.loadPrompts({
-        steps: [
-          { prompt: "before" },
-          lane("run-2026-11-27T10-00-00-000Z"),
-          lane("run-2026-11-27T10-00-01-000Z"),
-          { prompt: "cancelled prompt member" },
-          { prompt: "after" },
-        ],
-        parallelGroups: [
-          { id: "lanes", startIndex: 1, endIndex: 3, failFast: false },
-        ],
-      });
-      await startQueueExecution(stopped);
-      await stopped.commitStepOutcomeAndAdvance({
-        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-        status: PROMPT_TERMINAL_STATUS.COMPLETED,
-      });
-      stopped.getRuntimeStateMachine().requestStop();
-      const group = stopped.getState().parallelGroups[0];
-      const queueTarget = (stepIndex: number) =>
-        ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex }) as const;
-      await stopped.commitParallelGroupJoin(group, [
-        { target: queueTarget(1), status: PROMPT_TERMINAL_STATUS.COMPLETED },
-        { target: queueTarget(2), status: PROMPT_TERMINAL_STATUS.CANCELLED },
-        { target: queueTarget(3), status: PROMPT_TERMINAL_STATUS.CANCELLED },
-      ]);
-      stopped.getRuntimeStateMachine().confirmStopped();
-      await stopped.commitRuntimeTransition({ persist: false });
+      const stopped = await stoppedAtGroupJoin();
       assert.strictEqual(stopped.getState().currentIndex, 4);
 
       assert.strictEqual(
@@ -1931,6 +1964,102 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(
         rewound.steps[1]._runtime?.terminalStatus,
         PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+    });
+
+    test("a run stopped inside its group re-enters it to rewind the cancelled workflow members only", async () => {
+      // The shape a host restart leaves: a lane stopped directly while its
+      // siblings still ran, then every in-flight member settled CANCELLED
+      // with the head still inside the group, which never joined.
+      const queue = await stoppedInsideGroup();
+      assert.strictEqual(queue.getState().currentIndex, 1);
+
+      assert.strictEqual(
+        await queue.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = queue.getState();
+      assert.strictEqual(rewound.currentIndex, 1, "re-enters the group");
+      assert.deepStrictEqual(
+        rewound.results.slice(0, 5).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.CANCELLED,
+          STEP_STATUS.PENDING,
+        ]
+      );
+      for (const [index, childRunRef] of [
+        [1, "run-2026-11-27T10-00-00-000Z"],
+        [2, "run-2026-11-27T10-00-01-000Z"],
+      ] as const) {
+        assert.strictEqual(
+          rewound.steps[index]._runtime?.completedAt,
+          undefined
+        );
+        assert.strictEqual(
+          (rewound.steps[index]._runtime as { childRunRef?: string })
+            ?.childRunRef,
+          childRunRef
+        );
+      }
+    });
+
+    test("a child continued by its parent rewinds every cancelled member of its group, prompt members included", async () => {
+      // Joined: the child stopped at its group's join.
+      const joined = await stoppedAtGroupJoin();
+      assert.strictEqual(
+        await joined.rewindCancelledStepForContinuation({ anyStepKind: true }),
+        true
+      );
+      assert.strictEqual(joined.getState().currentIndex, 1);
+      assert.deepStrictEqual(
+        joined
+          .getState()
+          .results.slice(0, 5)
+          .map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+        ]
+      );
+      assert.strictEqual(
+        joined.getState().steps[3]._runtime?.terminalStatus,
+        undefined
+      );
+
+      // Still inside the group, as a restart leaves it.
+      const open = await stoppedInsideGroup();
+      assert.strictEqual(
+        await open.rewindCancelledStepForContinuation({ anyStepKind: true }),
+        true
+      );
+      assert.strictEqual(open.getState().currentIndex, 1);
+      assert.deepStrictEqual(
+        open
+          .getState()
+          .results.slice(1, 4)
+          .map((result) => result.status),
+        [STEP_STATUS.PENDING, STEP_STATUS.PENDING, STEP_STATUS.PENDING]
+      );
+
+      // A top-level continue of the same joined shape keeps the prompt
+      // member cancelled and rewinds only the workflow member.
+      const topLevel = await stoppedAtGroupJoin();
+      assert.strictEqual(
+        await topLevel.rewindCancelledStepForContinuation(),
+        true
+      );
+      assert.deepStrictEqual(
+        topLevel
+          .getState()
+          .results.slice(1, 4)
+          .map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.PENDING, STEP_STATUS.CANCELLED]
       );
     });
 

@@ -38,6 +38,35 @@ import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInsta
 import { TestWorkflowInstanceRegistryHost } from "../helpers/workflowInstanceRegistryHost";
 
 suite("Sub-workflow host end to end", () => {
+  /**
+   * Per child: whether anything subscribed to its queue state while it was
+   * PAUSED since its latest execution cycle started. The launcher does
+   * exactly that when a cycle ends with the run paused (it waits for the run
+   * to settle), so it marks the moment the launcher chose to keep waiting.
+   */
+  const pausedRunWaiters = new WeakMap<WorkflowInstance, boolean>();
+
+  function trackPausedRunWaits(child: WorkflowInstance): void {
+    let cycleStarted = false;
+    child.onDidStartExecutionCycle(() => {
+      cycleStarted = true;
+      pausedRunWaiters.set(child, false);
+    });
+    const subscribe = child.promptQueue.onDidChangeState;
+    Object.defineProperty(child.promptQueue, "onDidChangeState", {
+      configurable: true,
+      value: (...args: Parameters<typeof subscribe>) => {
+        if (
+          cycleStarted &&
+          child.promptQueue.getState().status === EXECUTION_STATES.PAUSED
+        ) {
+          pausedRunWaiters.set(child, true);
+        }
+        return subscribe(...args);
+      },
+    });
+  }
+
   function buildInstance(
     workspace: string,
     platform: MockPlatform,
@@ -141,6 +170,7 @@ suite("Sub-workflow host end to end", () => {
       ({ ancestorPaths, delegationChain, concurrent }) => {
         concurrentLaunches.push(concurrent);
         const child = createInstance({ ancestorPaths, delegationChain });
+        trackPausedRunWaits(child);
         instances.push(child);
         if (beforeChildLoad) {
           const load = child.loadPromptFile.bind(child);
@@ -467,7 +497,8 @@ suite("Sub-workflow host end to end", () => {
   /**
    * Wait until the child has paused and its execution cycle has ended — the
    * point at which a launcher that settles on the first cycle would fail the
-   * parent step — plus a macrotask for the parent to react.
+   * parent step — and the launcher has reacted by waiting on the paused
+   * run instead of settling (see `trackPausedRunWaits`).
    */
   async function waitForChildPausedCycle(
     child: WorkflowInstance
@@ -477,7 +508,10 @@ suite("Sub-workflow host end to end", () => {
       () => child.promptQueue.getState().status === "paused"
     );
     await child.whenExecutionSettled();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await waitFor(
+      "the launcher to wait on the paused child run",
+      () => pausedRunWaiters.get(child) === true
+    );
   }
 
   function assertStepUnsettled(parent: WorkflowInstance): void {
@@ -2637,25 +2671,98 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  /** `node gate.js <name>` records each run, then exits once <name>-go exists. */
+  async function writeGateScript(workspace: string): Promise<void> {
+    await fs.writeFile(
+      path.join(workspace, "gate.js"),
+      [
+        "const fs = require('fs');",
+        "const name = process.argv[2];",
+        "fs.appendFileSync(name + '-runs', 'ran\\n');",
+        "const timer = setInterval(() => {",
+        "  if (fs.existsSync(name + '-go')) {",
+        "    clearInterval(timer);",
+        "    process.exit(0);",
+        "  }",
+        "}, 25);",
+      ].join("\n")
+    );
+  }
+
+  /** The newest instance running a parent step's recorded child run. */
+  function laneChildOf(
+    instances: readonly WorkflowInstance[],
+    parent: WorkflowInstance,
+    stepIndex: number
+  ): WorkflowInstance | undefined {
+    const childRunRef = childRunRefOf(
+      parent.promptQueue.getState().steps[stepIndex]
+    );
+    return [...instances]
+      .reverse()
+      .find(
+        (instance) =>
+          instance !== parent &&
+          childRunRef !== undefined &&
+          instance.promptQueue.getState().runRef === childRunRef
+      );
+  }
+
+  /**
+   * Wait until each lane's child runs and its gate script (`lanes`, by name)
+   * has started: a stop that lands before the script spawns is not the stop
+   * these tests are about.
+   */
+  async function waitForLanesRunning(
+    workspace: string,
+    instances: readonly WorkflowInstance[],
+    parent: WorkflowInstance,
+    lanes: Readonly<Record<number, string>>
+  ): Promise<void> {
+    const stepIndices = Object.keys(lanes).map(Number);
+    for (const stepIndex of stepIndices) {
+      await waitForFile(path.join(workspace, `${lanes[stepIndex]}-runs`));
+    }
+    await waitFor("every lane attached and running", () =>
+      stepIndices.every(
+        (stepIndex) =>
+          laneChildOf(instances, parent, stepIndex)?.promptQueue.getState()
+            .status === EXECUTION_STATES.RUNNING
+      )
+    );
+  }
+
+  /**
+   * "Run alongside the current step": promote the running step into a group
+   * with `step` and start it beside the anchor, through the same queue and
+   * executor seams `executeEphemeralParallelPrompt` uses.
+   */
+  async function promoteBesideRunningStep(
+    parent: WorkflowInstance,
+    step: Record<string, unknown>,
+    failFast: boolean
+  ): Promise<void> {
+    const insertion = await parent.promptQueue.promoteStepToParallelGroup(
+      parent.promptQueue.getState().currentIndex,
+      step as unknown as WorkflowStep,
+      { failFast }
+    );
+    const join = await parent.workflowExecutor.joinRunningParallelGroup(
+      insertion.stepIndex
+    );
+    assert.ok(join.accepted, JSON.stringify(join));
+  }
+
+  const AFTER_SCRIPT_STEP = {
+    type: "script",
+    script: "node -e \"require('fs').writeFileSync('after','')\"",
+  };
+
   test("stopping one lane's child directly lets its sibling finish, stops the parent at the join, and a continue reattaches that lane", async () => {
     const workspace = makeTempDir("ctrlyoke-parallel-lane-user-stop-");
     const { createInstance, instances } = makeInstanceFactory(workspace);
     try {
-      // `node gate.js <name>` records each run, then exits once <name>-go exists.
-      await fs.writeFile(
-        path.join(workspace, "gate.js"),
-        [
-          "const fs = require('fs');",
-          "const name = process.argv[2];",
-          "fs.appendFileSync(name + '-runs', 'ran\\n');",
-          "const timer = setInterval(() => {",
-          "  if (fs.existsSync(name + '-go')) {",
-          "    clearInterval(timer);",
-          "    process.exit(0);",
-          "  }",
-          "}, 25);",
-        ].join("\n")
-      );
+      await writeGateScript(workspace);
       const parentPath = path.join(workspace, "parent.ctrlyoke.json");
       await writeJson(parentPath, {
         steps: [
@@ -2679,19 +2786,8 @@ suite("Sub-workflow host end to end", () => {
       const execution = parent.executeLoadedPromptFile();
       await waitForFile(path.join(workspace, "a-runs"));
       await waitForFile(path.join(workspace, "b-runs"));
-      const childOf = (stepIndex: number) => {
-        const childRunRef = childRunRefOf(
-          parent.promptQueue.getState().steps[stepIndex]
-        );
-        return [...instances]
-          .reverse()
-          .find(
-            (instance) =>
-              instance !== parent &&
-              childRunRef !== undefined &&
-              instance.promptQueue.getState().runRef === childRunRef
-          );
-      };
+      const childOf = (stepIndex: number) =>
+        laneChildOf(instances, parent, stepIndex);
       await waitFor("both lanes attached and running", () =>
         [0, 1].every(
           (stepIndex) =>
@@ -2800,6 +2896,291 @@ suite("Sub-workflow host end to end", () => {
       );
       await fs.access(path.join(workspace, "after"));
     } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a lane stopped directly before a host restart is reattached when the restarted parent continues", async () => {
+    const workspace = makeTempDir("ctrlyoke-parallel-lane-restart-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeGateScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            parallel: [
+              inlineLane("Sibling lane", "node gate.js b"),
+              inlineLane("Stopped lane", "node gate.js a"),
+            ],
+            failFast: true,
+          },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForLanesRunning(workspace, instances, parent, {
+        0: "b",
+        1: "a",
+      });
+      const laneRunRefs = [0, 1].map((stepIndex) =>
+        childRunRefOf(parent.promptQueue.getState().steps[stepIndex])
+      );
+
+      await withoutStopFallback(() =>
+        laneChildOf(instances, parent, 1)!.stop()
+      );
+      const { workflowKey, runRef, workingFilePath } =
+        parent.promptQueue.getState();
+      const readParentFile = async () =>
+        JSON.parse(await fs.readFile(workingFilePath!, "utf8")) as {
+          definitionRevision?: number;
+          steps: WorkflowStep[];
+        };
+      // The host dies here: the stopped lane's CANCELLED is on disk, its
+      // sibling is still running, and the group never joined.
+      const deadline = Date.now() + 10000;
+      let crashed = await fs.readFile(workingFilePath!, "utf8");
+      while (
+        (JSON.parse(crashed) as { steps: WorkflowStep[] }).steps[1]._runtime
+          ?.terminalStatus !== PROMPT_TERMINAL_STATUS.CANCELLED
+      ) {
+        assert.ok(Date.now() < deadline, "the stopped lane reaches disk");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        crashed = await fs.readFile(workingFilePath!, "utf8");
+      }
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.RUNNING
+      );
+      const crashedSteps = (JSON.parse(crashed) as { steps: WorkflowStep[] })
+        .steps;
+      assert.strictEqual(crashedSteps[0]._runtime?.completedAt, undefined);
+
+      // This process lives on, so end the old host's execution and put back
+      // the run file as the crash left it; a restarted host would reclaim
+      // the dead process's runner lock, so remove it the same way.
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        await execution;
+      });
+      for (const instance of instances) {
+        await instance.whenExecutionSettled();
+        instance.dispose();
+      }
+      await fs.writeFile(workingFilePath!, crashed);
+      await fs.rm(WorkflowPaths.runnerLockPath(workspace, workflowKey!), {
+        force: true,
+      });
+
+      const restarted = createInstance();
+      instances.push(restarted);
+      await fs.writeFile(path.join(workspace, "a-go"), "");
+      await fs.writeFile(path.join(workspace, "b-go"), "");
+      await withoutStopFallback(() =>
+        restarted.executeContinuationAtRun(
+          workflowKey!,
+          runRef!,
+          (JSON.parse(crashed) as { definitionRevision?: number })
+            .definitionRevision ?? 1
+        )
+      );
+
+      const resumed = restarted.promptQueue.getState();
+      assert.strictEqual(
+        resumed.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(resumed.results)
+      );
+      assert.deepStrictEqual(
+        resumed.results.slice(0, 3).map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
+      );
+      // Both lanes reattached to their recorded child runs (D6) and re-ran
+      // the step the stop or the restart interrupted.
+      assert.deepStrictEqual(
+        [0, 1].map((stepIndex) => childRunRefOf(resumed.steps[stepIndex])),
+        laneRunRefs
+      );
+      for (const stepIndex of [0, 1]) {
+        assert.strictEqual(
+          laneChildOf(instances, restarted, stepIndex)?.promptQueue.getState()
+            .status,
+          EXECUTION_STATES.COMPLETED
+        );
+      }
+      for (const lane of ["a", "b"]) {
+        assert.strictEqual(
+          await fs.readFile(path.join(workspace, `${lane}-runs`), "utf8"),
+          "ran\nran\n",
+          lane
+        );
+      }
+      assert.deepStrictEqual(
+        (await readParentFile()).steps
+          .slice(0, 2)
+          .map((step) => step._runtime?.terminalStatus),
+        [PROMPT_TERMINAL_STATUS.COMPLETED, PROMPT_TERMINAL_STATUS.COMPLETED]
+      );
+      await fs.access(path.join(workspace, "after"));
+    } finally {
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
+      await fs.writeFile(path.join(workspace, "b-go"), "").catch(() => {});
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a promoted workflow anchor whose child is stopped directly lets its sibling finish and stops the parent at the join", async () => {
+    const workspace = makeTempDir("ctrlyoke-promoted-anchor-user-stop-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeGateScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [inlineLane("Anchor lane", "node gate.js a"), AFTER_SCRIPT_STEP],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForLanesRunning(workspace, instances, parent, { 0: "a" });
+      await promoteBesideRunningStep(
+        parent,
+        inlineLane("Sibling lane", "node gate.js b"),
+        false
+      );
+      await waitForLanesRunning(workspace, instances, parent, {
+        0: "a",
+        1: "b",
+      });
+      const anchorChild = laneChildOf(instances, parent, 0)!;
+      const siblingChild = laneChildOf(instances, parent, 1)!;
+      const anchorRunRef = anchorChild.promptQueue.getState().runRef;
+
+      await withoutStopFallback(() => anchorChild.stop());
+      await waitFor(
+        "the anchor settles CANCELLED",
+        () =>
+          parent.promptQueue.getState().results[0]?.status ===
+          STEP_STATUS.CANCELLED
+      );
+      // The anchor follows the member rule although it runs on the
+      // sequential path: its sibling keeps running.
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.RUNNING
+      );
+      assert.strictEqual(
+        siblingChild.promptQueue.getState().status,
+        EXECUTION_STATES.RUNNING
+      );
+
+      await fs.writeFile(path.join(workspace, "b-go"), "");
+      await withoutStopFallback(() => execution);
+      const stopped = parent.promptQueue.getState();
+      assert.strictEqual(
+        stopped.status,
+        EXECUTION_STATES.STOPPED,
+        JSON.stringify(stopped.results)
+      );
+      assert.strictEqual(parentStops(), 1, "parent confirmed STOPPED once");
+      assert.deepStrictEqual(
+        stopped.results.slice(0, 3).map((result) => result.status),
+        [STEP_STATUS.CANCELLED, STEP_STATUS.COMPLETED, STEP_STATUS.PENDING]
+      );
+      await assert.rejects(fs.access(path.join(workspace, "after")));
+      assert.deepStrictEqual((await settledOutcomesByStep(parent))[0], {
+        stepIndex: 0,
+        outcome: {
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+          cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+        },
+      });
+
+      await fs.writeFile(path.join(workspace, "a-go"), "");
+      await withoutStopFallback(() => continueParent(parent));
+      const resumed = parent.promptQueue.getState();
+      assert.strictEqual(
+        resumed.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(resumed.results)
+      );
+      assert.strictEqual(childRunRefOf(resumed.steps[0]), anchorRunRef);
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "a-runs"), "utf8"),
+        "ran\nran\n"
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "b-runs"), "utf8"),
+        "ran\n"
+      );
+      await fs.access(path.join(workspace, "after"));
+    } finally {
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
+      await fs.writeFile(path.join(workspace, "b-go"), "").catch(() => {});
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("fail-fast cancels a promoted workflow anchor as a sibling and fails the parent", async () => {
+    const workspace = makeTempDir("ctrlyoke-promoted-anchor-failfast-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeGateScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [inlineLane("Anchor lane", "node gate.js a"), AFTER_SCRIPT_STEP],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForLanesRunning(workspace, instances, parent, { 0: "a" });
+      const anchorChild = laneChildOf(instances, parent, 0)!;
+      await promoteBesideRunningStep(
+        parent,
+        {
+          type: "script",
+          name: "Failing sibling",
+          script: 'node -e "process.exit(1)"',
+        },
+        true
+      );
+      await withoutStopFallback(() => execution);
+
+      const state = parent.promptQueue.getState();
+      // The anchor's cancel came from the group, so the group fails for the
+      // failing member's reason under its onFail instead of stopping.
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.ERROR,
+        JSON.stringify(state.results)
+      );
+      assert.strictEqual(parentStops(), 0);
+      assert.strictEqual(await readExecutionState(parent), "error");
+      assert.strictEqual(
+        anchorChild.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.deepStrictEqual(
+        state.results.slice(0, 2).map((result) => result.status),
+        [STEP_STATUS.CANCELLED, STEP_STATUS.FAILED]
+      );
+      assert.deepStrictEqual((await settledOutcomesByStep(parent))[0], {
+        stepIndex: 0,
+        outcome: {
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+          cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT,
+        },
+      });
+      await assert.rejects(fs.access(path.join(workspace, "after")));
+    } finally {
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
       await disposeAll(instances, workspace);
     }
   });
