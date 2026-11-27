@@ -259,8 +259,10 @@ parent's checkout and a clean-tree check would fail on their siblings' edits.
 While a lane is pending, the agent can change it with `edit_step`: edit its
 prompt and other prompt-step fields, switch it to another preset, or clear
 `worktree` to turn it back into an ordinary prompt step. Setting `worktree` on
-a pending prompt step makes it a lane. Workflow steps the author wrote cannot
-be edited through MCP. `workflow_status` lists a lane as a workflow step with
+a pending prompt step makes it a lane. Any pending workflow step with exactly a
+lane's shape (an inline prompt step with a managed worktree and no `onFail`)
+counts as a lane, whoever wrote it; other workflow steps cannot be edited
+through MCP. `workflow_status` lists a lane as a workflow step with
 its child run, the child's live state and branch while it runs, and its merge
 result once it settles.
 

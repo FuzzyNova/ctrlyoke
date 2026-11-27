@@ -3181,8 +3181,10 @@ export class WorkflowInstance
       // to wait for; the detector belongs to the host, not to this run.
       await confirmStopped();
       // Its integrations' listeners went with them: wake a step still waiting
-      // on a response through the abort path, now that the stop is confirmed,
-      // so it settles as stopped and the executor finishes.
+      // on a response through the abort path, so it settles as stopped and
+      // the executor finishes. (confirmStopped() defers to a group coordinator
+      // when the head is in a group; group members use the group's own signal,
+      // so this abort reaches only a sequential step.)
       this.disposedExecutionAbort.abort();
       this.workflowExecutor.clearResponseWaitState();
       this.startPending = false;

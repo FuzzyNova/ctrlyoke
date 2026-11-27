@@ -591,7 +591,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_EDIT_STEP_TOOL_NAME,
     description:
-      "Change the prompt or configuration of one pending step when you discover that its work needs correction or different settings. A lane queued with worktree { use } is edited like a prompt step: its prompt, name, model and other fields change in place. Set worktree { use } to move a prompt step into its own worktree or switch a lane's preset, and clear worktree to turn a lane back into a plain prompt step. Workflow steps the author wrote cannot be edited here.",
+      "Change the prompt or configuration of one pending step when you discover that its work needs correction or different settings. A lane queued with worktree { use } is edited like a prompt step: its prompt, name, model and other fields change in place. Set worktree { use } to move a prompt step into its own worktree or switch a lane's preset, and clear worktree to turn a lane back into a plain prompt step. Any other workflow step (a file reference, an inline script, a child with onFail or without a managed worktree) cannot be edited here.",
     inputSchema: {
       type: "object",
       properties: {
