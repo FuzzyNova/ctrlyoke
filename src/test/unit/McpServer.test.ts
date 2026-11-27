@@ -79,6 +79,7 @@ import { resolveCoordinationBoardScope } from "../../core/orchestration/Executio
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
 import { materializeMcpConditionPreset } from "../../utils/McpConditionPresetResolver";
 import { MCP_NO_WORKTREE_PRESETS_MESSAGE } from "../../utils/McpWorktreePresetResolver";
+import { MERGE_INTO_SHARED_ROOT_GUIDANCE } from "../../core/ParallelGroupPreflight";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import {
   resolveRetryBudget,
@@ -3513,8 +3514,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       ]
     );
     assert.strictEqual(result.effectiveSettings[0].model, "opus");
-    // The gated sequential lane does not trigger the ungated-step warning.
-    assert.strictEqual(result.warning, undefined);
+    // The gated sequential lane is not warned about; the ungated parallel
+    // lane is, because it has a worktree of its own to gate.
+    assert.match(result.warning, /^Step 2 will run with no end condition/);
 
     // The preset was copied by value: editing it later leaves queued lanes alone.
     persisted.worktreePresets!.lane.setup = "echo changed later";
@@ -3615,6 +3617,339 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(noPresets.runFilePath, "utf8"),
       beforeNone
     );
+  });
+
+  /** Declare the lane presets and the `committed` gate on an existing run. */
+  async function addLanePresets(run: RunFixture): Promise<void> {
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain", operator: "isEmpty" },
+    };
+    workingFile.worktreePresets = {
+      lane: { mode: "managed", merge: true, setup: "npm ci" },
+      solo: { mode: "managed", keep: true },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+  }
+
+  async function readStep(run: RunFixture, index: number) {
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    return workingFile.steps![index];
+  }
+
+  test("edit_step edits a lane's prompt fields, switches its preset, unwraps and wraps it", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-lane");
+    try {
+      await addLanePresets(run);
+      const laneMerge = { mode: "managed", merge: true, setup: "npm ci" };
+      const solo = { mode: "managed", keep: true };
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: 2,
+        steps: [
+          { prompt: "lane work", name: "Lane", worktree: { use: "lane" } },
+        ],
+      });
+      const stepId = (await readStep(run, 2))._runtime?.stepId;
+      assert.ok(stepId);
+
+      // The wrapped prompt fields edit in place; the preset stays.
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: {
+          prompt: "lane work v2",
+          model: "opus",
+          endCondition: { use: "committed" },
+        },
+      });
+      const committedGate = {
+        script: "git status --porcelain",
+        operator: "isEmpty",
+        env: {},
+      };
+      assert.deepStrictEqual(stripStepIds(await readStep(run, 2)), {
+        type: STEP_TYPES.WORKFLOW,
+        name: "Lane",
+        workflow: {
+          prompt: "lane work v2",
+          model: "opus",
+          endCondition: committedGate,
+          worktree: laneMerge,
+        },
+      });
+
+      // Switching presets copies the new one by value and keeps the prompt.
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { worktree: { use: "solo" }, name: "Renamed" },
+        clearProperties: ["model"],
+      });
+      assert.deepStrictEqual(stripStepIds(await readStep(run, 2)), {
+        type: STEP_TYPES.WORKFLOW,
+        name: "Renamed",
+        workflow: {
+          prompt: "lane work v2",
+          endCondition: committedGate,
+          worktree: solo,
+        },
+      });
+
+      // Clearing worktree unwraps the lane into a plain prompt step.
+      const unwrapped = responseJson(
+        await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {},
+          clearProperties: ["worktree"],
+        })
+      );
+      assert.strictEqual(unwrapped.changed, true);
+      assert.deepStrictEqual(stripStepIds(await readStep(run, 2)), {
+        name: "Renamed",
+        prompt: "lane work v2",
+        endCondition: committedGate,
+      });
+      assert.strictEqual((await readStep(run, 2))._runtime?.stepId, stepId);
+
+      // Setting worktree on a pending prompt step wraps it.
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 3,
+        updates: { worktree: { use: "lane" }, prompt: "pending-b as a lane" },
+      });
+      const wrapped = await readStep(run, 3);
+      assert.deepStrictEqual(stripStepIds(wrapped), {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "pending-b as a lane", worktree: laneMerge },
+      });
+      assert.ok(wrapped._runtime?.stepId);
+
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {},
+          clearProperties: ["worktree"],
+        }),
+        /step 2 is not a lane, so it has no worktree to clear/
+      );
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 3,
+          updates: { worktree: { use: "solo" } },
+          clearProperties: ["worktree"],
+        }),
+        /not both/
+      );
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { worktree: { use: "missing" } },
+        }),
+        /unknown worktree preset 'missing'\. Available presets: lane, solo\./
+      );
+      // A lane starts a new run, so wrapping cannot keep a session reference.
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {
+            worktree: { use: "lane" },
+            resumeSession: true,
+            sessionId: 1,
+          },
+        }),
+        /new run boundary/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("edit_step rejects workflow steps that are not agent lanes", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-authored-child");
+    try {
+      await addLanePresets(run);
+      const authored: WorkflowStep[] = [
+        { type: STEP_TYPES.WORKFLOW, workflow: "child.ctrlyoke.yaml" },
+        {
+          type: STEP_TYPES.WORKFLOW,
+          onFail: "continue",
+          workflow: { prompt: "inline", worktree: { mode: "managed" } },
+        },
+        {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: { prompt: "inline", worktree: false },
+        },
+        {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: { type: "script", script: "npm test" },
+        },
+      ] as WorkflowStep[];
+      for (const step of authored) {
+        const workingFile = JSON.parse(
+          await fs.readFile(run.runFilePath, "utf8")
+        ) as WorkingFile;
+        workingFile.steps![2] = step;
+        await writeTrustedRunFile(run.runFilePath, workingFile);
+        const before = await fs.readFile(run.runFilePath, "utf8");
+        for (const args of [
+          { updates: { prompt: "rewritten" } },
+          { updates: { worktree: { use: "lane" } } },
+          { updates: {}, clearProperties: ["worktree"] },
+        ]) {
+          await assert.rejects(
+            server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, ...args }),
+            /step 2 is a workflow step the workflow author wrote, so it cannot be edited through MCP/
+          );
+        }
+        assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+      }
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("append_step warns about ungated flat and parallel lanes, and not when they are gated", async () => {
+    const server = await setup();
+    await createLaneRun("ungated-lanes");
+
+    const ungated = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          { prompt: "gated", endCondition: { use: "committed" } },
+          { prompt: "flat lane", worktree: { use: "lane" } },
+          {
+            parallel: [
+              { prompt: "parallel lane", worktree: { use: "lane" } },
+              { prompt: "shared member" },
+            ],
+          },
+        ],
+      })
+    );
+    // The shared-tree member (step 4) stays unwarned, as parallel members are.
+    assert.strictEqual(
+      ungated.warning,
+      'Steps 2, 3 will run with no end condition, but this workflow declares condition presets: committed. To gate a step, call edit_step with updates.endCondition: { "use": "<name>" }; workflow_status lists each preset under metadata.conditionPresets. Steps 2, 3 are lanes and run in their own worktree, so they should carry an end condition such as { "use": "committed" } that checks the work was committed.'
+    );
+
+    const gated = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "flat lane",
+            worktree: { use: "lane" },
+            endCondition: { use: "committed" },
+          },
+          {
+            parallel: [
+              {
+                prompt: "parallel lane",
+                worktree: { use: "lane" },
+                endCondition: { use: "committed" },
+              },
+              { prompt: "shared member" },
+            ],
+          },
+        ],
+      })
+    );
+    assert.strictEqual(gated.warning, undefined);
+  });
+
+  test("parallelWithCurrent refuses a merge lane beside the running prompt step and admits one without merge", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("lane-join");
+    try {
+      await addLanePresets(run);
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "merging lane", worktree: { use: "lane" } }],
+        }),
+        (error: Error) =>
+          error.message.includes(
+            `parallelWithCurrent was rejected: Step 3 merges into the parent's checkout, which Step 2 edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`
+          )
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      const joined = responseJson(
+        await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "own lane", worktree: { use: "solo" } }],
+        })
+      );
+      assert.strictEqual(joined.destination, "activeParallelGroup");
+      assert.strictEqual((await readStep(run, 2)).type, STEP_TYPES.WORKFLOW);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("workflow_status reports a running lane's child with its live state and branch", async () => {
+    const server = await setup();
+    const run = await createLaneRun("live-lane");
+    const child = await createRun(
+      "live-lane-child",
+      "2026-01-02T00-00-00-000Z",
+      {
+        executionState: EXECUTION_STATES.RUNNING,
+        worktree: {
+          schemaVersion: 1,
+          mode: "managed",
+          origin: "created",
+          branchName: "ctrlyoke/live-lane",
+          worktreePath: "/tmp/live-lane",
+          executionRoot: "/tmp/live-lane",
+          executionCheckoutRoot: "/tmp/live-lane",
+          sourceCheckoutRoot: "/tmp/parent",
+          namedWorkspaceRoots: [],
+          baseCommit: "abc1234",
+          lifecycleOwner: "ctrlyoke",
+          lifecycleState: "ready",
+          directoryState: "present",
+          branchState: "present",
+          updatedAt: 1,
+        },
+      }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      ...workingFile.steps!,
+      {
+        type: STEP_TYPES.WORKFLOW,
+        name: "Lane",
+        workflow: { prompt: "work", worktree: { mode: "managed" } },
+        _runtime: {
+          stepId: "lane",
+          startedAt: 5,
+          childWorkflowKey: child.workflowKey,
+          childRunRef: child.runRef,
+        },
+      } as WorkflowStep,
+    ];
+    workingFile._runtime = { ...workingFile._runtime!, currentIndex: 1 };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.strictEqual(status.steps[1].type, STEP_TYPES.WORKFLOW);
+    assert.deepStrictEqual(status.steps[1].childRun, {
+      workflowKey: child.workflowKey,
+      runRef: child.runRef,
+      executionState: EXECUTION_STATES.RUNNING,
+      worktree: { mode: "managed", branchName: "ctrlyoke/live-lane" },
+    });
   });
 
   test("caps preset retries and validates declared parameter values", async () => {

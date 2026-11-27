@@ -23,7 +23,10 @@ import {
   isScriptStep,
   isSubWorkflowStep,
 } from "../types/CtrlYokeTypes";
-import type { PreparedSubWorkflowLaunch } from "../types/SubWorkflowTypes";
+import type {
+  PreparedSubWorkflowLaunch,
+  SubWorkflowWorktreePlan,
+} from "../types/SubWorkflowTypes";
 import type {
   ExecutionPropertyDefaults,
   ResolvedExecutionTarget,
@@ -200,7 +203,7 @@ function memberList(workflow: PromptFile, indices: readonly number[]): string {
 }
 
 /** How a member uses the parent's checkout, for `MERGE_INTO_SHARED_ROOT`. */
-interface ParentCheckoutUse {
+export interface ParentCheckoutUse {
   /** The member edits the parent's checkout while it runs. */
   readonly edits: boolean;
   /** The member's child merges its worktree into the parent's checkout. */
@@ -213,34 +216,83 @@ const NO_PARENT_CHECKOUT_USE: ParentCheckoutUse = {
 };
 
 /**
- * A prompt or script member runs in the parent's root. A sub-workflow member
- * is classified from its child's `worktree` key (D4): the prepared launch's
- * plan, or for an inline child without one (a preview) its authored
- * definition. A file child that was never parsed, and any member that fails
- * alone before it runs, uses nothing.
+ * How one step uses the parent's checkout. A prompt or script step runs in the
+ * parent's root. A sub-workflow step is classified from its child's
+ * `worktree` key (D4): `plan` when the child was prepared, otherwise, for an
+ * inline child, its authored definition. A file child that was never parsed
+ * uses nothing.
+ */
+export function stepParentCheckoutUse(
+  step: WorkflowStep,
+  parentRunsInMainCheckout: boolean,
+  plan?: SubWorkflowWorktreePlan
+): ParentCheckoutUse {
+  if (!isSubWorkflowStep(step)) {
+    return { edits: true, mergesInto: false };
+  }
+  const resolvedPlan =
+    plan ??
+    (typeof step.workflow === "string"
+      ? undefined
+      : classifySubWorkflowWorktree(step.workflow.worktree));
+  if (!resolvedPlan) return NO_PARENT_CHECKOUT_USE;
+  return {
+    edits:
+      resolvedPlan.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.INHERITED ||
+      (resolvedPlan.placement ===
+        SUB_WORKFLOW_WORKTREE_PLACEMENTS.MAIN_CHECKOUT &&
+        parentRunsInMainCheckout),
+    mergesInto: resolvedPlan.mergesIntoParent,
+  };
+}
+
+/**
+ * A member uses the parent's checkout as its step does, unless it fails alone
+ * before it runs (a substitution error or a failed child preparation).
  */
 function parentCheckoutUse(
   member: ParallelGroupPreflightMember,
   parentRunsInMainCheckout: boolean
 ): ParentCheckoutUse {
   if (member.varSubstitutionError !== undefined) return NO_PARENT_CHECKOUT_USE;
-  if (!isSubWorkflowStep(member.step)) {
-    return { edits: true, mergesInto: false };
-  }
   const launch = member.subWorkflowLaunch;
   if (launch && !launch.ok) return NO_PARENT_CHECKOUT_USE;
-  const plan =
-    launch?.worktreePlan ??
-    (typeof member.step.workflow === "string"
-      ? undefined
-      : classifySubWorkflowWorktree(member.step.workflow.worktree));
-  if (!plan) return NO_PARENT_CHECKOUT_USE;
+  return stepParentCheckoutUse(
+    member.step,
+    parentRunsInMainCheckout,
+    launch?.worktreePlan
+  );
+}
+
+/** One step index with its use of the parent's checkout. */
+export interface ParentCheckoutUser {
+  readonly stepIndex: number;
+  readonly use: ParentCheckoutUse;
+}
+
+/**
+ * The `MERGE_INTO_SHARED_ROOT` issue among `users`, or undefined when no
+ * merging member shares the group with a member editing the parent's
+ * checkout. Shared by group preflight and the live `parallelWithCurrent`
+ * join, so both refuse with the same text.
+ */
+export function mergeIntoSharedRootIssueAmong(
+  workflow: PromptFile,
+  users: readonly ParentCheckoutUser[]
+): ParallelGroupPreflightIssue | undefined {
+  const mergers = users
+    .filter((user) => user.use.mergesInto)
+    .map((user) => user.stepIndex)
+    .sort((a, b) => a - b);
+  const editors = users
+    .filter((user) => user.use.edits)
+    .map((user) => user.stepIndex)
+    .sort((a, b) => a - b);
+  if (mergers.length === 0 || editors.length === 0) return undefined;
   return {
-    edits:
-      plan.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.INHERITED ||
-      (plan.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.MAIN_CHECKOUT &&
-        parentRunsInMainCheckout),
-    mergesInto: plan.mergesIntoParent,
+    code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT,
+    memberIndices: [...new Set([...mergers, ...editors])].sort((a, b) => a - b),
+    message: `${memberList(workflow, mergers)} ${mergers.length > 1 ? "merge" : "merges"} into the parent's checkout, which ${memberList(workflow, editors)} ${editors.length > 1 ? "edit" : "edits"} in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`,
   };
 }
 
@@ -257,19 +309,21 @@ function mergeIntoSharedRootIssue(
 ): ParallelGroupPreflightIssue | undefined {
   const use = parentCheckoutUse(member, parentRunsInMainCheckout);
   if (!use.edits && !use.mergesInto) return undefined;
-  const counterparts = reservedMembers.filter((reserved) => {
-    const other = parentCheckoutUse(reserved, parentRunsInMainCheckout);
-    return (use.edits && other.mergesInto) || (use.mergesInto && other.edits);
-  });
+  const counterparts = reservedMembers
+    .map((reserved) => ({
+      stepIndex: reserved.stepIndex,
+      use: parentCheckoutUse(reserved, parentRunsInMainCheckout),
+    }))
+    .filter(
+      (other) =>
+        (use.edits && other.use.mergesInto) ||
+        (use.mergesInto && other.use.edits)
+    );
   if (counterparts.length === 0) return undefined;
-  const others = counterparts.map((reserved) => reserved.stepIndex);
-  const mergers = use.mergesInto ? [member.stepIndex] : others;
-  const editors = use.mergesInto ? others : [member.stepIndex];
-  return {
-    code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT,
-    memberIndices: [...others, member.stepIndex].sort((a, b) => a - b),
-    message: `${memberList(workflow, mergers)} ${mergers.length > 1 ? "merge" : "merges"} into the parent's checkout, which ${memberList(workflow, editors)} ${editors.length > 1 ? "edit" : "edits"} in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`,
-  };
+  return mergeIntoSharedRootIssueAmong(workflow, [
+    ...counterparts,
+    { stepIndex: member.stepIndex, use },
+  ]);
 }
 
 function sameGroupNumericReferences(

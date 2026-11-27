@@ -10,6 +10,7 @@ import {
   PARALLEL_GROUP_ADMISSION,
   QUEUE_POSITION,
   RUNNER_IDS,
+  STEP_TYPES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import {
@@ -17,6 +18,7 @@ import {
   RunContinuationService,
 } from "../../core/orchestration/RunContinuationService";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
+import { MERGE_INTO_SHARED_ROOT_GUIDANCE } from "../../core/ParallelGroupPreflight";
 import type { ParallelGroupTopology } from "../../core/ParallelGroupTopology";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -1027,6 +1029,137 @@ suite("RunContinuationService topology append transaction", () => {
     );
     assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
   });
+
+  suite("parallelWithCurrent lanes that merge into this run's checkout", () => {
+    const mergeLane = (prompt: string): WorkflowStep =>
+      ({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt, worktree: { mode: "managed", merge: true } },
+      }) as WorkflowStep;
+    const ownLane = (prompt: string): WorkflowStep =>
+      ({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt, worktree: { mode: "managed" } },
+      }) as WorkflowStep;
+
+    /** A RUNNING run whose head (index 1) is `running`, in an accepting group with `sibling`. */
+    async function seedActiveGroup(
+      running: WorkflowStep,
+      sibling?: WorkflowStep
+    ): Promise<string> {
+      workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-lane-join-")
+      );
+      await seedRun(
+        [
+          { prompt: "completed", _runtime: { completedAt: 1 } },
+          { ...running, _runtime: { startedAt: 2 } },
+          ...(sibling ? [{ ...sibling, _runtime: { startedAt: 2 } }] : []),
+        ] as Array<Record<string, unknown>>,
+        sibling
+          ? [{ id: "active", startIndex: 1, endIndex: 2, failFast: false }]
+          : []
+      );
+      const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+      const source = JSON.parse(
+        await fs.readFile(runPath, "utf8")
+      ) as WorkingFile;
+      source._runtime = {
+        ...source._runtime,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.RUNNING,
+        ...(sibling
+          ? {
+              activeParallelGroup: {
+                groupId: "active",
+                admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+              },
+            }
+          : {}),
+      };
+      await writeTrustedRunFile(runPath, source);
+      return runPath;
+    }
+
+    function join(steps: WorkflowStep[]) {
+      return RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace,
+        workflowKey,
+        runRef,
+        steps,
+        1,
+        100,
+        new WorkflowLineageRepository(),
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        6
+      );
+    }
+
+    test("rejects a merge lane beside a running prompt step without writing", async () => {
+      const runPath = await seedActiveGroup({ prompt: "running" });
+      const before = await fs.readFile(runPath, "utf8");
+      await assert.rejects(
+        join([mergeLane("merging")]),
+        (error: Error) =>
+          error.message ===
+          `parallelWithCurrent was rejected: Step 3 merges into the parent's checkout, which Step 2 edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`
+      );
+      assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
+    });
+
+    test("rejects a merge lane beside a running inheriting workflow member", async () => {
+      const runPath = await seedActiveGroup(ownLane("own lane"), {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "inherits the parent's root" },
+      } as WorkflowStep);
+      const before = await fs.readFile(runPath, "utf8");
+      await assert.rejects(
+        join([mergeLane("merging")]),
+        /Step 4 merges into the parent's checkout, which Step 3 edits/
+      );
+      assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
+    });
+
+    test("rejects a shared-tree step joining beside a running merge lane", async () => {
+      await seedActiveGroup(ownLane("own lane"), mergeLane("merging"));
+      await assert.rejects(
+        join([{ prompt: "edits the root" }]),
+        /Step 3 merges into the parent's checkout, which Step 4 edits/
+      );
+    });
+
+    test("admits a lane without merge beside a prompt step, and a merge lane beside lanes", async () => {
+      await seedActiveGroup({ prompt: "running" });
+      const withoutMerge = await join([ownLane("own lane")]);
+      assert.strictEqual(withoutMerge.joinedParallelGroup.promoted, true);
+      await fs.rm(workspace, { recursive: true, force: true });
+
+      await seedActiveGroup(ownLane("lane a"), ownLane("lane b"));
+      const besideLanes = await join([mergeLane("merging")]);
+      assert.deepStrictEqual(
+        {
+          start: besideLanes.joinedParallelGroup.startIndex,
+          end: besideLanes.joinedParallelGroup.endIndex,
+        },
+        { start: 1, end: 3 }
+      );
+    });
+
+    test("ignores a completed prompt member", async () => {
+      const runPath = await seedActiveGroup(ownLane("lane"), {
+        prompt: "done",
+      });
+      const source = JSON.parse(
+        await fs.readFile(runPath, "utf8")
+      ) as WorkingFile;
+      source.steps![2] = {
+        ...source.steps![2],
+        _runtime: { ...source.steps![2]._runtime, completedAt: 3 },
+      };
+      await writeTrustedRunFile(runPath, source);
+      await assert.doesNotReject(join([mergeLane("merging")]));
+    });
+  });
 });
 
 suite("RunContinuationService addressed step mutations", () => {
@@ -1284,6 +1417,45 @@ suite("RunContinuationService addressed step mutations", () => {
       ),
       /Definition revision conflict/
     );
+  });
+
+  test("keeps a pending step's id when an edit changes its kind", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-kind-change-")
+    );
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "plain", _runtime: { stepId: "kept" } },
+    ]);
+    const repository = new WorkflowLineageRepository();
+    const lane = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      0,
+      {
+        replace: {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: { prompt: "plain", worktree: { mode: "managed" } },
+        } as WorkflowStep,
+      },
+      1,
+      repository
+    );
+    assert.strictEqual(lane.workingFile.steps![0].type, STEP_TYPES.WORKFLOW);
+    assert.strictEqual(lane.workingFile.steps![0]._runtime?.stepId, "kept");
+    const plain = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      0,
+      { replace: { prompt: "plain again" } },
+      lane.definitionRevision,
+      repository
+    );
+    assert.deepStrictEqual(plain.workingFile.steps![0], {
+      prompt: "plain again",
+      _runtime: { stepId: "kept" },
+    });
   });
 
   test("rejects editing a parallel member to target its sibling", async () => {

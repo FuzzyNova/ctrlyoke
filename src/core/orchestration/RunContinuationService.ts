@@ -66,6 +66,11 @@ import {
 } from "../ParallelGroupTopology";
 import { isActiveQueueWorkRunning } from "../ParallelGroupRuntime";
 import {
+  mergeIntoSharedRootIssueAmong,
+  stepParentCheckoutUse,
+  type ParentCheckoutUser,
+} from "../ParallelGroupPreflight";
+import {
   mergeWorkflowStepUpdate,
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
@@ -798,6 +803,11 @@ export class RunContinuationService {
             `Cannot join parallel group ${joinedGroupId}: group is missing after insertion`
           );
         }
+        assertJoinDoesNotMergeIntoSharedRoot(
+          source,
+          nextTopology.steps,
+          joinedGroup
+        );
         const placement: ParallelGroupInsertPlacement = {
           requestedIndex: insertionIndex,
           insertedIndex: insertionIndex,
@@ -974,10 +984,13 @@ export class RunContinuationService {
               : (change.updates as WorkflowStep),
           ])[0]
         );
-        const mergedStep = mergeWorkflowStepUpdate(
+        const mergedStep = keepStepIdAcrossKindChange(
           topology.steps[index],
-          incomingStep,
-          change.clearProperties
+          mergeWorkflowStepUpdate(
+            topology.steps[index],
+            incomingStep,
+            change.clearProperties
+          )
         );
         assertStepHasRequiredContent(mergedStep);
         const nextTopology = replaceParallelGroupStep(
@@ -1380,6 +1393,47 @@ function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
 }
 
 /**
+ * D14: a lane whose child merges into this run's checkout cannot join beside
+ * a member that edits that checkout, and such a member cannot join beside a
+ * merging lane. Members that already completed no longer edit it. Every other
+ * member, running or still pending, would run beside the joined steps. A
+ * workflow member with no `worktree` (an inheriting child) runs in this
+ * run's root, so it counts as editing it, as in group preflight. A file child
+ * is never parsed here and counts as neither.
+ */
+function assertJoinDoesNotMergeIntoSharedRoot(
+  source: WorkingFile,
+  steps: readonly WorkflowStep[],
+  group: ParallelGroupDefinition
+): void {
+  // A `worktree: false` child edits this run's checkout only when this run
+  // has no worktree of its own.
+  const parentRunsInMainCheckout = source._runtime?.worktree === undefined;
+  const users: ParentCheckoutUser[] = [];
+  for (let index = group.startIndex; index <= group.endIndex; index += 1) {
+    const step = steps[index];
+    if (
+      !step ||
+      step.enabled === false ||
+      step._runtime?.completedAt !== undefined
+    ) {
+      continue;
+    }
+    users.push({
+      stepIndex: index,
+      use: stepParentCheckoutUse(step, parentRunsInMainCheckout),
+    });
+  }
+  const issue = mergeIntoSharedRootIssueAmong(
+    { ...source, steps: [...steps] },
+    users
+  );
+  if (issue) {
+    throw new Error(`parallelWithCurrent was rejected: ${issue.message}`);
+  }
+}
+
+/**
  * When `index` is a step that continuation of a settled ERROR run will retry
  * (the failed step, or a failed parallel group's unsuccessful member), apply
  * that retry's rewind now: move the head and reset every step it retries
@@ -1508,6 +1562,23 @@ function assertClearablePropertiesAreEditable(
       `Cannot clear internal step ${rejected.length === 1 ? "property" : "properties"}: ${rejected.join(", ")}`
     );
   }
+}
+
+/**
+ * An edit that changes a step's kind (an MCP lane wrap or unwrap, D14)
+ * replaces the step wholesale, which drops its runtime. The edit is still the
+ * same queue slot, so it keeps its step id: the executor and the queue's disk
+ * merge identify pending steps by it.
+ */
+function keepStepIdAcrossKindChange(
+  existing: WorkflowStep,
+  merged: WorkflowStep
+): WorkflowStep {
+  const stepId = existing._runtime?.stepId;
+  if (stepId === undefined || merged._runtime?.stepId !== undefined) {
+    return merged;
+  }
+  return { ...merged, _runtime: { ...merged._runtime, stepId } };
 }
 
 function assertStepHasRequiredContent(step: WorkflowStep): void {

@@ -250,6 +250,27 @@ lanes already queued. `workflow_status` lists the presets under
 then `append_step` refuses `worktree` altogether. See
 [MCP tools](/reference/mcp-tools#append-step) for the request shape.
 
+A lane should carry an end condition that checks its work was committed, such
+as the `committed` preset above. When the workflow declares condition presets,
+`append_step` warns about each lane queued without one, flat or in a parallel
+group. Plain parallel members are not warned about, because they share the
+parent's checkout and a clean-tree check would fail on their siblings' edits.
+
+While a lane is pending, the agent can change it with `edit_step`: edit its
+prompt and other prompt-step fields, switch it to another preset, or clear
+`worktree` to turn it back into an ordinary prompt step. Setting `worktree` on
+a pending prompt step makes it a lane. Workflow steps the author wrote cannot
+be edited through MCP. `workflow_status` lists a lane as a workflow step with
+its child run, the child's live state and branch while it runs, and its merge
+result once it settles.
+
+A lane with `merge: true` follows the
+[merge rule](#parallel-sub-workflow-steps) when it joins a running step
+through `append_step`'s `parallelWithCurrent`: it is refused beside a running or
+pending prompt or script step, or beside a workflow step whose child has no
+worktree, because that member is editing the checkout the lane would merge
+into. A lane without `merge`, or one joining a group of lanes, is admitted.
+
 ## Outcomes, Stop, and Pause
 
 A completed child completes the parent step. If the child fails or cannot

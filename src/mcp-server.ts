@@ -40,6 +40,7 @@ import type {
   SubWorkflowStep,
   WorkflowStep,
   WorkingFile,
+  WorkingFileWorktreeRuntime,
   CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
 import type { WorkflowRunManifest } from "./types/WorkflowTimelineTypes";
@@ -174,6 +175,7 @@ import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import {
   getReorderableStepIndices,
   RunContinuationService,
+  type RunStepChange,
 } from "./core/orchestration/RunContinuationService";
 import { withWarning } from "./core/StepReferenceShifts";
 import {
@@ -242,6 +244,7 @@ import {
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_STEP_UPDATE_FIELDS,
+  MCP_STEP_WORKTREE_FIELD,
   MCP_TOOL_DEFINITIONS,
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
@@ -250,6 +253,7 @@ import {
   type McpAppendStepResult,
   type McpClaimPathsArguments,
   type McpEditStepArguments,
+  type McpWorktreePresetUse,
   type McpGlobalStatusArguments,
   type McpReadOutputArguments,
   type McpWorkflowStatusArguments,
@@ -267,6 +271,8 @@ import {
   summarizeMcpConditionPresets,
 } from "./utils/McpConditionPresetResolver";
 import {
+  agentLaneParts,
+  type AgentLaneParts,
   laneOrPromptStep,
   materializeMcpWorktreePreset,
   summarizeMcpWorktreePresets,
@@ -544,21 +550,90 @@ function materializeConditionUpdates(
   };
 }
 
-/** Offsets, within the flattened append, of the steps not in a parallel group. */
-function sequentialAppendOffsets(
-  items: readonly (McpAppendStepInput | { parallel: unknown[] })[]
-): number[] {
-  const offsets: number[] = [];
+/**
+ * Offsets, within the flattened append, of the steps the ungated-step warning
+ * considers. Sequential steps and lanes count; a plain member of a parallel
+ * group, or a plain step joining the running group, does not, because it
+ * shares one working tree with its siblings, where a clean-tree preset would
+ * fail on their edits. A lane has its own worktree wherever it runs.
+ */
+function gateableAppendOffsets(
+  items: readonly (McpAppendStepInput | { parallel: McpAppendStepInput[] })[],
+  joinsRunningGroup: boolean
+): { steps: number[]; lanes: number[] } {
+  const steps: number[] = [];
+  const lanes: number[] = [];
   let offset = 0;
   for (const item of items) {
-    if ("parallel" in item) {
-      offset += item.parallel.length;
-    } else {
-      offsets.push(offset);
+    const members = "parallel" in item ? item.parallel : [item];
+    const inGroup = "parallel" in item || joinsRunningGroup;
+    for (const member of members) {
+      if (member.worktree) lanes.push(offset);
+      else if (!inGroup) steps.push(offset);
       offset += 1;
     }
   }
-  return offsets;
+  return { steps, lanes };
+}
+
+/** A running workflow step's child, as `workflow_status` reports it. */
+interface McpLiveChildRun {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  executionState?: ExecutionState;
+  worktree?: Pick<WorkingFileWorktreeRuntime, "mode" | "branchName">;
+}
+
+/**
+ * The edit_step change for a lane, or for a prompt step being wrapped into one
+ * (D14). The lane is taken apart into its prompt step, the updates and clears
+ * apply to that as to any prompt step, and the result is wrapped again with
+ * the new preset's copy when `worktree` names one, otherwise the lane's own
+ * copy, unless `unwrap` leaves it a plain prompt step. The change replaces the
+ * whole step; fields the new step no longer has are cleared so a same-kind
+ * merge cannot keep them.
+ */
+function laneEditChange(
+  workingFile: WorkingFile,
+  existingStep: WorkflowStep,
+  lane: AgentLaneParts | undefined,
+  updates: Omit<McpEditStepArguments["updates"], "worktree">,
+  clearProperties: string[] | undefined,
+  worktree: McpWorktreePresetUse | undefined,
+  unwrap: boolean
+): RunStepChange {
+  const promptStep = mergeWorkflowStepUpdate(
+    lane?.promptStep ?? existingStep,
+    materializeConditionUpdates(workingFile, updates),
+    clearProperties
+  ) as PromptStep;
+  const preset = unwrap
+    ? undefined
+    : worktree
+      ? materializeMcpWorktreePreset(workingFile, worktree)
+      : lane?.worktree;
+  const nextStep = preset
+    ? wrapPromptStepAsLane(promptStep, preset)
+    : promptStep;
+  if (isSubWorkflowStep(nextStep)) {
+    const boundaryErrors = inlineRunBoundaryErrors(nextStep, "worktree");
+    if (boundaryErrors.length > 0) {
+      throw new Error(boundaryErrors.join("; "));
+    }
+  }
+  // A kind change replaces the step outright; a same-kind replace merges.
+  const removed =
+    getStepType(existingStep) === getStepType(nextStep)
+      ? Object.keys(existingStep).filter(
+          (key) =>
+            key !== "_runtime" &&
+            !Object.prototype.hasOwnProperty.call(nextStep, key)
+        )
+      : [];
+  return {
+    replace: nextStep,
+    ...(removed.length > 0 ? { clearProperties: removed } : {}),
+  };
 }
 
 /**
@@ -1374,6 +1449,43 @@ export class CtrlYokeMCPServer {
   }
 
   /**
+   * The identity and live state of a running sub-workflow step's child, read
+   * from the child's own run file. A child whose file cannot be read yet
+   * (still starting) is reported by identity alone.
+   */
+  private async readLiveChildRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<McpLiveChildRun> {
+    const childRun: McpLiveChildRun = { workflowKey, runRef };
+    try {
+      const child = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.runFilePath(this.workspaceRoot, workflowKey, runRef),
+          "utf8"
+        )
+      ) as WorkingFile;
+      const worktree = child._runtime?.worktree;
+      return {
+        ...childRun,
+        ...(child._runtime?.executionState
+          ? { executionState: child._runtime.executionState }
+          : {}),
+        ...(worktree
+          ? {
+              worktree: {
+                mode: worktree.mode,
+                branchName: worktree.branchName,
+              },
+            }
+          : {}),
+      };
+    } catch {
+      return childRun;
+    }
+  }
+
+  /**
    * Handle workflow_status tool invocation
    * Returns queue metadata and a one-row summary per step
    */
@@ -1454,6 +1566,27 @@ export class CtrlYokeMCPServer {
         finalStep: queueData.finalStep,
         finalStepRuntime: runtime.finalStep,
       });
+    // A workflow step whose child is still running has no settlement yet;
+    // report the child it launched, with that child's own live state.
+    const liveChildRuns = new Map<number, McpLiveChildRun>();
+    await Promise.all(
+      allSteps.map(async (step, index) => {
+        if (!isSubWorkflowStep(step)) return;
+        const child = step._runtime;
+        if (
+          child?.startedAt === undefined ||
+          child.completedAt !== undefined ||
+          !child.childWorkflowKey ||
+          !child.childRunRef
+        ) {
+          return;
+        }
+        liveChildRuns.set(
+          index,
+          await this.readLiveChildRun(child.childWorkflowKey, child.childRunRef)
+        );
+      })
+    );
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -1488,19 +1621,21 @@ export class CtrlYokeMCPServer {
         model: effective?.model,
         sessionId: isPromptStep(p) ? (p.sessionId ?? null) : null,
         resumeSession: effective?.resumeSession ?? false,
-        ...(getStepType(p) === STEP_TYPES.WORKFLOW &&
-        subWorkflowOutputs.has(index)
-          ? (() => {
-              const output = subWorkflowOutputs.get(index)!;
-              return {
-                childRun: {
-                  workflowKey: output.childWorkflowKey,
-                  runRef: output.childRunRef,
-                  outcome: output.outcome,
-                },
-              };
-            })()
-          : {}),
+        ...(liveChildRuns.has(index)
+          ? { childRun: liveChildRuns.get(index) }
+          : getStepType(p) === STEP_TYPES.WORKFLOW &&
+              subWorkflowOutputs.has(index)
+            ? (() => {
+                const output = subWorkflowOutputs.get(index)!;
+                return {
+                  childRun: {
+                    workflowKey: output.childWorkflowKey,
+                    runRef: output.childRunRef,
+                    outcome: output.outcome,
+                  },
+                };
+              })()
+            : {}),
       };
     });
 
@@ -1789,23 +1924,28 @@ export class CtrlYokeMCPServer {
     });
 
     // A caller that never saw the workflow's presets cannot know it skipped a
-    // gate it was expected to attach. Parallel members are left out: they
-    // share one working tree, so a clean-tree preset would fail on a
-    // sibling's edits, and leaving them ungated is the right default.
+    // gate it was expected to attach. A workflow-level end condition already
+    // gates every appended step, lanes included (D13 inherits it).
+    const isUngated = (offset: number) => {
+      const added = updatedWorkingFile!.steps?.[response!.insertIndex + offset];
+      return (
+        added !== undefined &&
+        laneOrPromptStep(added)?.endCondition === undefined
+      );
+    };
+    const gateable =
+      updatedWorkingFile.endCondition === undefined
+        ? gateableAppendOffsets(
+            resolvedItems,
+            position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+          )
+        : { steps: [], lanes: [] };
+    const toIndices = (offsets: number[]) =>
+      offsets.filter(isUngated).map((offset) => response!.insertIndex + offset);
     const ungatedPresetWarning = formatUngatedAppendedStepsWarning(
       updatedWorkingFile,
-      position === QUEUE_POSITION.PARALLEL_WITH_CURRENT ||
-        updatedWorkingFile.endCondition !== undefined
-        ? []
-        : sequentialAppendOffsets(resolvedItems)
-            .map((offset) => response!.insertIndex + offset)
-            .filter((index) => {
-              const added = updatedWorkingFile!.steps?.[index];
-              return (
-                added !== undefined &&
-                laneOrPromptStep(added)?.endCondition === undefined
-              );
-            })
+      toIndices(gateable.steps),
+      toIndices(gateable.lanes)
     );
     if (ungatedPresetWarning) {
       response.warning = [response.warning, ungatedPresetWarning]
@@ -1844,6 +1984,17 @@ export class CtrlYokeMCPServer {
   /** Handle edit_step for a zero-based pending step index. */
   private async handleStepEdit(args: McpEditStepArguments) {
     const { index, updates, clearProperties } = args;
+    const { worktree: worktreeUpdate, ...stepUpdates } = updates;
+    const clearsWorktree =
+      clearProperties?.includes(MCP_STEP_WORKTREE_FIELD) ?? false;
+    const otherClears = clearProperties?.filter(
+      (property) => property !== MCP_STEP_WORKTREE_FIELD
+    );
+    if (worktreeUpdate && clearsWorktree) {
+      throw new Error(
+        `${MCP_EDIT_STEP_TOOL_NAME}: set updates.worktree to switch a lane's preset, or clear worktree to unwrap it, not both.`
+      );
+    }
     if (
       Object.prototype.hasOwnProperty.call(updates, "additionalArgs") ||
       clearProperties?.includes("additionalArgs")
@@ -1876,6 +2027,7 @@ export class CtrlYokeMCPServer {
       selected.filePath
     );
     const existingStep = workingFile.steps?.[index];
+    let change: RunStepChange | undefined;
     if (existingStep) {
       if (isScriptStep(existingStep)) {
         const allowedScriptStepFields = new Set<string>([
@@ -1904,13 +2056,42 @@ export class CtrlYokeMCPServer {
           );
         }
       }
+      const lane = agentLaneParts(existingStep);
+      if (isSubWorkflowStep(existingStep) && !lane) {
+        throw new Error(
+          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} is a workflow step the workflow author wrote, so it cannot be edited through MCP; edit_step only edits prompt steps and lanes queued with worktree { use }.`
+        );
+      }
+      if (clearsWorktree && !lane) {
+        throw new Error(
+          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} is not a lane, so it has no worktree to clear.`
+        );
+      }
+      if (lane || worktreeUpdate) {
+        change = laneEditChange(
+          workingFile,
+          existingStep,
+          lane,
+          stepUpdates,
+          otherClears,
+          worktreeUpdate,
+          clearsWorktree
+        );
+      }
+      change ??= {
+        updates: materializeConditionUpdates(workingFile, stepUpdates),
+        clearProperties,
+      };
       const effectiveStep = mergeWorkflowStepUpdate(
         existingStep,
-        materializeConditionUpdates(workingFile, updates),
-        clearProperties
+        "replace" in change
+          ? change.replace
+          : (change.updates as Partial<WorkflowStep>),
+        change.clearProperties
       );
+      const effectivePromptStep = laneOrPromptStep(effectiveStep);
       await this.validateStepHarnessAndModelCapabilities(
-        [effectiveStep],
+        effectivePromptStep ? [effectivePromptStep] : [effectiveStep],
         workingFile.harness
       );
     }
@@ -1919,17 +2100,20 @@ export class CtrlYokeMCPServer {
       selected.workflowKey,
       selected.runRef,
       index,
-      {
-        updates: materializeConditionUpdates(workingFile, updates),
+      change ?? {
+        updates: materializeConditionUpdates(workingFile, stepUpdates),
         clearProperties,
       },
       target.definitionRevision,
       lineageRepository,
       target.allowInterruptedRun
     );
-    const effectiveStep = edited.workingFile.steps?.[index];
-    const warnings = effectiveStep
-      ? executionModeWarnings([effectiveStep], edited.workingFile)
+    const editedStep = edited.workingFile.steps?.[index];
+    const editedPromptStep = editedStep
+      ? laneOrPromptStep(editedStep)
+      : undefined;
+    const warnings = editedPromptStep
+      ? executionModeWarnings([editedPromptStep], edited.workingFile)
       : [];
     return this.mutationResponse(
       MCP_EDIT_STEP_TOOL_NAME,
