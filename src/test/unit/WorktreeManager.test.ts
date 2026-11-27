@@ -220,6 +220,39 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("classifies an inherited D4a checkout from its managed ownership record", async () => {
+    const { parent, repository } = await makeRepository("d4a-inherited-d4c");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    try {
+      await fs.writeFile(
+        path.join(managed.worktreePath, "README.md"),
+        "child edits\n"
+      );
+      const owner = await worktrees.findManagedWorktreeRecordForCheckout(
+        managed.worktreePath,
+        managed.worktreePath
+      );
+      assert.ok(owner, "inherited checkout must resolve to its managed owner");
+      assert.strictEqual(owner.workflowKey, managed.workflowKey);
+      await prepareParentCheckoutForWorktreeChild({
+        checkoutRoot: managed.worktreePath,
+        managed: true,
+        managedLabel: "Managed Test Workflow",
+      });
+      assert.strictEqual(
+        execFileSync(
+          "git",
+          ["-C", managed.worktreePath, "log", "-1", "--pretty=%s"],
+          { encoding: "utf8" }
+        ).trim(),
+        buildManagedAutoCommitMessage("Managed Test Workflow")
+      );
+    } finally {
+      await managed.lease.release();
+    }
+  });
+
   function localBranchExists(repository: string, branchName: string): boolean {
     try {
       execFileSync(

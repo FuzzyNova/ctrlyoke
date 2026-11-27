@@ -769,6 +769,28 @@ export class WorktreeManager {
     return this.tryReadRecord(recordPath);
   }
 
+  /** Find the ctrlyoke ownership record for the checkout at this path. */
+  public async findManagedWorktreeRecordForCheckout(
+    sourceCheckoutRoot: string,
+    checkoutRoot: string
+  ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
+    const { repositoryRoot, commonDirectory } =
+      await this.resolveRepositoryContext(sourceCheckoutRoot);
+    const [records, entries] = await Promise.all([
+      this.readRecords(commonDirectory),
+      listGitWorktrees(repositoryRoot),
+    ]);
+    return records.find((record) => {
+      const entry = findGitWorktreeEntryForRecord(entries, record);
+      return (
+        entry !== undefined &&
+        !entry.bare &&
+        !entry.prunable &&
+        pathsEqual(record.worktreePath, checkoutRoot)
+      );
+    });
+  }
+
   /** Remove a just-created imported worktree after its patch failed to apply. */
   public async removeImportedManagedWorktree(
     info: WorktreeInfo

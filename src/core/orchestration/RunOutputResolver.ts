@@ -4,6 +4,7 @@ import type {
   ScriptRuntimeOutput,
   SubWorkflowOutput,
   ScriptVerdict,
+  SubWorkflowStep,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import {
@@ -114,6 +115,26 @@ export interface ResolvedRunAttemptValue
   startReason?: TimelineAttemptStartReason;
   terminalState?: TimelineAttemptTerminalState;
   terminalReason?: string;
+}
+
+function createWorkflowPriorContextItem(
+  index: number,
+  step: SubWorkflowStep,
+  output: SubWorkflowOutput,
+  detail: PriorContextDetail,
+  extra: Partial<PriorContextItem> = {}
+): PriorContextItem {
+  return {
+    index,
+    ...(step.name ? { name: step.name } : {}),
+    detail,
+    ...extra,
+    subWorkflow: { output },
+    stepKind: getStepType(step),
+    ...(typeof step.workflow === "string"
+      ? { workflowPath: step.workflow }
+      : {}),
+  };
 }
 
 /** Identity and timing shared by both attempt lifecycle records. */
@@ -352,6 +373,24 @@ export class RunOutputResolver {
   constructor(
     private readonly recorder: TimelineRecorder = new TimelineRecorder()
   ) {}
+
+  /** Build the same workflow item used by prior-context resolution, with its descendants. */
+  async resolveWorkflowPriorContextItem(
+    manifestPath: string,
+    index: number,
+    step: SubWorkflowStep,
+    output: SubWorkflowOutput,
+    options: RunOutputProjectionOptions,
+    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
+  ): Promise<PriorContextItem> {
+    const item = createWorkflowPriorContextItem(index, step, output, detail);
+    const items = await this.resolveSubWorkflowChildren(
+      [item],
+      options,
+      new Set([subWorkflowVisitKeyFromManifest(manifestPath)])
+    );
+    return items[0];
+  }
 
   async *stream(
     manifestPath: string
@@ -1314,16 +1353,12 @@ export class RunOutputResolver {
         if (!step || !value) return [];
         if (isSubWorkflowStep(step) && value.subWorkflowOutput) {
           return [
-            {
+            createWorkflowPriorContextItem(
               index,
-              name: step.name,
-              detail:
-                merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
-              subWorkflow: { output: value.subWorkflowOutput },
-              stepKind: getStepType(step),
-              workflowPath:
-                typeof step.workflow === "string" ? step.workflow : undefined,
-            },
+              step,
+              value.subWorkflowOutput,
+              merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail
+            ),
           ];
         }
         if (isScriptStep(step)) {
@@ -1481,13 +1516,13 @@ export class RunOutputResolver {
           return [{ ...common, scriptOutput: value.scriptOutput }];
         if (step && isSubWorkflowStep(step) && value.subWorkflowOutput)
           return [
-            {
-              ...common,
-              subWorkflow: { output: value.subWorkflowOutput },
-              stepKind: getStepType(step),
-              workflowPath:
-                typeof step.workflow === "string" ? step.workflow : undefined,
-            },
+            createWorkflowPriorContextItem(
+              index,
+              step,
+              value.subWorkflowOutput,
+              common.detail,
+              { ...common, type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP }
+            ),
           ];
         const projected = latestValues.get(targetKey);
         const transcript = projected?.transcript;

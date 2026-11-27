@@ -146,7 +146,6 @@ import {
   LOGS_DIR,
   QUEUE_POSITION,
   STEP_TYPES,
-  PRIOR_CONTEXT_DETAILS,
   SCRIPT_STEP_COPY_FIELDS,
   PROMPT_PROPERTIES,
   STEP_STATUS,
@@ -1412,6 +1411,8 @@ export class CtrlYokeMCPServer {
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
     const subWorkflowOutputs = await this.readQueueSubWorkflowOutputs(selected);
+    const finalStepSubWorkflow =
+      await this.readLatestFinalStepSubWorkflowOutput(selected);
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -1502,6 +1503,18 @@ export class CtrlYokeMCPServer {
         descriptorRevision: selected.descriptorRevision,
       },
       steps,
+      ...(finalStepSubWorkflow
+        ? {
+            finalStep: {
+              pass: finalStepSubWorkflow.passNumber,
+              childRun: {
+                workflowKey: finalStepSubWorkflow.output.childWorkflowKey,
+                runRef: finalStepSubWorkflow.output.childRunRef,
+                outcome: finalStepSubWorkflow.output.outcome,
+              },
+            },
+          }
+        : {}),
       schemaWarnings,
     };
 
@@ -2153,6 +2166,47 @@ export class CtrlYokeMCPServer {
     return outputs;
   }
 
+  private async readLatestFinalStepSubWorkflowOutput(selected: {
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+  }): Promise<{ passNumber: number; output: SubWorkflowOutput } | undefined> {
+    try {
+      const events = await new TimelineRecorder().readEvents(
+        WorkflowPaths.manifestPath(
+          this.workspaceRoot,
+          selected.workflowKey,
+          selected.runRef
+        )
+      );
+      const latest = events.reduce<
+        | Extract<
+            (typeof events)[number],
+            { eventType: typeof TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED }
+          >
+        | undefined
+      >((current, event) => {
+        if (
+          event.eventType !== TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED ||
+          !("target" in event) ||
+          event.target.kind !== FINAL_STEP_PHASES.FINAL_STEP
+        )
+          return current;
+        return !current ||
+          (event.target as { loopIndex: number }).loopIndex >
+            (current.target as { loopIndex: number }).loopIndex
+          ? event
+          : current;
+      }, undefined);
+      if (!latest) return undefined;
+      return {
+        passNumber: (latest.target as { loopIndex: number }).loopIndex + 1,
+        output: latest.payload,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * Handle read_output tool invocation.
    * Returns AI response text from completed prompts.
@@ -2246,32 +2300,17 @@ export class CtrlYokeMCPServer {
           let workflowItem: PriorContextItem | undefined;
           const subWorkflowOutput = subWorkflowOutputs.get(i);
           if (isSubWorkflowStep(p) && subWorkflowOutput) {
-            let children: PriorContextItem[] | undefined;
-            try {
-              children = await resolver.resolveAllPriorContextItems(
-                WorkflowPaths.manifestPath(
-                  this.workspaceRoot,
-                  subWorkflowOutput.childWorkflowKey,
-                  subWorkflowOutput.childRunRef
-                ),
-                { workspaceRoot: this.workspaceRoot }
-              );
-            } catch {
-              // Shared rendering emits childRunUnavailable for unavailable history.
-            }
-            workflowItem = {
-              index: i,
-              ...(p.name ? { name: p.name } : {}),
-              stepKind: STEP_TYPES.WORKFLOW,
-              detail: PRIOR_CONTEXT_DETAILS.FULL,
-              ...(typeof p.workflow === "string"
-                ? { workflowPath: p.workflow }
-                : {}),
-              subWorkflow: {
-                output: subWorkflowOutput,
-                ...(children ? { children } : {}),
-              },
-            };
+            workflowItem = await resolver.resolveWorkflowPriorContextItem(
+              WorkflowPaths.manifestPath(
+                this.workspaceRoot,
+                selected.workflowKey,
+                selected.runRef
+              ),
+              i,
+              p,
+              subWorkflowOutput,
+              { workspaceRoot: this.workspaceRoot }
+            );
           }
           const fullResponseText = workflowItem
             ? buildPriorContextXmlFromItems([workflowItem])

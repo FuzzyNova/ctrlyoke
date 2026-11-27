@@ -72,6 +72,8 @@ import {
   isRunHistoryLocationInitialized,
 } from "../../utils/RunHistoryStoragePolicy";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
+import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
@@ -1568,6 +1570,23 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         `workflowKey="${child.workflowKey}"`
       )
     );
+    const sharedItem = await new RunOutputResolver(
+      recorder
+    ).resolveWorkflowPriorContextItem(
+      parentManifest,
+      0,
+      { type: STEP_TYPES.WORKFLOW, workflow: "child.yaml" },
+      {
+        childWorkflowKey: child.workflowKey,
+        childRunRef: child.runRef,
+        outcome: { status: "completed" },
+      },
+      { workspaceRoot }
+    );
+    assert.strictEqual(
+      parentStepOutput.outputs[0].responseText,
+      buildPriorContextXmlFromItems([sharedItem])
+    );
     assert.ok(
       parentStepOutput.outputs[0].responseText.includes("child response text")
     );
@@ -1926,6 +1945,56 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     assert.ok(!("gitOutcome" in status.steps[1]));
     assert.ok(!("gitOutcome" in status.steps[2]));
+  });
+
+  test("workflow_status reports the latest finalStep child with its pass number", async () => {
+    const server = await setup();
+    const run = await createRun("final-child", "2026-01-01T00-00-00-000Z", {
+      finalStep: { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 2 },
+    });
+    const child = await createRun(
+      "final-child-run",
+      "2026-01-02T00-00-00-000Z",
+      {
+        parentRun: {
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex: 1,
+        },
+      }
+    );
+    const recorder = new TimelineRecorder();
+    await recorder.appendEvents(
+      WorkflowPaths.manifestPath(workspaceRoot, run.workflowKey, run.runRef),
+      [
+        {
+          eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+          timestampMs: 3,
+          target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
+          runIndex: 0,
+          attemptIndex: 1,
+          definitionRevision: 1,
+          payload: {
+            childWorkflowKey: child.workflowKey,
+            childRunRef: child.runRef,
+            outcome: { status: "completed" },
+          },
+        },
+      ]
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.deepStrictEqual(status.finalStep, {
+      pass: 2,
+      childRun: {
+        workflowKey: child.workflowKey,
+        runRef: child.runRef,
+        outcome: { status: "completed" },
+      },
+    });
   });
 
   test("workflow_status reports each step's harness, model, and executionMode", async () => {

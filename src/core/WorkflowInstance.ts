@@ -2249,12 +2249,23 @@ export class WorkflowInstance
       subWorkflowHost: this.executionOptions.subWorkflowHost,
       prepareSubWorkflowWorktreeChild: async () => {
         const worktree = this.activeWorktree;
+        const checkoutRoot =
+          this.executionWorkspace.executionCheckoutRoot ??
+          this.executionWorkspace.executionRoot;
+        const managedOwner = await this.worktreeManager
+          .findManagedWorktreeRecordForCheckout(checkoutRoot, checkoutRoot)
+          .catch(() => undefined);
+        const ownerLabel = managedOwner
+          ? await this.lineageRepository.readWorkflowDisplayName(
+              managedOwner.stateRoot,
+              managedOwner.workflowKey
+            )
+          : undefined;
         await prepareParentCheckoutForWorktreeChild({
-          checkoutRoot:
-            this.executionWorkspace.executionCheckoutRoot ??
-            this.executionWorkspace.executionRoot,
-          managed: worktree?.mode === WORKTREE_MODES.MANAGED,
-          managedLabel: worktree?.workflowName ?? worktree?.branchName,
+          checkoutRoot,
+          managed: Boolean(managedOwner),
+          managedLabel:
+            ownerLabel || worktree?.workflowName || worktree?.branchName,
         });
       },
       get ancestorPaths() {
