@@ -1793,7 +1793,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
-    test("a stopped run rewinds its cancelled workflow step for continuation, never a cancelled prompt", async () => {
+    test("a stopped run rewinds its cancelled workflow step for continuation, and a cancelled prompt only for a continued child", async () => {
       const workflowStep = {
         type: STEP_TYPES.WORKFLOW,
         workflow: "child.ctrlyoke.yaml",
@@ -1830,7 +1830,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
       assert.strictEqual(subWorkflow.getState().currentIndex, 1);
       assert.strictEqual(
-        await subWorkflow.rewindCancelledSubWorkflowStepForContinuation(),
+        await subWorkflow.rewindCancelledStepForContinuation(),
         true
       );
       const rewound = subWorkflow.getState();
@@ -1848,13 +1848,24 @@ suite("PromptQueue State Machine Tests", () => {
         { prompt: "after" },
       ]);
       assert.strictEqual(
-        await prompt.rewindCancelledSubWorkflowStepForContinuation(),
+        await prompt.rewindCancelledStepForContinuation(),
         false
       );
       assert.strictEqual(prompt.getState().currentIndex, 1);
       assert.strictEqual(
         prompt.getState().results[0].status,
         STEP_STATUS.CANCELLED
+      );
+
+      // A child continued by its parent's step re-runs its interrupted step.
+      assert.strictEqual(
+        await prompt.rewindCancelledStepForContinuation({ anyStepKind: true }),
+        true
+      );
+      assert.strictEqual(prompt.getState().currentIndex, 0);
+      assert.strictEqual(
+        prompt.getState().results[0].status,
+        STEP_STATUS.PENDING
       );
     });
 

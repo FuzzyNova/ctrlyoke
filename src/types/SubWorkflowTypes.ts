@@ -99,14 +99,19 @@ export function isSameSubWorkflowParentLink(
         left.loopIndex === right.loopIndex;
 }
 
+/** The stop/pause controls a parent forwards to the child its step runs. */
+export interface SubWorkflowControl {
+  pause(): Promise<void>;
+  /** Resume a pausing or paused child; never awaits the child's remaining run. */
+  cancelPause(): Promise<void>;
+  stop(): Promise<void>;
+}
+
 /** Control surface and run identity for a launched child. */
-export interface SubWorkflowHandle {
+export interface SubWorkflowHandle extends SubWorkflowControl {
   readonly workflowKey: WorkflowKey;
   readonly runRef: RunRef;
   readonly done: Promise<SubWorkflowResult>;
-  pause(): Promise<void>;
-  cancelPause(): Promise<void>;
-  stop(): Promise<void>;
 }
 
 /** Terminal outcome of the child run. */
@@ -176,6 +181,8 @@ export interface SubWorkflowInstance {
    * step boundary ends its cycle, and `resume()` starts the next one.
    */
   whenExecutionSettled(): Promise<void>;
+  /** Fires once when the instance is disposed (host shutdown). */
+  onDidDispose(listener: () => void): { dispose(): void };
 }
 
 export interface SubWorkflowInstanceOptions {

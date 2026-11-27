@@ -143,6 +143,7 @@ import {
 } from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
 import type {
+  SubWorkflowControl,
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowParentLink,
@@ -153,6 +154,7 @@ import {
   isSameSubWorkflowParentLink,
   SUB_WORKFLOW_SOURCE_KINDS,
 } from "../types/SubWorkflowTypes";
+import { SubWorkflowControlRelay } from "./orchestration/SubWorkflowControlRelay";
 import {
   resolvePromptFileTextWithVariables,
   resolvePromptTextWithVariables,
@@ -299,7 +301,7 @@ export interface WorkflowExecutionContext {
   registerActiveTarget?: (
     target: ExecutionTarget,
     attemptIndex: number,
-    subWorkflow?: SubWorkflowHandle | null
+    subWorkflow?: SubWorkflowControl | null
   ) => void;
   registerTargetPtySession?: (
     target: ExecutionTarget,
@@ -3247,6 +3249,19 @@ export class WorkflowExecutor {
       return settleFailure("Sub-workflow parent run identity is unavailable");
     }
 
+    const settleCancelled = () =>
+      this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        cancelled: true,
+        stopWorkflowOnCancel: true,
+      });
+    // Registered before the launch, so a stop or pause that arrives while the
+    // child is still loading reaches it once its handle exists.
+    const control = new SubWorkflowControlRelay();
+    context.registerActiveTarget?.(target, attemptIndex, control);
     let handle: SubWorkflowHandle | undefined;
     let completedChild = false;
     try {
@@ -3278,6 +3293,8 @@ export class WorkflowExecutor {
             cancelPause: async () => undefined,
             stop: async () => undefined,
           };
+        } else if (control.wasStopRequested) {
+          return settleCancelled();
         } else
           handle = await host.launch({
             source,
@@ -3301,6 +3318,7 @@ export class WorkflowExecutor {
               filePath === undefined ? ancestors : [...ancestors, filePath],
           });
       } catch (error) {
+        if (control.wasStopRequested) return settleCancelled();
         // No child run exists yet (e.g. the file failed to load before the
         // child allocated its identity), so this is a start failure.
         return settleFailure(
@@ -3309,7 +3327,7 @@ export class WorkflowExecutor {
           }`
         );
       }
-      context.registerActiveTarget?.(target, attemptIndex, handle);
+      await control.attach(handle);
       const runtimeIndex =
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
@@ -3370,15 +3388,12 @@ export class WorkflowExecutor {
           });
         }
       }
-      if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
-        return this.settleNonHarnessStep({
-          context,
-          target,
-          stepIndex,
-          attemptIndex,
-          cancelled: true,
-          stopWorkflowOnCancel: true,
-        });
+      if (
+        result.status === PROMPT_TERMINAL_STATUS.CANCELLED ||
+        // Stopped while still loading: the child never started, by request.
+        (result.failedToStart && control.wasStopRequested)
+      ) {
+        return settleCancelled();
       }
       if (result.status === PROMPT_TERMINAL_STATUS.FAILED) {
         const prefix = result.failedToStart
@@ -3401,7 +3416,7 @@ export class WorkflowExecutor {
         error instanceof Error ? error.message : String(error)
       );
     } finally {
-      if (handle) context.registerActiveTarget?.(target, attemptIndex, null);
+      context.registerActiveTarget?.(target, attemptIndex, null);
     }
   }
 

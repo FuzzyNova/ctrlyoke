@@ -18,6 +18,7 @@ import {
 } from "../../types/DashboardConstants";
 import { manifestPath } from "../../utils/WorkflowPaths";
 import { TimelineRecorder } from "./TimelineRecorder";
+import { Log } from "../../utils/Log";
 
 /** Launches child runs without coupling execution to a particular host. */
 export class SubWorkflowLauncher implements SubWorkflowHost {
@@ -148,25 +149,79 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     wasStoppedByParent: () => boolean,
     markParentStopped: () => void
   ): SubWorkflowHandle {
+    let rejectResume: (error: unknown) => void = () => undefined;
+    const resumeFailure = new Promise<never>((_, reject) => {
+      rejectResume = reject;
+    });
+    resumeFailure.catch(() => undefined);
     const done = this.collectExecution(
       instance,
       execution,
-      wasStoppedByParent
+      wasStoppedByParent,
+      resumeFailure
     ).catch((error): SubWorkflowResult => ({
       status: PROMPT_TERMINAL_STATUS.FAILED,
       failureMessage: errorMessage(error),
     }));
+    // The run identity exists from promotion, while the child is still IDLE
+    // and would reject a pause. A pause that arrives then is held until the
+    // child starts running.
+    let pauseOnStart = false;
+    const startWatch =
+      instance.promptQueue.getState().status === EXECUTION_STATES.IDLE
+        ? instance.promptQueue.onDidChangeState((state) => {
+            if (state.status === EXECUTION_STATES.IDLE) return;
+            startWatch?.dispose();
+            if (!pauseOnStart) return;
+            pauseOnStart = false;
+            // Not inside the child's own state emission.
+            queueMicrotask(() => {
+              instance.pause().catch((error: unknown) => {
+                Log.warn(
+                  `[SubWorkflowLauncher] Pausing sub-workflow ${identity.workflowKey}/${identity.runRef} failed: ${errorMessage(error)}`
+                );
+              });
+            });
+          })
+        : undefined;
+    void done.finally(() => startWatch?.dispose());
     return {
       workflowKey: identity.workflowKey as SubWorkflowHandle["workflowKey"],
       runRef: identity.runRef as SubWorkflowHandle["runRef"],
       done,
-      pause: () => instance.pause(),
-      // A child that already reached its step boundary is PAUSED, where
-      // cancelPause() is a no-op; resuming the parent must resume it.
-      cancelPause: () =>
-        instance.promptQueue.getState().status === EXECUTION_STATES.PAUSED
-          ? instance.resume()
-          : instance.cancelPause(),
+      pause: async () => {
+        if (
+          startWatch &&
+          instance.promptQueue.getState().status === EXECUTION_STATES.IDLE
+        ) {
+          pauseOnStart = true;
+          return;
+        }
+        await instance.pause();
+      },
+      cancelPause: async () => {
+        if (pauseOnStart) {
+          pauseOnStart = false;
+          return;
+        }
+        // A child that already reached its step boundary is PAUSED, where
+        // cancelPause() is a no-op, so resuming the parent resumes it. Its
+        // resume() runs the whole remaining cycle: start it without waiting,
+        // or the parent commits its own RUNNING only once the child ends.
+        // `done` settles on the resumed run, or on the resume's failure.
+        if (
+          instance.promptQueue.getState().status !== EXECUTION_STATES.PAUSED
+        ) {
+          await instance.cancelPause();
+          return;
+        }
+        instance.resume().catch((error: unknown) => {
+          Log.warn(
+            `[SubWorkflowLauncher] Resuming sub-workflow ${identity.workflowKey}/${identity.runRef} failed: ${errorMessage(error)}`
+          );
+          rejectResume(error);
+        });
+      },
       stop: async () => {
         markParentStopped();
         await instance.stop();
@@ -177,14 +232,29 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
   private async collectExecution(
     instance: SubWorkflowInstance,
     execution: Promise<void>,
-    wasStoppedByParent: () => boolean
+    wasStoppedByParent: () => boolean,
+    resumeFailure: Promise<never>
   ): Promise<SubWorkflowResult> {
+    const cancelledBy = () =>
+      wasStoppedByParent()
+        ? SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
+        : SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD;
     try {
       await execution;
-      // Pausing ends the child's execution cycle at a step boundary without
-      // settling the run; its resume starts the next cycle.
-      if (instance.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
-        await this.waitForSettledRun(instance);
+      // A cycle that ends with the run still active paused it at a step
+      // boundary, or a resume has already begun the next cycle; either way
+      // the run has not settled yet.
+      if (ACTIVE_EXECUTION_STATES.has(instance.promptQueue.getState().status)) {
+        const disposed = await this.waitForSettledRun(instance, resumeFailure);
+        if (disposed) {
+          // Host shutdown, not a failure: CANCELLED stops the parent whatever
+          // its onFail (D9), and the paused child run stays continuable (D6).
+          return {
+            status: PROMPT_TERMINAL_STATUS.CANCELLED,
+            cancelledBy: cancelledBy(),
+            worktree: this.worktree(instance),
+          };
+        }
       }
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
@@ -201,9 +271,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         case EXECUTION_STATES.STOPPED:
           return {
             status: PROMPT_TERMINAL_STATUS.CANCELLED,
-            cancelledBy: wasStoppedByParent()
-              ? SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
-              : SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+            cancelledBy: cancelledBy(),
             worktree: this.worktree(instance),
           };
         case EXECUTION_STATES.ERROR:
@@ -219,26 +287,42 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     }
   }
 
-  /** Wait until the child no longer owns an executor and its cycle has ended. */
+  /**
+   * Wait until the child no longer owns an executor and its cycle has ended.
+   * Returns true when the instance was disposed first: a disposed child never
+   * leaves PAUSED, so waiting on its state would never end.
+   */
   private async waitForSettledRun(
-    instance: SubWorkflowInstance
-  ): Promise<void> {
-    const isSettled = () =>
-      !ACTIVE_EXECUTION_STATES.has(instance.promptQueue.getState().status);
-    if (!isSettled()) {
-      await new Promise<void>((resolve) => {
-        const subscription = instance.promptQueue.onDidChangeState(() => {
-          if (!isSettled()) return;
-          subscription.dispose();
-          resolve();
-        });
-        if (isSettled()) {
-          subscription.dispose();
-          resolve();
-        }
-      });
+    instance: SubWorkflowInstance,
+    resumeFailure: Promise<never>
+  ): Promise<boolean> {
+    const subscriptions: Array<{ dispose(): void }> = [];
+    try {
+      const outcome = await Promise.race([
+        new Promise<"settled">((resolve) => {
+          const check = () => {
+            if (
+              !ACTIVE_EXECUTION_STATES.has(
+                instance.promptQueue.getState().status
+              )
+            ) {
+              resolve("settled");
+            }
+          };
+          subscriptions.push(instance.promptQueue.onDidChangeState(check));
+          check();
+        }),
+        new Promise<"disposed">((resolve) => {
+          subscriptions.push(instance.onDidDispose(() => resolve("disposed")));
+        }),
+        resumeFailure,
+      ]);
+      if (outcome === "disposed") return true;
+    } finally {
+      for (const subscription of subscriptions) subscription.dispose();
     }
     await instance.whenExecutionSettled();
+    return false;
   }
 
   private async waitForRunIdentity(

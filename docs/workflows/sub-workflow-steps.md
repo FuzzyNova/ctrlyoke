@@ -122,7 +122,9 @@ Stopping the parent stops its active child, and stopping the child directly
 stops the parent. Pausing the parent forwards the pause to the child, which
 pauses at its next step boundary. The parent stays in its pausing state for as
 long as the child is paused, because its current step is the child run.
-Resuming the parent resumes the child, which continues its own run. Pausing or
+Resuming the parent resumes the child, which continues its own run. A stop or
+pause that arrives while the child is still starting reaches it as soon as it
+starts; a child paused that early pauses before its first step. Pausing or
 resuming a child directly does not pause or resume the parent.
 
 ## In the dashboard
@@ -140,9 +142,11 @@ finished is allowed.
 
 When a parent run resumes a step that already started a child, ctrlyoke reconnects
 to that child run. Completed children settle the parent step without running again;
-stopped, failed, or interrupted children continue from their saved run. Starting
-an explicit new run from the parent definition starts a fresh child. Each
-`finalStep` pass has its own child run.
+stopped, failed, or interrupted children continue from their saved run. A stopped
+child runs the step its stop interrupted again, unlike continuing a stopped
+workflow on its own, which moves on past that step. Starting an explicit new run
+from the parent definition starts a fresh child. Each `finalStep` pass has its own
+child run; continuing a pass that was stopped reconnects to that pass's child.
 
 ## Using child output in later steps
 

@@ -6,6 +6,7 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
+import { TypedEmitter } from "../../utils/TypedEmitter";
 import type {
   SubWorkflowInstance,
   SubWorkflowLaunchRequest,
@@ -26,7 +27,12 @@ import {
 } from "../../types/DashboardConstants";
 
 type Scenario =
-  "completed" | "mid-run-error" | "startup-error" | "stopped" | "throw";
+  | "completed"
+  | "mid-run-error"
+  | "paused"
+  | "startup-error"
+  | "stopped"
+  | "throw";
 
 class FakeChild implements SubWorkflowInstance {
   loadResult = true;
@@ -65,6 +71,17 @@ class FakeChild implements SubWorkflowInstance {
     };
   };
 
+  private readonly stateEmitter = new TypedEmitter<QueueState>();
+  private readonly disposeEmitter = new TypedEmitter<void>();
+  /** Live `onDidChangeState`/`onDidDispose` subscriptions. */
+  stateListeners = 0;
+  disposeListeners = 0;
+
+  setStatus(status: QueueState["status"]): void {
+    this.status = status;
+    this.stateEmitter.fire(this.promptQueue.getState());
+  }
+
   readonly promptQueue = {
     getState: (): QueueState => ({
       status: this.status,
@@ -81,7 +98,16 @@ class FakeChild implements SubWorkflowInstance {
       results: this.results,
       steps: this.steps,
     }),
-    onDidChangeState: () => ({ dispose: () => {} }),
+    onDidChangeState: (listener: (state: QueueState) => void) => {
+      this.stateListeners += 1;
+      const subscription = this.stateEmitter.event(listener);
+      return {
+        dispose: () => {
+          this.stateListeners -= 1;
+          subscription.dispose();
+        },
+      };
+    },
     getWorkflowFile: () => this.worktree ?? ({ steps: [] } as PromptFile),
   };
 
@@ -114,6 +140,9 @@ class FakeChild implements SubWorkflowInstance {
       this.steps[0]._runtime = { startedAt: 1 };
       this.status = EXECUTION_STATES.ERROR;
       this.results[0].status = STEP_STATUS.FAILED;
+    } else if (this.nextScenario === "paused") {
+      this.steps[0]._runtime = { startedAt: 1 };
+      this.status = EXECUTION_STATES.PAUSED;
     } else if (this.nextScenario === "startup-error") {
       this.status = EXECUTION_STATES.ERROR;
     } else if (this.nextScenario === "throw") {
@@ -140,8 +169,35 @@ class FakeChild implements SubWorkflowInstance {
   releaseExecution?: () => void;
   async pause(): Promise<void> {}
   async cancelPause(): Promise<void> {}
-  async resume(): Promise<void> {}
+  resumeCalls = 0;
+  /** Holds a resumed run open, as a real resume awaits the remaining run. */
+  resumeGate?: Promise<void>;
+  resumeError?: Error;
+  async resume(): Promise<void> {
+    this.resumeCalls += 1;
+    if (this.resumeError) {
+      await Promise.resolve();
+      throw this.resumeError;
+    }
+    this.setStatus(EXECUTION_STATES.RUNNING);
+    await this.resumeGate;
+    this.results[0].status = STEP_STATUS.COMPLETED;
+    this.setStatus(EXECUTION_STATES.COMPLETED);
+  }
   async whenExecutionSettled(): Promise<void> {}
+  onDidDispose(listener: () => void): { dispose(): void } {
+    this.disposeListeners += 1;
+    const subscription = this.disposeEmitter.event(listener);
+    return {
+      dispose: () => {
+        this.disposeListeners -= 1;
+        subscription.dispose();
+      },
+    };
+  }
+  dispose(): void {
+    this.disposeEmitter.fire();
+  }
   async stop(): Promise<void> {
     this.stopCalls += 1;
     this.status = EXECUTION_STATES.STOPPED;
@@ -456,6 +512,101 @@ suite("SubWorkflowLauncher", () => {
       });
       removeTempDir(stateRoot);
     }
+  });
+
+  /** Resolves true when `promise` settles before a macrotask runs. */
+  async function settlesPromptly(promise: Promise<unknown>): Promise<boolean> {
+    return Promise.race([
+      promise.then(() => true),
+      new Promise<boolean>((resolve) => setImmediate(() => resolve(false))),
+    ]);
+  }
+
+  test("resuming a PAUSED child returns without awaiting its remaining run", async () => {
+    const factory = new FakeFactory();
+    factory.child.nextScenario = "paused";
+    let releaseResume!: () => void;
+    factory.child.resumeGate = new Promise<void>((resolve) => {
+      releaseResume = resolve;
+    });
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    assert.strictEqual(
+      await settlesPromptly(handle.cancelPause()),
+      true,
+      "cancelPause returned before the child's run ended"
+    );
+    assert.strictEqual(factory.child.resumeCalls, 1);
+    assert.strictEqual(factory.child.status, EXECUTION_STATES.RUNNING);
+    assert.strictEqual(await settlesPromptly(handle.done), false);
+
+    releaseResume();
+    const result = await handle.done;
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.COMPLETED);
+    assert.strictEqual(factory.child.stateListeners, 0);
+    assert.strictEqual(factory.child.disposeListeners, 0);
+  });
+
+  test("a PAUSED child whose resume rejects settles done FAILED with the error", async () => {
+    const factory = new FakeFactory();
+    factory.child.nextScenario = "paused";
+    factory.child.resumeError = new Error("resume exploded");
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    await handle.cancelPause();
+    const result = await handle.done;
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.FAILED);
+    assert.strictEqual(result.failureMessage, "resume exploded");
+    assert.strictEqual(factory.child.stateListeners, 0);
+  });
+
+  test("a PAUSED child that is disposed settles done CANCELLED and unsubscribes", async () => {
+    const factory = new FakeFactory();
+    factory.child.nextScenario = "paused";
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    assert.strictEqual(await settlesPromptly(handle.done), false);
+    assert.strictEqual(factory.child.stateListeners, 1);
+
+    factory.child.dispose();
+    const result = await handle.done;
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.CANCELLED);
+    assert.strictEqual(
+      result.cancelledBy,
+      SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
+    );
+    assert.strictEqual(factory.child.stateListeners, 0);
+    assert.strictEqual(factory.child.disposeListeners, 0);
+  });
+
+  test("a resume racing the settle check waits for the resumed run", async () => {
+    const factory = new FakeFactory();
+    let releaseResume!: () => void;
+    factory.child.resumeGate = new Promise<void>((resolve) => {
+      releaseResume = resolve;
+    });
+    // The first cycle ends paused, and a resume lands before the launcher
+    // inspects the state: it reads RUNNING, never PAUSED.
+    factory.child.executeLoadedPromptFile = async () => {
+      factory.child.executeCalls += 1;
+      factory.child.steps[0]._runtime = { startedAt: 1 };
+      factory.child.status = EXECUTION_STATES.PAUSED;
+      void factory.child.resume();
+    };
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    assert.strictEqual(await settlesPromptly(handle.done), false);
+    releaseResume();
+    const result = await handle.done;
+    assert.strictEqual(
+      result.status,
+      PROMPT_TERMINAL_STATUS.COMPLETED,
+      JSON.stringify(result)
+    );
   });
 
   test("never rejects done when execution unexpectedly throws", async () => {

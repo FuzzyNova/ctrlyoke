@@ -63,7 +63,7 @@ import {
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import type {
-  SubWorkflowHandle,
+  SubWorkflowControl,
   SubWorkflowHost,
   SubWorkflowInstance,
   SubWorkflowLoadOptions,
@@ -283,7 +283,7 @@ interface ActiveTargetResources {
   integration?: HarnessIntegration;
   processRunner?: ScriptProcessRunner;
   ptySessionId?: string;
-  subWorkflow?: SubWorkflowHandle;
+  subWorkflow?: SubWorkflowControl;
 }
 
 export interface WorkflowInstanceExecutionOptions {
@@ -537,6 +537,10 @@ export class WorkflowInstance
   // Streaming event forwarding — aggregates events from all execution integrations
   // so callers (e.g. the standalone CLI) can subscribe once on the instance.
   // ─────────────────────────────────────────────────────────────────────────
+  private readonly disposeEmitter = new TypedEmitter<void>();
+  /** Fires once from `dispose()` (`SubWorkflowInstance`). */
+  public readonly onDidDispose = this.disposeEmitter.event;
+
   private readonly _streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
   /** Fires structured CLI events (Claude/Codex) from the active execution integration. */
   public readonly onStreamingEvents = this._streamingEventsEmitter.event;
@@ -1329,6 +1333,9 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
       this.activeWorktree = undefined;
     }
+    // Last: a launcher waiting on this paused child settles its parent step.
+    this.disposeEmitter.fire();
+    this.disposeEmitter.dispose();
   }
 
   /**
@@ -2622,7 +2629,11 @@ export class WorkflowInstance
     await onPrepared?.();
 
     await this.promptQueue.rewindTerminalFailureForContinuation();
-    await this.promptQueue.rewindCancelledSubWorkflowStepForContinuation();
+    // A child continued by its parent's step (D6) re-runs the step its stop
+    // interrupted; continuing any other stopped run resumes after it.
+    await this.promptQueue.rewindCancelledStepForContinuation({
+      anyStepKind: subWorkflowOptions !== undefined,
+    });
 
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
       workflowKey,
@@ -2804,7 +2815,7 @@ export class WorkflowInstance
       if (this.workflowRuntime.status === EXECUTION_STATES.ERROR) {
         await this.promptQueue.rewindTerminalFailureForContinuation();
       } else {
-        await this.promptQueue.rewindCancelledSubWorkflowStepForContinuation();
+        await this.promptQueue.rewindCancelledStepForContinuation();
       }
       await this.executeLoadedPromptFile(undefined, true);
       return;
@@ -4481,7 +4492,7 @@ export class WorkflowInstance
   private registerActiveTarget(
     target: WorkflowAttemptTarget,
     attemptIndex: number,
-    subWorkflow?: SubWorkflowHandle | null
+    subWorkflow?: SubWorkflowControl | null
   ): void {
     const targetKey = this.getExecutionTargetRunKey(target);
     const resource = this.activeTargetResources.get(targetKey) ?? { target };
@@ -4492,7 +4503,7 @@ export class WorkflowInstance
   }
 
   private async forwardSubWorkflowControl(
-    handle: SubWorkflowHandle | undefined,
+    handle: SubWorkflowControl | undefined,
     action: "pause" | "cancelPause" | "stop"
   ): Promise<void> {
     if (!handle) return;

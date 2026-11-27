@@ -956,13 +956,21 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
-   * Return a stopped run's cancelled sequential workflow step to pending, so
-   * continuing the run re-executes it and reattaches to its recorded child run
-   * (D6). A cancelled prompt or script step stays settled and continuation
-   * resumes after it, but a stopped child is still mid-run: skipping its
-   * parent step would orphan the rest of the child's work.
+   * Return a stopped run's cancelled sequential step to pending, so continuing
+   * the run re-executes the step its stop interrupted.
+   *
+   * By default only a workflow step with a recorded child is rewound: it
+   * re-executes to reattach to that child run (D6). A cancelled prompt or
+   * script step stays settled and continuation resumes after it, but a
+   * stopped child is still mid-run, and skipping its parent step would orphan
+   * the rest of the child's work. `anyStepKind` is for that child itself when
+   * D6 continues it: its interrupted step is the work the parent step is
+   * waiting on, so it re-runs whatever its kind. A finalStep pass needs no
+   * rewind; a stopped pass is re-entered at the same `loopIndex`.
    */
-  public async rewindCancelledSubWorkflowStepForContinuation(): Promise<boolean> {
+  public async rewindCancelledStepForContinuation(
+    options: { anyStepKind?: boolean } = {}
+  ): Promise<boolean> {
     if (this.stateMachine.status !== EXECUTION_STATES.STOPPED) {
       return false;
     }
@@ -970,8 +978,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const step = this.state.steps[index];
     if (
       !step ||
-      !isSubWorkflowStep(step) ||
-      !step._runtime?.childRunRef ||
+      (!options.anyStepKind &&
+        (!isSubWorkflowStep(step) || !step._runtime?.childRunRef)) ||
       this.state.results[index]?.status !== STEP_STATUS.CANCELLED ||
       this.state.parallelGroups.some(
         (group) => index >= group.startIndex && index <= group.endIndex
