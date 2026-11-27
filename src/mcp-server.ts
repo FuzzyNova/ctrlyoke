@@ -1433,7 +1433,9 @@ export class CtrlYokeMCPServer {
         subWorkflowOutputs.set(child.target.stepIndex, child.output);
       else if (
         !finalStepSubWorkflow ||
-        child.target.loopIndex + 1 > finalStepSubWorkflow.passNumber
+        // `>=`: runs are in event order, so a pass whose child was stopped
+        // and continued reports its latest settlement, as queue steps do.
+        child.target.loopIndex + 1 >= finalStepSubWorkflow.passNumber
       ) {
         finalStepSubWorkflow = {
           passNumber: child.target.loopIndex + 1,
