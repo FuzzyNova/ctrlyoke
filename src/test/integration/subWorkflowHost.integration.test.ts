@@ -5836,7 +5836,11 @@ suite("Sub-workflow host end to end", () => {
     return fs.realpath((await worktreeRuntimeOf(instance)).worktreePath);
   }
 
-  test("two inheriting members of a managed parent run side by side in the parent's worktree (D4d rule 2)", async function () {
+  // Inheriting children ask for shared-native leases, which were already
+  // compatible with each other (and rule 1 admits the parent's exclusive
+  // lease), so this case passes without D4d rule 2; rule 2 itself is pinned
+  // by ExecutionRootLeaseManager.test.ts's exclusive-mode cases.
+  test("two inheriting members of a managed parent run side by side in the parent's worktree", async function () {
     // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
     this.timeout(180_000);
     const restoreGitTimeouts = setGitTimeoutOverridesForTests({

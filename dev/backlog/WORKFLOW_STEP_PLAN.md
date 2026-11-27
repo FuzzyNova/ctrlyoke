@@ -1397,7 +1397,7 @@ root. That subset is landing step 3 below.
 | P7  | Concurrent managed starts with a slow `setup` fail with a lock timeout, or take over the 30 s-stale mutation lock                                                                                     | Fixed; managed `setup` runs outside the mutation lock                                                                                         |
 | P8  | A child whose agent commits its own work never lands or merges                                                                                                                                        | Fixed; managed settlement accepts forward commits on the recorded branch                                                                      |
 | P9  | The merge step has no way to learn each lane's branch                                                                                                                                                 | D12: the step's output carries the branch metadata; `$step:summary:a-b` reads every lane at a bounded size                                    |
-| P10 | Several children inheriting one exclusive worktree root would conflict on their leases                                                                                                                | D4d sibling-delegation rule                                                                                                                   |
+| P10 | Several children inheriting one exclusive worktree root would conflict on their leases (round 12: never true; inheriting children take shared-native leases, which coexist)                           | D4d sibling-delegation rule                                                                                                                   |
 | P11 | Two lanes with `merge: true` that settle together race for the source checkout's merge lease; the loser ends `blocked` because `mergeManagedWorktree` tries `acquire` once                            | D4d: sibling merge leases wait (bounded) and re-run the merge guard                                                                           |
 | P12 | A one-prompt lane needs its own workflow file, and an agent that writes one dirties the parent's tree, so the D4c check and the `committed` gate both fail                                            | D13 inline single-step definitions                                                                                                            |
 | P13 | MCP `append_step` accepts only flat prompt steps and can't name a worktree; agents can't supply `setup` scripts                                                                                       | D14 `worktreePresets` + `worktree: { use }` on `append_step` items                                                                            |
@@ -1700,46 +1700,46 @@ finalStep:
 
 ## Edge Cases
 
-| Scenario                                                          | Handling                                                                                                                                      |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cycle (A → B → A)                                                 | Start failure naming the cycle (D10) → `onFail`                                                                                               |
-| Deep chain with no cycle                                          | Allowed; no depth limit                                                                                                                       |
-| Same file queued after itself                                     | Allowed; not an active-ancestor cycle                                                                                                         |
-| Child file missing or unresolvable                                | Start failure → `onFail`                                                                                                                      |
-| Child schema/validation error                                     | Start failure carrying the validation message → `onFail`                                                                                      |
-| Child fails (ERROR)                                               | `onFail` (D9)                                                                                                                                 |
-| Child stopped (from either level)                                 | Parent step CANCELLED, parent stops (D2)                                                                                                      |
-| Parent paused while blocked                                       | Parent PAUSING; pause forwarded to the child (D3)                                                                                             |
-| Child paused directly                                             | Parent stays RUNNING; the step row shows the child's paused state (D3)                                                                        |
-| Window reload or crash mid-child                                  | The parent resumes and reattaches to the recorded child run (D6)                                                                              |
-| Child has no `worktree` key                                       | Runs in the parent's execution root via a delegated lease (D4a/D4d)                                                                           |
-| Child has `worktree: false` / managed / named                     | Honoured as authored. Worktrees branch from, and merge into, the parent's checkout (D4b)                                                      |
-| Parent checkout dirty when a worktree child starts                | Managed parent: checkpoint commit. Main/named parent: start failure → `onFail` (D4c)                                                          |
-| Child `merge: true` conflicts or is blocked                       | Step COMPLETED with warning; recorded in the step's metadata for later steps (D4e/D12a)                                                       |
-| Child names the same named worktree the parent holds              | Delegated lease applies only to inheritance; an explicit conflicting worktree raises `ExecutionLeaseConflictError` → start failure → `onFail` |
-| Child has its own `finalStep`                                     | Runs as part of the child run                                                                                                                 |
-| Two parallel members target the same named worktree               | `WORKTREE_COLLISION` preflight issue                                                                                                          |
-| Parallel member inherits the root another merges into             | `MERGE_INTO_SHARED_ROOT` preflight issue                                                                                                      |
-| One parallel lane stopped by the user                             | Siblings finish; parent stops at the join; resume reattaches the stopped lane                                                                 |
-| One parallel lane fails, `failFast: true`                         | Siblings' children are stopped (CANCELLED); group fails                                                                                       |
-| Nested fan-out (a child that fans out itself)                     | Grandchildren branch from and merge into the child's worktree (D4b); lease chains cover every level (D4d)                                     |
-| `worktree` key on a sub-workflow step                             | Schema error (the existing `workflowStep` wrapper rule)                                                                                       |
-| `{{var}}` in the `workflow` path                                  | Not substituted in v1 (D11)                                                                                                                   |
-| Host without `subWorkflowHost`                                    | Step fails with "not supported in this host"                                                                                                  |
-| Root file is only a workflow step                                 | Valid one-step queue; append more workflows while it runs (D8)                                                                                |
-| `$previous` after a workflow step                                 | Metadata plus every child step's full output, recursively (D12a)                                                                              |
-| `$step:summary:N` over a very long child                          | One shared 400 KB summary budget; earliest child steps omitted whole (`omitted="all"`), metadata and the last summary always kept (D12b)      |
-| CLI parallel group of lanes whose steps are interactive           | Children built headless-only; no TTY contention (R5)                                                                                          |
-| Bundle with `subWorkflowSettled` imported by an older ctrlyoke    | Import refused with "is not a recognized timeline event"; no timeline schema bump (R3)                                                        |
-| Agent appends a lane to a paused worktree parent                  | Accepted: the R14 bug was fixed in `ffc623b4f`                                                                                                |
-| Child run history deleted before a later reference                | Metadata with `<childRunUnavailable/>`; not an error                                                                                          |
-| Inline child references `$previous` or a numeric `sessionId`      | Validation error naming the run boundary (D13)                                                                                                |
-| Inline child holds `steps`, `parallel`, or `type: workflow`       | Schema error; use a file (D13)                                                                                                                |
-| Agent names an unknown worktree preset, or the workflow has none  | `append_step`/`edit_step` error listing the available presets (D14)                                                                           |
-| Agent passes `type: workflow` or a file path to `append_step`     | Rejected by the flat item schema; agents only get lanes (D14)                                                                                 |
-| Two `merge: true` lanes settle at the same time                   | The later merge waits for the earlier one's lease, then merges on top of it (D4d)                                                             |
-| Shared-tree member in the same group as a `merge: true` lane      | `MERGE_INTO_SHARED_ROOT` preflight issue                                                                                                      |
-| `merge: true` lane joins a running step via `parallelWithCurrent` | Rejected with the `MERGE_INTO_SHARED_ROOT` message (D14)                                                                                      |
+| Scenario                                                          | Handling                                                                                                                                                                                                             |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cycle (A → B → A)                                                 | Start failure naming the cycle (D10) → `onFail`                                                                                                                                                                      |
+| Deep chain with no cycle                                          | Allowed; no depth limit                                                                                                                                                                                              |
+| Same file queued after itself                                     | Allowed; not an active-ancestor cycle                                                                                                                                                                                |
+| Child file missing or unresolvable                                | Start failure → `onFail`                                                                                                                                                                                             |
+| Child schema/validation error                                     | Start failure carrying the validation message → `onFail`                                                                                                                                                             |
+| Child fails (ERROR)                                               | `onFail` (D9)                                                                                                                                                                                                        |
+| Child stopped (from either level)                                 | Parent step CANCELLED, parent stops (D2)                                                                                                                                                                             |
+| Parent paused while blocked                                       | Parent PAUSING; pause forwarded to the child (D3)                                                                                                                                                                    |
+| Child paused directly                                             | Parent stays RUNNING; the step row shows the child's paused state (D3)                                                                                                                                               |
+| Window reload or crash mid-child                                  | The parent resumes and reattaches to the recorded child run (D6)                                                                                                                                                     |
+| Child has no `worktree` key                                       | Runs in the parent's execution root via a delegated lease (D4a/D4d)                                                                                                                                                  |
+| Child has `worktree: false` / managed / named                     | Honoured as authored. Worktrees branch from, and merge into, the parent's checkout (D4b)                                                                                                                             |
+| Parent checkout dirty when a worktree child starts                | Managed parent: checkpoint commit. Main/named parent: start failure → `onFail` (D4c)                                                                                                                                 |
+| Child `merge: true` conflicts or is blocked                       | Step COMPLETED with warning; recorded in the step's metadata for later steps (D4e/D12a)                                                                                                                              |
+| Child names the same named worktree the parent holds              | Delegated lease applies only to inheritance; an explicit conflicting worktree fails to start (as built, the earlier "already checked out in the initiating source checkout" check fires before the lease) → `onFail` |
+| Child has its own `finalStep`                                     | Runs as part of the child run                                                                                                                                                                                        |
+| Two parallel members target the same named worktree               | `WORKTREE_COLLISION` preflight issue                                                                                                                                                                                 |
+| Parallel member inherits the root another merges into             | `MERGE_INTO_SHARED_ROOT` preflight issue                                                                                                                                                                             |
+| One parallel lane stopped by the user                             | Siblings finish; parent stops at the join; resume reattaches the stopped lane                                                                                                                                        |
+| One parallel lane fails, `failFast: true`                         | Siblings' children are stopped (CANCELLED); group fails                                                                                                                                                              |
+| Nested fan-out (a child that fans out itself)                     | Grandchildren branch from and merge into the child's worktree (D4b); lease chains cover every level (D4d)                                                                                                            |
+| `worktree` key on a sub-workflow step                             | Schema error (the existing `workflowStep` wrapper rule)                                                                                                                                                              |
+| `{{var}}` in the `workflow` path                                  | Not substituted in v1 (D11)                                                                                                                                                                                          |
+| Host without `subWorkflowHost`                                    | Step fails with "not supported in this host"                                                                                                                                                                         |
+| Root file is only a workflow step                                 | Valid one-step queue; append more workflows while it runs (D8)                                                                                                                                                       |
+| `$previous` after a workflow step                                 | Metadata plus every child step's full output, recursively (D12a)                                                                                                                                                     |
+| `$step:summary:N` over a very long child                          | One shared 400 KB summary budget; earliest child steps omitted whole (`omitted="all"`), metadata and the last summary always kept (D12b)                                                                             |
+| CLI parallel group of lanes whose steps are interactive           | Children built headless-only; no TTY contention (R5)                                                                                                                                                                 |
+| Bundle with `subWorkflowSettled` imported by an older ctrlyoke    | Import refused with "is not a recognized timeline event"; no timeline schema bump (R3)                                                                                                                               |
+| Agent appends a lane to a paused worktree parent                  | Accepted: the R14 bug was fixed in `ffc623b4f`                                                                                                                                                                       |
+| Child run history deleted before a later reference                | Metadata with `<childRunUnavailable/>`; not an error                                                                                                                                                                 |
+| Inline child references `$previous` or a numeric `sessionId`      | Validation error naming the run boundary (D13)                                                                                                                                                                       |
+| Inline child holds `steps`, `parallel`, or `type: workflow`       | Schema error; use a file (D13)                                                                                                                                                                                       |
+| Agent names an unknown worktree preset, or the workflow has none  | `append_step`/`edit_step` error listing the available presets (D14)                                                                                                                                                  |
+| Agent passes `type: workflow` or a file path to `append_step`     | Rejected by the flat item schema; agents only get lanes (D14)                                                                                                                                                        |
+| Two `merge: true` lanes settle at the same time                   | The later merge waits for the earlier one's lease, then merges on top of it (D4d)                                                                                                                                    |
+| Shared-tree member in the same group as a `merge: true` lane      | `MERGE_INTO_SHARED_ROOT` preflight issue                                                                                                                                                                             |
+| `merge: true` lane joins a running step via `parallelWithCurrent` | Rejected with the `MERGE_INTO_SHARED_ROOT` message (D14)                                                                                                                                                             |
 
 ---
 
@@ -2617,31 +2617,90 @@ summaries instead.
       writes the record outside the lock (pre-existing); the hand-written manifest poll in
       `subWorkflowHost.integration.test.ts` (a third copy of that deadline loop).
 
+- **Round 12 (reviewed 2026-11-27): round-11 gaps, landing steps 4 and 5.** All five
+  `claude-cli`/`opus` steps did what they were asked, each gated by the `committed` preset;
+  `npm test` green (8769 extension, 4959 UI, packaging). Two parallel reviewers read the core
+  and worktree diffs; I reviewed the dashboard commit and checked it live (Playwright, 1280 px,
+  default panel widths). Review fix `a14bc5ba3`: the blocked-merge dashboard reason no longer
+  says the worktree is kept; the authored-waves tests compare wave-1 branches as a set (lanes
+  settle in either order); the second-stop settlement test waits 60 s, not 10 s, for a real
+  worktree add; the inheriting-members test no longer claims to prove rule 2.
+  - `b9c108715`: skill-mode MCP sets `CTRLYOKE_EXECUTION_ROOT` only from `--execution-root`
+    (an inherited value is dropped); stopping an idle PAUSED run cancels and skips nothing, and
+    a stop landing while a pause unwinds waits (capped 5 s) for it; CHANGELOG **Fixed**.
+  - `55b32c173`: every managed settlement goes through the stop-abortable
+    `settleManagedWorktree` (`managedWorktreeSettlement(config)` single-sources merge/keep);
+    separate stopped messages for the mutation-lock wait and the merge-lease backoff;
+    `FileLockUnavailableError` records merge `blocked`; `mutationLockOpen` test seam.
+  - `0462eecdb`: `resolveEffectiveStepHarness` colours a step in the list, chip rail and output
+    alike; pending rows honour `ui.harnessColors` (CHANGELOG **Fixed**, a 0.2.0 bug); a lane
+    with a child run marks its harness/model "(expected)"; a named lane shows its branch from
+    the definition; `CliJsonSubWorkflowWorktree` is its own interface; `landingOutcome` values
+    in `docs/cli/ci.md`.
+  - `b1021b815`: D4d rule 2 (`isInheritingSibling`: delegated leases with the same immediate
+    delegator, never a merge lease); real-git tests of inheriting members of a managed parent
+    (and their D6 reattach) and of nested fan-out (lanes merge into the child's worktree, the
+    child into main, chains `[P]` / `[P, C]`). Blocker P10 did not exist: inheriting children
+    take shared-native leases, already compatible, so rule 2 only governs exclusive delegated
+    leases (none exist today besides merge leases, which it excludes).
+  - `59652e3b0`: `WORKTREE_COLLISION` (whole group at preflight, the late member alone at
+    dispatch/join, like `SESSION_COLLISION`; `normalizeNamedWorktreeBranch` in
+    `src/utils/BranchName.ts`); preview lists group issues on workflow members; named members
+    (branch from `base` else parent `HEAD`, never merge, reused) and the parent-holds-it start
+    failure; real-git authored-waves tests (wave 2's base is the merge commit; a dirty merge
+    step fails wave 2). Bug fixed: a settled child's worktree metadata is now read from its run
+    file (the in-memory queue never holds it), so settlements carry the lane's branch.
+  - **Found in review, not yet fixed** (round 13 steps 1–2):
+    - Stopping a PAUSED worktree run (bug): execution settles while PAUSED, which keeps the
+      worktree reservation for Continue (`settleWorkflowExecution`, `pausedWorktreeReservation`);
+      the idle-pause stop then confirms STOPPED and nothing settles the managed worktree or
+      releases the lease, runner lock and heartbeat. Pre-existing for an idle pause
+      (`2a4238d26`), extended by `b9c108715` to the mid-unwind case, which used to settle.
+    - Stop then quick Continue (bug, low): the `preDispatchStartup` check precedes the 5 s
+      unwind wait and is not re-checked, so a Continue during the wait leaves `stop()` on the
+      cancellation path, which cancels and skips the never-started step.
+    - `SubWorkflowLauncher.executionHandle` (bug, low): `settled` is set only after
+      `withRecordedWorktree`'s disk read, so a parent stop or fail-fast in that window stops a
+      finished child again (STOPPED → CANCELLING). The read's fallback for a missing/corrupt
+      run file is untested.
+    - Dashboard (seen live): inside a parallel group at the default panel width the title row
+      is ~133 px; the icon (16), "Workflow" badge (53) and the collapsed worktree icon (24)
+      leave the name ~28 px ("La…"). `shrink-1000` works, but it is not enough.
+    - "(expected)" stands in for what a lane's child ran with; nothing records it. A reattached
+      COMPLETED child settles without worktree metadata (pre-existing, narrow).
+    - Tests: no executor-level test of a late-dispatched member or a `parallelWithCurrent`
+      joiner hitting `WORKTREE_COLLISION`; the nested fan-out test does not check a lane's
+      `baseCommit` against the child worktree's HEAD.
+    - Low, left: a joiner is refused for a branch only an already-settled member held (the join
+      path reserves settled members too; agents only get managed lanes); the preview sees
+      collisions only between inline members (file children are not parsed, as with
+      `MERGE_INTO_SHARED_ROOT`).
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 12 (queued 2026-11-27): round-11 gaps, then landing step 4.** All on
+- **Round 13 (queued 2026-11-27): round-12 gaps, then landing step 6.** All on
   `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Core/MCP fixes: skill-mode execution root, idle-pause stop cancels nothing, MCP
-     forwarding and edit-path tests.
-  2. Worktree settlement fixes: the two startup-pipeline settlements take the stop signal
-     through one shared settle helper, stopped-merge message, `FileLockUnavailableError`,
-     the "still lands" test clock.
-  3. Dashboard lane fixes (colour single-sourced, frozen harness after run, narrow-width
-     badges, DRY, CLI worktree interface, tests).
-  4. D4d rule 2 (sibling delegation) and inheriting parallel members of a worktree parent, with
-     a real-git nested fan-out test (grandchild branches from and merges into its parent's
-     worktree).
-  5. `WORKTREE_COLLISION`, named-worktree members, and a real-git authored-wave test (wave,
-     merge step, wave 2 branching from the merge commit).
-- **Round 13: landing step 5 leftovers and step 6.** Whatever rounds 12's steps 4–5 leave of
-  authored waves; queue-next / run-alongside entry points (`appendMode`); the open question on
-  continuing stopped children.
+  1. Core stop fixes: a stopped PAUSED worktree run settles and releases; re-check after the
+     unwind wait; launcher `settled` before the disk read, plus its fallback test.
+  2. Record what a child actually ran with (harness/model) on its settlement, show it on the
+     lane row instead of "(expected)"; reattached COMPLETED child keeps worktree metadata;
+     narrow-width lane title.
+  3. Entry points backend: `APPEND_MODES`, `buildSubWorkflowReferenceStep`, `appendMode` and
+     `position` on `APPEND_FILE`, orchestrator routing by state, "alongside" through
+     `RunContinuationService.appendStepsToActiveParallelGroup` (with the member preflight for a
+     joining file child), `ctrlyoke.queueAsSubWorkflowFromContext`; executor-level
+     `WORKTREE_COLLISION` tests for late dispatch and joins; nested fan-out `baseCommit` check.
+  4. Entry points UI: switcher row menu ("Queue workflow to run next…", "Run workflow alongside
+     current step…"), `WorkflowControls` "Queue as sub-workflow…", workspace viewer file menu;
+     docs and CHANGELOG.
 - **Round 14: landing step 7.** "Started by" label polish, editor mode + preview + completions polish (including skipping
   inline definitions in `StepReferenceShifts.ts` and step-number completions), and the
   `schemaUiPropertyRoundTrip` UI-control coverage for `subWorkflowStep` (the editor control is
-  what that suite checks, so it lands with the editor mode, never as an opt-out).
+  what that suite checks, so it lands with the editor mode, never as an opt-out). Preview
+  parsing file children so `WORKTREE_COLLISION`/`MERGE_INTO_SHARED_ROOT` show for them too, if
+  cheap. Then the whole-spec requirement-by-requirement audit.
 
 ### Decisions
 
@@ -2820,3 +2879,16 @@ Coarse roadmap; re-planned every pass.
 - **MCP's merge-lane checks take the run's execution root only from ctrlyoke** (round 11 review).
   The edit/join merge-lane checks use `CTRLYOKE_EXECUTION_ROOT` as ctrlyoke set it, else the run
   file; never the agent's working directory (round 12 step 1 fixes skill mode).
+- **`WORKTREE_COLLISION` behaves like `SESSION_COLLISION`** (round 12): it fails the whole group
+  at group preflight, and only the late member at its own dispatch or join. A `{{var}}` named
+  branch is not compared at preflight (the child substitutes it); a clash between two fails the
+  later member at start. The key is the normalized branch only.
+- **D4d rule 2 needs a chain that ends in the same delegator, not an identical chain** (round
+  12; the spec was silent). Worktree-owning leases carry no chain, so rule 2 can never admit two
+  holders of one named worktree.
+- **A lane's harness/model is labelled "(expected)" once its child exists** (round 12) until
+  round 13 records what the child used on its settlement (an optional field, read tolerantly,
+  so no format bump).
+- **A stopped PAUSED worktree run must settle like any stopped run** (round 13; D3 was silent).
+  Pausing keeps the worktree reservation for Continue; a stop ends the run, so it settles the
+  managed worktree (merge per config) and releases the lease and runner lock.
