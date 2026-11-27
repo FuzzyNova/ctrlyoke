@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Stopping a long-running script now waits for its process runner to shut down instead of waiting for the detector's 10-second fallback.
+- A managed worktree run continued from a different checkout than the one it started in keeps the base, target branch and source checkout it was created with, instead of overwriting its ownership record or failing with a branch collision. If that source checkout has been removed, the continue fails and names it. A failed-setup managed worktree whose source checkout was removed is now cleaned up on the next managed run.
 
 ### Added
 

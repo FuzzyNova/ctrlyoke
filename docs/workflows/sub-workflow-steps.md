@@ -115,6 +115,12 @@ with the parent's, under the checkout the run was started from. New worktrees
 go in the main checkout's worktrees folder (`<main>.worktrees/`, or
 `worktrees.root` when set), beside the parent's, never inside it.
 
+Continuing a child run directly, from its own run or with `ctrlyoke continue`,
+keeps the checkout its worktree branched from: it reuses its worktree and base,
+its target branch is still the parent's, and `merge: true` still merges into the
+parent's checkout. If that checkout has since been removed, the continue fails
+and names it rather than merging somewhere else.
+
 Before a fresh child with a worktree starts, ctrlyoke checks the parent's
 execution checkout. A clean checkout proceeds. Dirty changes in a ctrlyoke
 managed worktree are checkpoint-committed with the same deterministic message
@@ -164,8 +170,10 @@ it cannot share a group with a member that works in that checkout: a prompt or
 script member, a workflow member whose child has no `worktree`, or, when the
 parent runs in the main checkout, one whose child sets `worktree: false`. The
 merge would land while that member is still editing. The group fails before
-any member starts and names both members. Give the editing member its own
-worktree, or drop `merge` and leave the merge to a step after the group.
+any member starts and names both members. This applies even when the group
+runs one member at a time (`queue.maxParallelSteps: 1`). Give the editing
+member its own worktree, or drop `merge` and leave the merge to a step after
+the group.
 Members whose children all have their own worktrees, with or without
 `merge`, can share a group.
 

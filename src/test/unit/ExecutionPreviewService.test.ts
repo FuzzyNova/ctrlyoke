@@ -1400,6 +1400,76 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(preview.steps[0]?.workspaceMutations.length, 1);
   });
 
+  /**
+   * A group of a prompt member, a `worktree: false` child and a `merge: true`
+   * lane, previewed through the prompt member: the workflow-wide preview
+   * does not render sub-workflow steps yet (spec "Execution preview"), but the
+   * group preflight covers every member. The merge lane's issue names the
+   * `worktree: false` child as an editor only when the parent runs in the main
+   * checkout (`parentRunsInMainCheckout`).
+   */
+  async function mergeLaneEditors(
+    worktree: PromptFile["worktree"]
+  ): Promise<string> {
+    const preview = await createService().build({
+      workflow: {
+        ...(worktree !== undefined ? { worktree } : {}),
+        steps: [
+          { name: "prompt member", prompt: "edit in place" },
+          {
+            type: "workflow",
+            name: "main lane",
+            workflow: { type: "script", script: "npm test", worktree: false },
+          },
+          {
+            type: "workflow",
+            name: "merge lane",
+            workflow: {
+              prompt: "lane work",
+              worktree: { mode: "managed", merge: true },
+            },
+          },
+        ],
+        parallelGroups: [
+          { id: "group", startIndex: 0, endIndex: 2, failFast: true },
+        ],
+      },
+      scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 0 },
+    });
+    const issues = preview.steps.flatMap((step) =>
+      step.diagnostics.filter(
+        (diagnostic) =>
+          diagnostic.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT
+      )
+    );
+    assert.strictEqual(issues.length, 1, JSON.stringify(issues));
+    const editors = /which (.*) edits? in the same parallel group/.exec(
+      issues[0].message
+    );
+    assert.ok(editors, issues[0].message);
+    return editors[1];
+  }
+
+  test("a preview of a main-checkout workflow counts a worktree: false lane as editing its checkout", async () => {
+    assert.strictEqual(
+      await mergeLaneEditors(undefined),
+      'Step 1 ("prompt member"), Step 2 ("main lane")'
+    );
+    // An explicit `worktree: false` workflow runs in the main checkout too.
+    assert.strictEqual(
+      await mergeLaneEditors(false),
+      'Step 1 ("prompt member"), Step 2 ("main lane")'
+    );
+  });
+
+  test("a preview of a managed-worktree workflow does not count a worktree: false lane as editing its checkout", async () => {
+    assert.strictEqual(
+      await mergeLaneEditors({ mode: "managed" }),
+      'Step 1 ("prompt member")'
+    );
+  });
+
   test("omits the worktree preview when the workflow is not configured to use one", async () => {
     const preview = await createService().build({
       workflow: { steps: [{ prompt: "no worktree here" }] },

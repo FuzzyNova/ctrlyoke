@@ -213,6 +213,70 @@ function findGitWorktreeEntryForRecord(
   );
 }
 
+/**
+ * Whether a managed run belongs to the runs started from `checkoutRoot`, so
+ * that checkout may recover or reclaim it. A record names the checkout it
+ * branched from; a sub-workflow child's is its parent's managed worktree
+ * (D4b), so the chain is followed up to the checkout the root run started
+ * in. A chain that reaches a source checkout Git no longer lists (a removed
+ * parent worktree) has no other owner left: it belongs here when
+ * `includeOrphaned` is set (reclaiming a failed setup), and not otherwise,
+ * since such a run can no longer be resumed. A chain that reaches a user's
+ * own linked checkout belongs to that checkout.
+ */
+function managedRecordDescendsFromCheckout(
+  record: ManagedWorktreeOwnershipRecord,
+  checkoutRoot: string,
+  entries: readonly GitWorktreeEntry[],
+  records: readonly ManagedWorktreeOwnershipRecord[],
+  includeOrphaned: boolean
+): boolean {
+  const visited = new Set<ManagedWorktreeOwnershipRecord>();
+  let current = record;
+  while (!visited.has(current)) {
+    visited.add(current);
+    const source = current.sourceCheckoutRoot;
+    if (pathsEqual(source, checkoutRoot)) return true;
+    const sourceEntry = findLiveSourceCheckoutEntry(entries, source);
+    if (!sourceEntry) return includeOrphaned;
+    const owner = records.find((candidate) =>
+      gitWorktreeEntryMatchesManagedRecord(sourceEntry, candidate)
+    );
+    if (!owner) return false;
+    current = owner;
+  }
+  return false;
+}
+
+/** The listed, non-prunable checkout at a record's source checkout path. */
+function findLiveSourceCheckoutEntry(
+  entries: readonly GitWorktreeEntry[],
+  sourceCheckoutRoot: string
+): GitWorktreeEntry | undefined {
+  return entries.find(
+    (entry) =>
+      !entry.prunable &&
+      entry.prunableReason === undefined &&
+      pathsEqual(entry.worktreePath, sourceCheckoutRoot)
+  );
+}
+
+/**
+ * A resumed managed run branches from and merges into the checkout its
+ * record names. When that checkout is gone (a sub-workflow parent's worktree
+ * was removed), retargeting it at the caller's checkout would merge into the
+ * wrong branch, so the start fails instead.
+ */
+function assertRecordedSourceCheckoutExists(
+  record: ManagedWorktreeOwnershipRecord,
+  entries: readonly GitWorktreeEntry[]
+): void {
+  if (findLiveSourceCheckoutEntry(entries, record.sourceCheckoutRoot)) return;
+  throw new Error(
+    `Managed worktree "${record.branchName}" was branched from "${record.sourceCheckoutRoot}", which is no longer a checkout of this repository. Start a new run, or remove the worktree in Settings → Worktrees.`
+  );
+}
+
 export interface NamedWorktreeSetupRecord {
   schemaVersion: typeof NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION;
   worktreePath: string;
@@ -1733,9 +1797,12 @@ export class WorktreeManager {
           )
         );
         records = await this.readRecords(commonDirectory);
+        // The record, not the caller, owns the source checkout of a run it
+        // already describes: a sub-workflow child branched from its parent's
+        // worktree (D4b) is found by its identity even when it is continued
+        // directly, with no parent link, from the main checkout.
         const existingRecord = records.find(
           (record) =>
-            pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot) &&
             record.workflowKey === identity.workflowKey &&
             record.runRef === identity.runRef
         );
@@ -1754,12 +1821,20 @@ export class WorktreeManager {
         await validateBranchName(branchName);
 
         const entries = await listGitWorktrees(sourceCheckoutRoot);
+        if (existingRecord) {
+          assertRecordedSourceCheckoutExists(existingRecord, entries);
+        }
         let existingCheckout = entries.find(
           (entry) => entry.branchName === branchName
         );
         if (
           existingCheckout &&
-          pathsEqual(existingCheckout.worktreePath, sourceCheckoutRoot)
+          (pathsEqual(existingCheckout.worktreePath, sourceCheckoutRoot) ||
+            (existingRecord !== undefined &&
+              pathsEqual(
+                existingCheckout.worktreePath,
+                existingRecord.sourceCheckoutRoot
+              )))
         ) {
           throw new Error(
             `Managed branch "${branchName}" is already checked out in the source checkout.`
@@ -1847,13 +1922,7 @@ export class WorktreeManager {
           branchState: WORKTREE_BRANCH_STATES.MISSING,
         };
 
-        if (existingRecord) {
-          this.assertRecordMatchesRequest(existingRecord, {
-            sourceCheckoutRoot,
-            workflowKey: identity.workflowKey,
-            runRef: identity.runRef,
-          });
-        } else {
+        if (!existingRecord) {
           await this.writeRecord(recordPath, record);
         }
 
@@ -1933,7 +2002,17 @@ export class WorktreeManager {
       ) {
         continue;
       }
-      if (!pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot)) continue;
+      if (
+        !managedRecordDescendsFromCheckout(
+          record,
+          sourceCheckoutRoot,
+          entries,
+          records,
+          false
+        )
+      ) {
+        continue;
+      }
       if (
         options.workflowKey !== undefined &&
         record.workflowKey !== options.workflowKey
@@ -3284,25 +3363,6 @@ export class WorktreeManager {
     await writeFileAtomic(recordPath, `${JSON.stringify(record, null, 2)}\n`);
   }
 
-  private assertRecordMatchesRequest(
-    record: ManagedWorktreeOwnershipRecord,
-    request: {
-      sourceCheckoutRoot: string;
-      workflowKey: WorkflowKey;
-      runRef: RunRef;
-    }
-  ): void {
-    if (
-      !pathsEqual(record.sourceCheckoutRoot, request.sourceCheckoutRoot) ||
-      record.workflowKey !== request.workflowKey ||
-      record.runRef !== request.runRef
-    ) {
-      throw new Error(
-        `Managed ownership record for "${record.branchName}" belongs to another run.`
-      );
-    }
-  }
-
   private async assertManagedPathIsAvailable(
     worktreePath: string,
     expectedPath?: string
@@ -3350,15 +3410,22 @@ export class WorktreeManager {
     return inspections.some((inspection) => !inspection.stale);
   }
 
+  /**
+   * The ensure options a discovered record resolves its execution inputs
+   * with. Inputs come from the discovering checkout: a child's record names
+   * its parent's worktree (D4b), which may be gone, while the caller's
+   * workspace folders are in its own checkout. Every checkout of a
+   * repository has the same layout, so the execution workspace maps the same.
+   */
   private recoveryAsResolveOptions(
     record: ManagedWorktreeOwnershipRecord,
     options: RecoverManagedWorktreeOptions
   ): EnsureManagedWorktreeOptions {
     const namedWorkspaceRoots = options.namedWorkspaceRoots ?? [
-      { name: "repository", fsPath: record.sourceCheckoutRoot },
+      { name: "repository", fsPath: options.sourceCheckoutRoot },
     ];
     return {
-      sourceCheckoutRoot: record.sourceCheckoutRoot,
+      sourceCheckoutRoot: options.sourceCheckoutRoot,
       stateRoot: options.stateRoot ?? record.stateRoot,
       workspaceRoots: options.workspaceRoots,
       namedWorkspaceRoots,
@@ -3387,15 +3454,23 @@ export class WorktreeManager {
     commonDirectory: string,
     records: readonly ManagedWorktreeOwnershipRecord[]
   ): Promise<void> {
-    const candidates = records.filter(
+    const failedSetups = records.filter(
       (record) =>
-        pathsEqual(record.sourceCheckoutRoot, repositoryRoot) &&
         record.lifecycleState === WORKTREE_LIFECYCLE_STATES.BLOCKED &&
         record.setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
     );
-    if (candidates.length === 0) return;
+    if (failedSetups.length === 0) return;
 
     let entries = await listGitWorktrees(repositoryRoot);
+    const candidates = failedSetups.filter((record) =>
+      managedRecordDescendsFromCheckout(
+        record,
+        repositoryRoot,
+        entries,
+        records,
+        true
+      )
+    );
     for (const record of candidates) {
       const liveLease = (
         await ExecutionRootLeaseManager.inspectLeases(record.worktreePath)
@@ -3488,7 +3563,7 @@ export class WorktreeManager {
   ): Promise<WorktreeInfo> {
     const resolvedOptions = this.recoveryAsResolveOptions(record, options);
     const inputs = await this.resolveExecutionInputs(
-      record.sourceCheckoutRoot,
+      resolvedOptions.sourceCheckoutRoot,
       resolvedOptions
     );
     const executionWorkspace = this.buildExecutionWorkspace(

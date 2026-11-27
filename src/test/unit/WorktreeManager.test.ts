@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { execFileSync } from "child_process";
+import { execFileSync, spawnSync } from "child_process";
 import { suite, suiteSetup, suiteTeardown, teardown, test } from "mocha";
 import {
   WorktreeManager,
@@ -418,6 +418,519 @@ suite("WorktreeManager", function () {
       );
     } finally {
       await parentLease.release();
+    }
+  });
+
+  /** A PID that no process holds: one that just exited. */
+  function deadPid(): number {
+    const exited = spawnSync(process.execPath, ["-e", ""]);
+    assert.ok(exited.pid, "spawned a process to take a dead PID from");
+    return exited.pid;
+  }
+
+  function commitFile(directory: string, name: string, message: string) {
+    execFileSync("git", ["-C", directory, "add", name]);
+    execFileSync("git", ["-C", directory, "commit", "-m", message], {
+      stdio: "ignore",
+    });
+  }
+
+  const CHILD_RUN = "run-2" as RunRef;
+  const CHILD_BRANCH = "ctrlyoke/managed-test-workflow/run-2";
+
+  /**
+   * A managed parent run with one commit of its own, and the options that
+   * start its managed child from the parent's worktree as a launcher does
+   * (D4b): the parent's checkout is the source, the window's is the state
+   * root.
+   */
+  async function managedParent(worktrees: WorktreeManager, repository: string) {
+    const parentRun = await ensureManaged(worktrees, repository);
+    try {
+      await fs.writeFile(
+        path.join(parentRun.worktreePath, "parent.txt"),
+        "parent\n"
+      );
+      commitFile(parentRun.worktreePath, "parent.txt", "parent work");
+    } catch (error) {
+      await parentRun.lease.release();
+      throw error;
+    }
+    const childOptions = (delegator: string) => ({
+      runRef: CHILD_RUN,
+      stateRoot: repository,
+      workspaceCheckoutRoot: repository,
+      delegationChain: [delegator],
+    });
+    return { parentRun, childOptions };
+  }
+
+  test("a child continued directly from the main checkout keeps its record's source checkout, base and target, and merges into the parent's branch", async () => {
+    const { parent, repository } = await makeRepository("direct-resume");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    let resumedReleased = false;
+    let resumed: Awaited<ReturnType<typeof ensureManaged>> | undefined;
+    try {
+      const child = await ensureManaged(
+        worktrees,
+        parentRun.worktreePath,
+        childOptions(parentRun.lease.ownerToken)
+      );
+      await fs.writeFile(path.join(child.worktreePath, "child.txt"), "child\n");
+      commitFile(child.worktreePath, "child.txt", "child work");
+      const recordBefore = await worktrees.readManagedWorktreeRecord(
+        repository,
+        child.branchName
+      );
+      // The child and its parent stop, so neither holds a lease.
+      await child.lease.release();
+      await parentRun.lease.release();
+
+      // Continued from its own row: no parent link, so the caller passes the
+      // window's checkout as the source.
+      resumed = await ensureManaged(worktrees, repository, {
+        runRef: CHILD_RUN,
+      });
+      assert.strictEqual(resumed.origin, "recovered");
+      assert.strictEqual(resumed.worktreePath, child.worktreePath);
+      assert.strictEqual(
+        await fs.realpath(resumed.sourceCheckoutRoot),
+        await fs.realpath(parentRun.worktreePath)
+      );
+      assert.strictEqual(resumed.baseCommit, child.baseCommit);
+      assert.strictEqual(resumed.targetBranch, parentRun.branchName);
+      const recordAfter = await worktrees.readManagedWorktreeRecord(
+        repository,
+        child.branchName
+      );
+      assert.strictEqual(
+        recordAfter?.sourceCheckoutRoot,
+        recordBefore?.sourceCheckoutRoot
+      );
+      assert.strictEqual(recordAfter?.baseCommit, recordBefore?.baseCommit);
+      assert.strictEqual(recordAfter?.targetBranch, parentRun.branchName);
+      // The window's workspace folder still maps into the child's worktree.
+      assert.strictEqual(
+        resumed.executionWorkspace.executionRoot,
+        child.worktreePath
+      );
+
+      const result = await worktrees.completeManagedRun(resumed, {
+        merge: true,
+      });
+      resumedReleased = true;
+      assert.strictEqual(
+        result.mergeOutcome,
+        "fast-forward",
+        String(result.message)
+      );
+      assert.strictEqual(
+        gitOutput(parentRun.worktreePath, "log", "-1", "--format=%s"),
+        "child work"
+      );
+      assert.strictEqual(
+        gitOutput(repository, "log", "--format=%s"),
+        "base",
+        "the main checkout gets no commit"
+      );
+    } finally {
+      if (resumed && !resumedReleased) await resumed.lease.release();
+      await parentRun.lease.release();
+    }
+  });
+
+  test("a top-level managed run resumes from its unchanged record", async () => {
+    const { parent, repository } = await makeRepository("top-level-resume");
+    const worktrees = manager(parent);
+    const first = await ensureManaged(worktrees, repository);
+    await first.lease.release();
+    const before = await worktrees.readManagedWorktreeRecord(
+      repository,
+      first.branchName
+    );
+    execFileSync(
+      "git",
+      ["-C", repository, "commit", "--allow-empty", "-m", "later"],
+      {
+        stdio: "ignore",
+      }
+    );
+
+    const resumed = await ensureManaged(worktrees, repository);
+    try {
+      assert.strictEqual(resumed.origin, "recovered");
+      assert.strictEqual(resumed.worktreePath, first.worktreePath);
+      assert.strictEqual(resumed.baseCommit, first.baseCommit);
+      assert.strictEqual(resumed.targetBranch, first.targetBranch);
+      const after = await worktrees.readManagedWorktreeRecord(
+        repository,
+        first.branchName
+      );
+      assert.strictEqual(after?.sourceCheckoutRoot, before?.sourceCheckoutRoot);
+      assert.strictEqual(after?.baseCommit, before?.baseCommit);
+      assert.strictEqual(after?.createdAt, before?.createdAt);
+    } finally {
+      await resumed.lease.release();
+    }
+  });
+
+  test("a resumed child whose parent's worktree was removed fails to start and names it", async () => {
+    const { parent, repository } = await makeRepository("removed-parent");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    const child = await ensureManaged(
+      worktrees,
+      parentRun.worktreePath,
+      childOptions(parentRun.lease.ownerToken)
+    ).finally(() => parentRun.lease.release());
+    await child.lease.release();
+    const parentWorktree = await fs.realpath(parentRun.worktreePath);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "worktree",
+      "remove",
+      "--force",
+      parentWorktree,
+    ]);
+
+    await assert.rejects(
+      ensureManaged(worktrees, repository, { runRef: CHILD_RUN }),
+      (error: Error) =>
+        error.message.includes(child.branchName) &&
+        error.message.includes(parentWorktree) &&
+        /no longer a checkout of this repository/.test(error.message)
+    );
+    const record = await worktrees.readManagedWorktreeRecord(
+      repository,
+      child.branchName
+    );
+    assert.strictEqual(
+      record?.sourceCheckoutRoot,
+      child.sourceCheckoutRoot,
+      "the record is not retargeted"
+    );
+  });
+
+  /**
+   * A child of a managed parent whose setup fails leaves a blocked record
+   * naming the parent's worktree as its source checkout.
+   */
+  async function failedSetupChild(name: string, removeParent: boolean) {
+    const { parent, repository } = await makeRepository(name);
+    const worktrees = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: new RecordingWorktreeSetupRunner({
+        success: false,
+        result: "setup failed",
+        error: "setup failed",
+        stdout: "",
+        stderr: "setup failed",
+        exitCode: 1,
+      }),
+    });
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    try {
+      await assert.rejects(
+        ensureManaged(worktrees, parentRun.worktreePath, {
+          ...childOptions(parentRun.lease.ownerToken),
+          setup: "npm ci",
+        }),
+        (error: unknown) => error instanceof WorktreeSetupError
+      );
+    } finally {
+      await parentRun.lease.release();
+    }
+    const record = await worktrees.readManagedWorktreeRecord(
+      repository,
+      CHILD_BRANCH
+    );
+    assert.strictEqual(record?.lifecycleState, "blocked");
+    assert.strictEqual(record?.setupOutcome, WORKTREE_SETUP_OUTCOMES.FAILED);
+    if (removeParent) {
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "remove",
+        "--force",
+        await fs.realpath(parentRun.worktreePath),
+      ]);
+    }
+    return { worktrees, repository, childPath: record!.worktreePath };
+  }
+
+  for (const removeParent of [false, true]) {
+    test(`a failed-setup child record is reclaimed from the main checkout ${removeParent ? "once its parent's worktree is gone" : "while its parent's worktree remains"}`, async () => {
+      const { worktrees, repository, childPath } = await failedSetupChild(
+        removeParent ? "reclaim-orphaned-child" : "reclaim-child",
+        removeParent
+      );
+
+      // Any managed start in the repository reconciles failed setups.
+      const next = await ensureManaged(worktrees, repository, {
+        runRef: "run-3" as RunRef,
+      });
+      await next.lease.release();
+
+      assert.ok(
+        !(await listWorktrees(repository)).some(
+          (entry) => entry.branchName === CHILD_BRANCH
+        ),
+        "the failed child checkout is removed"
+      );
+      await assert.rejects(fs.access(childPath));
+      // The branch starts at the parent's commit, which main does not have,
+      // so the safe delete keeps it and the record stays as its tombstone.
+      const record = await worktrees.readManagedWorktreeRecord(
+        repository,
+        CHILD_BRANCH
+      );
+      assert.strictEqual(record?.lifecycleState, "settled");
+      assert.strictEqual(record?.directoryState, "removed");
+      assert.strictEqual(record?.branchState, "present");
+      assert.notStrictEqual(
+        gitOutput(repository, "branch", "--list", CHILD_BRANCH),
+        ""
+      );
+    });
+  }
+
+  test("a failed-setup record of a run started in a user's linked worktree is left to that checkout", async () => {
+    const { parent, repository } = await makeRepository("reclaim-user-linked");
+    const linked = path.join(parent, "linked");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "user/linked", linked],
+      { stdio: "ignore" }
+    );
+    const worktrees = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: new RecordingWorktreeSetupRunner({
+        success: false,
+        result: "setup failed",
+        error: "setup failed",
+        stdout: "",
+        stderr: "setup failed",
+        exitCode: 1,
+      }),
+    });
+    await assert.rejects(
+      ensureManaged(worktrees, linked, {
+        stateRoot: linked,
+        namedWorkspaceRoots: [{ name: "linked", fsPath: linked }],
+        runRef: CHILD_RUN,
+        setup: "npm ci",
+      }),
+      (error: unknown) => error instanceof WorktreeSetupError
+    );
+
+    const next = await ensureManaged(worktrees, repository, {
+      runRef: "run-3" as RunRef,
+    });
+    await next.lease.release();
+
+    assert.strictEqual(
+      (await worktrees.readManagedWorktreeRecord(repository, CHILD_BRANCH))
+        ?.lifecycleState,
+      "blocked"
+    );
+  });
+
+  test("activation discovery from the main checkout lists a stopped child of a managed parent as recoverable", async () => {
+    const { parent, repository } = await makeRepository("discover-child");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    const child = await ensureManaged(
+      worktrees,
+      parentRun.worktreePath,
+      childOptions(parentRun.lease.ownerToken)
+    ).finally(() => parentRun.lease.release());
+    await child.lease.release();
+
+    const report = await worktrees.discoverActivationState({
+      sourceCheckoutRoot: repository,
+    });
+    const recoverable = report.recoverableManagedWorktrees.map(
+      (info) => info.branchName
+    );
+    assert.ok(recoverable.includes(child.branchName), recoverable.join(", "));
+    assert.ok(recoverable.includes(parentRun.branchName));
+    const recovered = report.recoverableManagedWorktrees.find(
+      (info) => info.branchName === child.branchName
+    );
+    assert.strictEqual(
+      await fs.realpath(recovered!.sourceCheckoutRoot),
+      await fs.realpath(parentRun.worktreePath)
+    );
+    assert.strictEqual(
+      recovered!.executionWorkspace.executionRoot,
+      child.worktreePath
+    );
+  });
+
+  test("a managed-parent merge lane resumed after a crash reclaims the dead leases and merges into the parent's branch", async () => {
+    const { parent, repository } = await makeRepository("crash-merge-lane");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    const child = await ensureManaged(
+      worktrees,
+      parentRun.worktreePath,
+      childOptions(parentRun.lease.ownerToken)
+    ).finally(() => parentRun.lease.release());
+    try {
+      await fs.writeFile(path.join(child.worktreePath, "lane.txt"), "lane\n");
+      commitFile(child.worktreePath, "lane.txt", "lane work");
+    } finally {
+      await child.lease.release();
+    }
+    // The crashed process's leases stay on disk with a dead owner.
+    const crashedPid = deadPid();
+    for (const [executionRoot, runRef] of [
+      [parentRun.worktreePath, identity().runRef],
+      [child.worktreePath, CHILD_RUN],
+    ] as const) {
+      await ExecutionRootLeaseManager.acquire({
+        mode: "exclusive-worktree",
+        stateRoot: repository,
+        executionRoot,
+        workflowKey: identity().workflowKey,
+        runRef,
+        runner: "vscode",
+        instanceId: "crashed-instance",
+        pid: crashedPid,
+      });
+      const inspections =
+        await ExecutionRootLeaseManager.inspectLeases(executionRoot);
+      assert.deepStrictEqual(
+        inspections.map((inspection) => inspection.stale),
+        [true]
+      );
+    }
+
+    // The restarted host continues the parent, which reattaches its child (D6).
+    const resumedParent = await ensureManaged(worktrees, repository);
+    let childReleased = false;
+    let resumedChild: Awaited<ReturnType<typeof ensureManaged>> | undefined;
+    try {
+      assert.strictEqual(resumedParent.origin, "recovered");
+      resumedChild = await ensureManaged(
+        worktrees,
+        resumedParent.worktreePath,
+        childOptions(resumedParent.lease.ownerToken)
+      );
+      assert.strictEqual(resumedChild.origin, "recovered");
+      assert.strictEqual(resumedChild.worktreePath, child.worktreePath);
+      assert.strictEqual(resumedChild.baseCommit, child.baseCommit);
+      assert.strictEqual(resumedChild.targetBranch, parentRun.branchName);
+
+      const result = await worktrees.completeManagedRun(resumedChild, {
+        merge: true,
+      });
+      childReleased = true;
+      assert.strictEqual(
+        result.mergeOutcome,
+        "fast-forward",
+        String(result.message)
+      );
+      assert.strictEqual(
+        gitOutput(parentRun.worktreePath, "log", "-1", "--format=%s"),
+        "lane work"
+      );
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      if (resumedChild && !childReleased) await resumedChild.lease.release();
+      await resumedParent.lease.release();
+    }
+  });
+
+  test("a top-level run in a linked user worktree places its managed worktree under the main checkout's worktrees folder", async () => {
+    const { parent, repository } = await makeRepository("linked-top-level");
+    const linked = path.join(parent, "linked");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "user/linked", linked],
+      { stdio: "ignore" }
+    );
+    const run = await ensureManaged(siblingRootManager(), linked, {
+      stateRoot: linked,
+      namedWorkspaceRoots: [{ name: "linked", fsPath: linked }],
+    });
+    try {
+      assert.strictEqual(
+        path.dirname(run.worktreePath),
+        path.join(await fs.realpath(parent), "repository.worktrees")
+      );
+      await assert.rejects(fs.access(`${linked}.worktrees`));
+      assert.strictEqual(
+        await fs.realpath(run.sourceCheckoutRoot),
+        await fs.realpath(linked)
+      );
+      assert.strictEqual(run.targetBranch, "user/linked");
+    } finally {
+      await run.lease.release();
+    }
+  });
+
+  test("a child whose window state root is a repository subfolder runs in that subfolder of its worktree", async () => {
+    const { parent, repository } = await makeRepository("subfolder-state");
+    const subfolder = path.join(repository, "packages", "app");
+    await fs.mkdir(subfolder, { recursive: true });
+    await fs.writeFile(path.join(subfolder, "index.js"), "\n");
+    commitFile(repository, "packages", "add app");
+    const worktrees = manager(parent);
+    const parentRun = await ensureManaged(worktrees, repository, {
+      stateRoot: subfolder,
+      namedWorkspaceRoots: [{ name: "app", fsPath: subfolder }],
+    });
+    try {
+      assert.strictEqual(
+        parentRun.executionWorkspace.executionRoot,
+        path.join(parentRun.worktreePath, "packages", "app")
+      );
+      // As WorkflowInstance passes it: the window's state root, a subfolder.
+      const child = await ensureManaged(worktrees, parentRun.worktreePath, {
+        runRef: CHILD_RUN,
+        stateRoot: subfolder,
+        workspaceCheckoutRoot: subfolder,
+        namedWorkspaceRoots: [{ name: "app", fsPath: subfolder }],
+        delegationChain: [parentRun.lease.ownerToken],
+      });
+      try {
+        const childApp = path.join(child.worktreePath, "packages", "app");
+        assert.strictEqual(child.executionWorkspace.executionRoot, childApp);
+        assert.deepStrictEqual(
+          child.executionWorkspace.namedWorkspaceRoots.map(
+            (root) => root.fsPath
+          ),
+          [childApp]
+        );
+        assert.strictEqual(
+          child.executionWorkspace.stateRoot,
+          path.resolve(subfolder),
+          "history stays under the window's state root"
+        );
+      } finally {
+        await child.lease.release();
+      }
+    } finally {
+      await parentRun.lease.release();
     }
   });
 

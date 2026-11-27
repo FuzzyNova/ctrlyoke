@@ -4704,4 +4704,291 @@ suite("Sub-workflow host end to end", () => {
       await disposeAll(instances, workspace);
     }
   });
+
+  test("a merge lane of a managed parent continued directly from its own run merges into the parent's worktree branch, not main", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-direct-continue-");
+    // The lane runs in its own worktree, so the gate lives outside the
+    // repository at an absolute path.
+    const recordDir = makeTempDir("ctrlyoke-direct-continue-record-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeGateScript(recordDir);
+      await writeJson(path.join(workspace, "lane.ctrlyoke.json"), {
+        name: "Lane",
+        worktree: { mode: "managed", merge: true },
+        steps: [
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').writeFileSync('lane.txt','lane')\"",
+          },
+          {
+            type: "script",
+            script: `node ${JSON.stringify(path.join(recordDir, "gate.js"))} ${JSON.stringify(path.join(recordDir, "lane"))}`,
+          },
+        ],
+      });
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Managed parent",
+        worktree: { mode: "managed", keep: true },
+        steps: [{ type: "workflow", workflow: "lane.ctrlyoke.json" }],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(recordDir, "lane-runs"));
+      const lane = launchedChild(instances, parent);
+      await waitFor(
+        "the lane to run",
+        () => lane.promptQueue.getState().status === EXECUTION_STATES.RUNNING
+      );
+      const parentWorktree = await worktreeRuntimeOf(parent);
+      const laneBefore = await worktreeRuntimeOf(lane);
+      assert.strictEqual(laneBefore.targetBranch, parentWorktree.branchName);
+
+      // Stopped from its own row; the parent stops through the outcome.
+      await withoutStopFallback(async () => {
+        await lane.stop();
+        await execution;
+      });
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      const { workflowKey, runRef, workingFilePath } =
+        lane.promptQueue.getState();
+      for (const instance of instances) {
+        await instance.whenExecutionSettled();
+        await instance.outputHistoryManager.flushPendingIndexRefresh();
+        instance.dispose();
+      }
+      for (const key of [
+        workflowKey!,
+        parent.promptQueue.getState().workflowKey!,
+      ]) {
+        await fs.rm(WorkflowPaths.runnerLockPath(workspace, key), {
+          force: true,
+        });
+      }
+      const laneFile = JSON.parse(
+        await fs.readFile(workingFilePath!, "utf8")
+      ) as { definitionRevision?: number };
+
+      // Continued directly: a fresh instance with no parent link.
+      const continued = createInstance();
+      instances.push(continued);
+      await fs.writeFile(path.join(recordDir, "lane-go"), "");
+      await withoutStopFallback(() =>
+        continued.executeContinuationAtRun(
+          workflowKey!,
+          runRef!,
+          laneFile.definitionRevision ?? 1
+        )
+      );
+
+      assert.strictEqual(
+        continued.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(continued.promptQueue.getState().results)
+      );
+      const laneAfter = await worktreeRuntimeOf(continued);
+      assert.strictEqual(laneAfter.worktreePath, laneBefore.worktreePath);
+      assert.strictEqual(laneAfter.baseCommit, laneBefore.baseCommit);
+      assert.strictEqual(laneAfter.targetBranch, parentWorktree.branchName);
+      assert.strictEqual(
+        await fs.realpath(laneAfter.sourceCheckoutRoot),
+        await fs.realpath(parentWorktree.worktreePath)
+      );
+      assert.strictEqual(
+        laneAfter.mergeOutcome,
+        "fast-forward",
+        String(laneAfter.message)
+      );
+      assert.strictEqual(
+        execFileSync(
+          "git",
+          [
+            "-C",
+            parentWorktree.worktreePath,
+            "log",
+            "--format=%s",
+            "--",
+            "lane.txt",
+          ],
+          { encoding: "utf8" }
+        ).trim(),
+        buildManagedAutoCommitMessage("Lane"),
+        "the lane's commit is on the parent's worktree branch"
+      );
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "log", "--format=%s"], {
+          encoding: "utf8",
+        }).trim(),
+        "add workflows",
+        "the user's main checkout gets no commit"
+      );
+    } finally {
+      await fs.writeFile(path.join(recordDir, "lane-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+      removeTempDir(recordDir);
+    }
+  });
+
+  /** A `worktree: false` lane beside a `merge: true` lane. */
+  const mainCheckoutAndMergeLanes = (script: string) => ({
+    parallel: [
+      inlineLane("Main lane", script, { worktree: false }),
+      inlineLane("Merge lane", "node merge-lane.js", {
+        worktree: { mode: "managed", merge: true },
+      }),
+    ],
+    failFast: false,
+  });
+
+  const MERGE_INTO_SHARED_ROOT_MESSAGE = `Step 2 ("Merge lane") merges into the parent's checkout, which Step 1 ("Main lane") edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`;
+
+  /** Run `definition`'s workflow to its end, capturing the log. */
+  async function runCapturingLog(
+    parent: WorkflowInstance,
+    definitionPath: string
+  ): Promise<string[]> {
+    assert.strictEqual(await parent.loadPromptFile(definitionPath), true);
+    const log = captureLog();
+    try {
+      await parent.executeLoadedPromptFile();
+    } finally {
+      log.restore();
+    }
+    return log.lines.map((line) => line.message);
+  }
+
+  test("a parent in the main checkout counts a worktree: false lane as editing its checkout beside a merge lane", async () => {
+    const workspace = makeTempDir("ctrlyoke-main-parent-false-lane-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [mainCheckoutAndMergeLanes('node -e ""')],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const lines = await runCapturingLog(parent, parentPath);
+
+      assert.ok(
+        lines.some((line) => line.includes(MERGE_INTO_SHARED_ROOT_MESSAGE)),
+        lines.join("\n")
+      );
+      assert.deepStrictEqual(concurrentLaunches, [], "no lane launched");
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a D4a child of a main-checkout parent counts a worktree: false lane as editing the checkout it inherits", async () => {
+    const workspace = makeTempDir("ctrlyoke-d4a-child-false-lane-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      // No worktree key: the child runs in the parent's main checkout.
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        steps: [mainCheckoutAndMergeLanes('node -e ""')],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const lines = await runCapturingLog(parent, parentPath);
+
+      assert.notStrictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.ok(
+        lines.some((line) => line.includes(MERGE_INTO_SHARED_ROOT_MESSAGE)),
+        lines.join("\n")
+      );
+      assert.deepStrictEqual(
+        concurrentLaunches,
+        [false],
+        "only the child launched; none of its lanes did"
+      );
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a managed parent runs a worktree: false lane beside a merge lane, which merges into its worktree", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-managed-parent-false-lane-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeMergeLaneScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Managed parent",
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          mainCheckoutAndMergeLanes(
+            "node -e \"require('fs').writeFileSync('main-lane','')\""
+          ),
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      const lines = await runCapturingLog(parent, parentPath);
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+      assert.ok(
+        !lines.some((line) => line.includes(MERGE_INTO_SHARED_ROOT_GUIDANCE)),
+        lines.join("\n")
+      );
+      // The worktree: false lane ran in the main checkout.
+      await fs.access(path.join(workspace, "main-lane"));
+      const parentWorktree = await worktreeRuntimeOf(parent);
+      const mergeLane = await worktreeRuntimeOf(
+        launchedChild(instances, parent, 1)
+      );
+      assert.strictEqual(
+        mergeLane.mergeOutcome,
+        "fast-forward",
+        String(mergeLane.message)
+      );
+      assert.strictEqual(mergeLane.targetBranch, parentWorktree.branchName);
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
 });
