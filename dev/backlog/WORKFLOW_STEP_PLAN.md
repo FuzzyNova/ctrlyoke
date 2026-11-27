@@ -2750,33 +2750,105 @@ summaries instead.
       on an empty queue, like `queueFromContext`); a model-less `ranWith` shows no model (as a
       started prompt step does).
 
+- **Round 14 (reviewed 2026-11-27): round-13 gaps, landing step 7 starts (file-reference
+  editor).** All four `claude-cli`/`opus` steps did what they were asked, each gated by the
+  `committed` preset; `npm test` green (8835 extension, 5020 UI, packaging). Two parallel
+  reviewers read the core and dashboard diffs. No live check: no step had Playwright tools, and
+  this pass did not run the dev host (round 15 step 4 checks the editor live). Review fix
+  `17d5ce08d`: `postSubWorkflowAppend` with an explicitly captured `undefined` mutation no
+  longer re-reads the displayed view (a default parameter applied to it); the joiner
+  `WORKTREE_COLLISION` test's holder-lane wait (one flake under full `npm test`, passes alone)
+  got a 25 s budget and an observed-state message; stale `stopPausedRun` comment names.
+  - `bf34a97b5`: Continue-then-Stop during an unwind and overlapping stops stay on the paused
+    path (`pausedRunStop` promise; a second stop joins the first); the paused-run branch runs
+    before the setup branch, so a stop right after a Continue's `beginPreDispatchStartup`
+    settles the kept reservation (the leak was real); `settleRetainedIntegrations` closes the
+    pause's parked `lastRunIntegrations` with `WORKTREE_RELEASED` and runs the strict cleanup,
+    whose result decides the landing; an ignored Continue notifies
+    (`PAUSED_STOP_IGNORES_CONTINUE_MESSAGE`); CHANGELOG **Fixed** widened.
+  - `3e45dcc18`: a late member (slot dispatch or join) failing member preflight goes through its
+    `onFail` and never fail-fasts siblings; `SUB_WORKFLOW_LIVE_APPEND_STATES` derived and
+    typed; only the orchestrator calls `buildSubWorkflowReferenceStep` (instance receives the
+    built step); run-alongside records and republishes revisions; the router refuses inline +
+    `parallelWithCurrent` (`INLINE_PARALLEL_APPEND_REFUSAL`); an out-of-workspace file is
+    refused at queue time; `readCompletedChild` never rejects; `ranWith` falls back to memory
+    and `readSubWorkflowRanWith` drops unknown harness ids (`HarnessId`).
+  - `79d2043ef`: `useSubWorkflowRanWithIndex` returns a cached string snapshot (no rescan or
+    re-render from it on ordinary appends; the panel still re-renders per chunk for older
+    whole-store reasons, filed as @dev/bugs/backlog/steps-panel-rerenders-on-every-output-entry.md);
+    `ranWith` only for terminal step statuses; "Append and Continue as Sub-workflow…" label
+    variants; `getParallelDispatchRefusal` (@src/ui/webview-react/utils/parallelDispatch.ts) shared with
+    Run in Parallel (Run Alongside is now disabled with no step running); one picker hook; the
+    hosted picker captures the mutation when the menu item is chosen.
+  - `a071ab354`: editor **Workflow** mode for file-reference steps: `resetStepKindFields` (8
+    sites, not 4) and `loadStepFields`; `setStepType` stores the kind; `SubWorkflowStepFields`
+    (file field, Browse…, On Fail, colour); `useWorkflowFilePicker` (generalized);
+    `SELECT_SUB_WORKFLOW_STEP_FILE` → `SUB_WORKFLOW_STEP_FILE_SELECTED`;
+    @src/ui/webview-react/utils/subWorkflowStepProperties.ts shared with the preview; inline steps load
+    read-only (Move to Editor disabled for them); `schemaUiPropertyRoundTrip` "workflow step"
+    and "final step (workflow)" surfaces, `workflow` in `NOT_AUTHORABLE` beside
+    `prompt`/`script` with a `CONTENT_CONTROL_IDS` guard; Save As round trip; docs, CHANGELOG
+    **Added**. Before it, clicking a workflow step row threw in `enterEditMode`.
+  - **Found in review, not yet fixed** (round 15 steps 1–3):
+    - Stop during the pause's own settlement (bug, read): `stopRun` waits only while
+      `hasLiveExecution()`, which goes false when `execute()` returns, before
+      `settleExecution` (`WorkflowStartupPipeline.ts`) has awaited the per-integration cleanup
+      and filled `lastRunIntegrations`. A Stop (or Continue-then-Stop) in that window runs
+      `stopIdlePausedRun` beside the pause settlement: integrations not yet parked miss the
+      strict check, and the pause's `finishExecutionHistory` clears `startPending` under the
+      stop. Wait on the settlement (`startPending`/`executionSettledPromise`), not liveness.
+    - Continue alone during the unwind (bug, read; the step flagged it): `settleWorkflowExecution`
+      reads the status when settlement starts; a Continue after `confirmPaused()` makes it
+      RUNNING, so a managed worktree run settles as terminal (commit, merge/remove, lease and
+      runner lock released), then the resume prepares a fresh worktree for the remaining steps.
+    - Continue-then-Stop may finalize the manifest as CANCELLING (suspected): assert it.
+    - The parked-integration loop in `settleRetainedIntegrations` repeats the cleanup/merge-
+      message code of `settleExecutionIntegrations`.
+    - Queue-time resolution builds its own `PromptFileResolver` (workspace root, approved
+      roots) instead of the launch's (`WorkflowExecutor.getPromptFileResolutionOptions`:
+      execution root, source checkout, workflow-relative references); two setups that can
+      drift. `recordedRanWith` reports an earlier step's harness when the latest is unknown.
+      Tests: `ParallelGroupRun.test.ts` `waitForOutcome` falls through silently after ~1 s;
+      new `as unknown as WorkingFile` casts in `SubWorkflowLauncher.test.ts`; no executor-level
+      late dispatch under `maxParallelSteps` failing preflight; `promoteBesideRunningStep`'s
+      `as unknown as WorkflowStep`; the webview's now-redundant `ranWith.harness as HarnessId`.
+    - Editor Browse in the hosted dashboard stores the modal's absolute path (`file.path`); the
+      native picker's router handler re-implements the reference build with a different root
+      (`getNamedRoots()[0]`) and skips `resolveSubWorkflowReference`; typed paths keep
+      backslashes. Move to Editor silently discards a Workflow-mode new-step draft (only
+      script drafts are guarded/kept). A native picker reply lands on whatever file workflow
+      step is selected when it arrives (no target key). `WorkflowControls` keeps a
+      `"queue-sub-workflow"` literal; `STEP_TYPE_OPTIONS` hardcodes Prompt/Script labels; the
+      `CONTENT_CONTROL_IDS` guard is satisfied by the id constants alone. The inline "Queue from
+      File" hosted picker reads the address at pick time (step 77 noted it).
+    - Low, left: the steps-panel whole-store re-renders (bug filed); Script mode still shows the
+      execution-mode picker; no file-exists/parse check when saving a typed path (launch fails
+      under `onFail`).
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 14 (queued 2026-11-27): round-13 gaps, then the start of landing step 7.** All on
+- **Round 15 (queued 2026-11-27): round-14 gaps, then the inline editor.** All on
   `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Core stop fixes: Continue-then-Stop during the unwind; strict artifact cleanup (and
-     integration release) before a paused run's stop lands its worktree; overlapping stops;
-     the `isResumeSuperseded` leak check; feedback for an ignored Continue.
-  2. Late-joiner preflight failure honours `onFail` and never fail-fasts siblings; the
-     `e3627aea9` and launcher smalls.
-  3. Dashboard fixes: ran-with index without per-chunk re-renders; ignore `ranWith` while a
-     continued child runs; "Append and Continue…" label variants; one picker branch and one
-     parallel-dispatch refusal helper; hosted picker captures the address at open.
-  4. Editor, file references: `setStepType` stores the kind (Workflow option),
-     `resetStepKindFields`, `getSubWorkflowStepPropertyUpdate`, the StepEditor workflow-file
-     field + browse + `onFail`, editing an existing file workflow step (inline ones stay
-     read-only until round 15), `schemaUiPropertyRoundTrip` coverage for the fields it adds.
-- **Round 15: rest of landing step 7.** Inline (D13) editor mode: File / Inline switch, the
-  wrapped prompt/script editor, the worktree control reusing the workflow-level editor, a
-  `worktreePresets` list in the workflow properties editor (with round-trip coverage); execution
-  preview ("Runs <file>"; inline child as its wrapped step plus "in its own worktree"), preview
-  parsing file children for `WORKTREE_COLLISION`/`MERGE_INTO_SHARED_ROOT` if cheap.
-- **Round 16:** completions (`SUB_WORKFLOW_STEP` object kind, `workflow` path role,
-  `subWorkflowOnly` root keys, snippet, session-candidate exclusion), `StepReferenceShifts`
-  skipping inline definitions, `ctrlyoke-syntax` skill and tech-support agent `$previous`
-  meaning. Then the whole-spec requirement-by-requirement audit.
+  1. Core pause/stop settlement: wait on the settlement, not liveness; Continue alone during
+     the unwind keeps the worktree reservation; manifest status of Continue-then-Stop; one
+     cleanup helper for parked and live integrations.
+  2. One resolver setup for queue-time and launch resolution, exposed for the router's editor
+     picker; `recordedRanWith`; test hygiene and casts; late-dispatch executor test.
+  3. Editor fixes: hosted and native Browse both normalized by the backend; Move to Editor
+     keeps or guards a Workflow-mode draft; picker reply target key; backslashes; literals;
+     stronger content-control guard; inline Queue from File captures its address.
+  4. Inline (D13) editor mode: File / Inline switch, the wrapped prompt/script editor, the
+     worktree control reusing the workflow-level editor, an inline `schemaUiPropertyRoundTrip`
+     surface; live check.
+- **Round 16:** `worktreePresets` list in the workflow properties editor (round-trip
+  coverage); execution preview ("Runs <file>"; inline child as its wrapped step plus "in its
+  own worktree"; preview parsing file children for `WORKTREE_COLLISION`/`MERGE_INTO_SHARED_ROOT`
+  if cheap); completions (`SUB_WORKFLOW_STEP` object kind, `workflow` path role,
+  `subWorkflowOnly` root keys, snippet, session-candidate exclusion).
+- **Round 17:** `StepReferenceShifts` skipping inline definitions, `ctrlyoke-syntax` skill and
+  tech-support agent `$previous` meaning; then the whole-spec requirement-by-requirement audit.
 
 ### Decisions
 
@@ -2982,6 +3054,24 @@ Coarse roadmap; re-planned every pass.
   labels are Title Case to match their menus. Inline mode with `parallelWithCurrent` is refused;
   a CANCELLING run is not live and is refused by the continuation path; queuing into an empty
   queue does not record the child file as the parent definition (no false cycle).
-- **Landing step 7 is split over rounds 14–16** (round 13 review): the editor has no workflow
-  mode at all yet (`setStepType` throws for it), so file-reference editing lands first, then the
-  inline mode with preview polish, then completions and the audit.
+- **Landing step 7 is split over rounds 14–17** (round 13 review; round 14 added a round):
+  file-reference editing landed first (round 14), then the inline mode (round 15), then
+  `worktreePresets` editing, preview polish and completions (round 16), then the leftovers and
+  the audit (round 17).
+
+- **The editor stores `workflow` as step content, like `prompt` and `script`** (round 14): it
+  travels in the save message's `text`, so it sits in `schemaUiPropertyRoundTrip`'s
+  `NOT_AUTHORABLE` with a content-control guard; the explicit Workflow-mode round trip covers
+  it. The inline form's nested keys get their own surface with the inline editor (round 15).
+- **A late prompt or script member failing member preflight settles FAILED but never fail-fasts
+  its siblings** (round 14): they have no `onFail`; a workflow member follows its `onFail`, and
+  without one (`stopWorkflow`) fails the group at the join, as group preflight would.
+- **Run Workflow Alongside Current Step is disabled while no step runs** (round 14), like Run in
+  Parallel; the queue entries read "Append and Continue…" on any viewed run, as the inline
+  siblings do.
+- **The editor does not parse a typed workflow path on save** (round 14); a picked file is
+  checked by the same resolution as the queue entries (round 15 step 3), and a bad path fails
+  the step at launch under its `onFail`. Move to Editor is disabled for an inline workflow step
+  until the inline editor lands.
+- **The steps panel's per-chunk re-render is a separate bug, not this spec's**
+  (`steps-panel-rerenders-on-every-output-entry.md`): it predates the sub-workflow work.
