@@ -49,10 +49,12 @@ Shipped:
 - **Round 5:** D6 hardening (tests still missing), D12c fixes and child addresses in
   `workflow_status`/`read_output`, `subWorkflowRuns` in `run --json`, the dashboard parent row
   and "Started by", and D4c for sequential worktree children.
+- **Round 6:** D6 from a real resume, real-instance stop/pause propagation, the CLI child
+  progress prefix, and D13 inline definitions for sequential steps (review fixes are round 7).
 
 Not shipped (everything else in this plan): D4b, the D4c once-per-group check,
-parallel members, entry points, CLI child progress prefix, D13 inline definitions, D14 agent
-lanes and `worktreePresets`, and sibling merge wait (D4d rule 2).
+parallel members, entry points, D14 agent lanes and `worktreePresets`, and sibling merge wait
+(D4d rule 2).
 
 Line numbers were re-verified on 2026-11-26 wherever this revision touched a passage, and are
 otherwise pointers; re-locate by symbol. Every symbol and path named below was re-checked on
@@ -415,10 +417,12 @@ while the instance sits in PAUSING. A sub-workflow step is just a long step, so:
 
 - **Pause the parent** → the parent enters PAUSING as usual, and `pause()` is forwarded to the
   active child through the handle. The child pauses at _its_ next step boundary and shows PAUSED
-  in its own row. The parent stays PAUSING, which is accurate: it will pause when its current
-  step, the child run, finishes.
-- **Cancel the pause on the parent** (resume while PAUSING; `WorkflowInstance.cancelPause()`,
-  `:2595`, already exists) → forwarded as `cancelPause()`/resume to the child.
+  in its own row. The parent stays PAUSING until the child is resumed: a PAUSED child never
+  finishes on its own, so the parent's step stays unsettled (the launcher waits through the
+  child's pause, `SubWorkflowInstance.whenExecutionSettled`, round 6).
+- **Cancel the pause on the parent** (resume while PAUSING; `WorkflowInstance.cancelPause()`
+  already exists) → forwarded to the child: `cancelPause()` while the child is still PAUSING,
+  `resume()` once it is PAUSED. The forward must not await the child's remaining run.
 - **Pause or resume the child directly** → nothing is propagated to the parent. The parent stays
   RUNNING, and its step row shows the child's live state ("Sub-workflow paused"), so the dashboard
   stays accurate without touching the parent's state machine.
@@ -2131,34 +2135,122 @@ summaries instead.
       `read_output` hand-builds the workflow `PriorContextItem` instead of reusing the
       resolver's construction.
 
+- **Round 6 (reviewed 2026-11-27): round-5 gaps and D13.** Every step committed what it was
+  asked for; `npm test` green (8507 extension, 4926 UI) before the review fix. The review
+  (three parallel reviewers over the diffs) found real defects in the D13, stop/pause and CLI
+  work; they are round 7's first four steps.
+  - `3c4226bce`: D6 from a real resume. Root cause: `PromptQueue.markPromptCompleted` recorded
+    `completedAt`/`terminalStatus` only for prompt and script steps, so a cancelled workflow step
+    reloaded as pending behind `currentIndex` and was skipped. It now records them for every
+    kind, and `rewindCancelledSubWorkflowStepForContinuation` returns a stopped run's
+    cancelled sequential workflow step with a recorded child to pending (from
+    `executeContinuationAtRun` and `resume()`'s STOPPED branch). Executor D6 branch tests, a
+    launcher continuation-rejection test, a seeded re-run test; the executor reads manifests
+    and settlements through `OutputHistoryManager` (`readRunManifest`,
+    `hasSubWorkflowSettlement`) and no longer constructs `TimelineRecorder`.
+  - `f522e1b16`: two load-sensitive tests hardened (`SecretRedactionMiddleware` binds
+    127.0.0.1; `StepCommands` teardown retries).
+  - `b9e9232e9`: the four real-instance propagation cases, finally. Root causes fixed: a
+    script or workflow step at index 0 always stopped through the 10 s fallback (startup
+    attaches an integration to the first target; the executor now clears it for non-prompt
+    steps); a paused child failed the parent with "unexpected state: paused" (the launcher
+    waits through a pause, `whenExecutionSettled`); resuming a PAUSING parent never resumed a
+    PAUSED child (the handle now calls `resume()`). Stop tests fail on the fallback warning.
+  - `101d05010`: CLI child progress prefixed with the nearest child workflow name, compiled-CLI
+    parent → child → grandchild test, exit-code tests, `subWorkflowRuns` rebuilt from
+    `subWorkflowSettled` events (one per pass).
+  - `eacc6d14e`: D4c classifies the checkout through managed-worktree ownership records
+    (`findManagedWorktreeRecordForCheckout`), MCP `workflow_status` reports the latest
+    finalStep child with its pass, `read_output` builds workflow items through
+    `RunOutputResolver.resolveWorkflowPriorContextItem`.
+  - `2ff595e64`: D13 part 1: `InlineSubWorkflowDefinition`, `isInlineSubWorkflowDefinition`,
+    `getSubWorkflowDisplayName`, schema `inlineSubWorkflowDefinition` (no schema bump: it
+    widens a field that has not shipped), parser boundary validation, R10 exclusions.
+  - `ac4d88c36`: D13 part 2: `materializeInlineSubWorkflow`
+    (`src/utils/InlineSubWorkflowMaterializer.ts`), `PromptFileLoader.loadFromMemoryOrThrow`,
+    `SUB_WORKFLOW_SOURCE_KINDS.INLINE` launch source, inline D6 reattach and D4c, docs and
+    CHANGELOG.
+  - `e2c4f2934` (review fix): `2ff595e64` made `getWorkflowStepText` return the step name, so
+    the dashboard's enabled toggle wrote the name into `workflow` (a named file step lost its
+    path, an inline step became a string), MCP reported the name as `workflow`, and runtime
+    identity keyed on the name. It returns content again; labels use
+    `getSubWorkflowDisplayName`.
+  - **Found in review, not yet fixed** (round 7 steps 1–4):
+    - D13 launch: an inline child without `worktree` runs in the main checkout under a
+      worktree parent (`loadFromMemoryOrThrow` skips the D4a `parentExecution` move
+      `loadPromptFile` does); the materializer's key list omits `sandbox`/`sandboxMode`/
+      `priorContextDetail` (derive it from `EXECUTION_PROPERTY_KEYS`), copies every inline key
+      (`enabled`, `color`, `onFail`, `_runtime`, …) to the child root, leaves `worktree` on the
+      step, and its `resumeSession`/`priorContext` deletion is dead code; `trustedExternalRoots`
+      is the user/workspace approvals, not the parent's effective set; the lineage name goes
+      through `path.basename` (a step named `check src/core` becomes `core`) and a finalStep
+      child is named `step <N+1>` on every pass instead of through `FinalStepLabels.ts`;
+      `resolvedWorkflowPath` stores the display name; relative prompt-file references in an
+      inline prompt may resolve differently in the child; no end-to-end `--var` test; the docs
+      promise inherited permissions, untrue for sandbox.
+    - D13 validation: the inline arm admits `_runtime` (an authored `_runtime.sessionId` would
+      resume a session in the child); the boundary regex checks only `prompt` (not
+      `retryPrompt`/`passRetryPrompt`), misses `$allFinalStep`, and flags references in code
+      fences and after a letter; `priorContext` keywords `all`/`finalStepAll`/
+      `finalStepPrevious` pass; `VarSubstitutionPolicy.test.ts`'s excluded-path check was
+      weakened from segment matching to exact equality.
+    - Stop/pause: `cancelPause` on a PAUSED child awaits the child's whole remaining run, so the
+      parent's persisted state stays `pausing` until the child finishes; a stop or pause while
+      `host.launch` is still running reaches no handle, so the child keeps running after the
+      parent confirms STOPPED; a PAUSED child that is disposed never settles `done`; the
+      settle check tests `=== PAUSED` rather than the active states; the continued child skips
+      its own cancelled step (see Decisions); no test for a finalStep pass stopped mid-child.
+    - CLI: `subWorkflowRuns` has one entry per `subWorkflowSettled` event, so a retried step or a
+      stopped-then-continued child appears twice; in-flight children vanished from the JSON
+      (`f14e72cc5` listed them with `status: null`); entries look up the current step list, not
+      the event's step definition; the child reporter in `src/cli.ts` is a slimmed copy of the
+      root handlers (no harness/model headers, pass labels, parallel headers or retry tallies);
+      a nameless file child is labelled `child workflow`; the `onFail: continue` test does not
+      prove the child ran and failed.
+    - MCP: `readQueueSubWorkflowOutputs` and `readLatestFinalStepSubWorkflowOutput` each read
+      the whole timeline, duplicating `RunOutputResolver`'s `subWorkflowRuns` projection, with
+      casts and an `"target" in event` check; the read_output parity test compares the resolver
+      with itself.
+    - D4c: `findManagedWorktreeRecordForCheckout` matches on path only, unlike the existing
+      discovery code that also requires the branch and skips prunable entries, so a stale record
+      can make a user's worktree count as managed and get a checkpoint commit; the
+      `WorkflowInstance` wiring has no test (the real-git test passes `managed: true` by hand),
+      no realpath (`/var` vs `/private/var`) or negative case, and git errors are swallowed
+      without a log.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 6 (queued 2026-11-26): close the round-5 gaps, then D13.** The two real-instance
-  steps run on `claude-cli`/`opus`, because `codex-cli` steps have now fallen short on them
-  twice each.
-  1. D6 continuation (verify the skip lead with a failing real-instance test first), executor
-     branch tests, launcher continuation-rejection test.
-  2. Real-instance propagation tests (the four cases), fixing what they expose.
-  3. CLI child progress prefix, exit-code and compiled-CLI end-to-end tests, per-pass finalStep
-     entries in `subWorkflowRuns`.
-  4. D4c classification of an inherited managed checkout; MCP finalStep `childRun`; shared
-     workflow-item construction for `read_output`.
-  5. D13 part 1: inline definition type, schema arm, parser validation, R10 exclusions.
-  6. D13 part 2: materialization, `loadFromMemoryOrThrow`, launcher, D6 reattach without a
-     source file, docs.
-- **Round 7: isolated lanes, part 1 (landing step 3).** Parallel member acceptance + preflight
-  branch, D4c once-per-group check, `MERGE_INTO_SHARED_ROOT`, user-cancelled-lane join rule,
-  R5 CLI headless children, D12c per-member scope (a member may read only runs its own step
-  started).
-- **Round 8: isolated lanes, part 2.** D4d sibling merge wait (R4), D14 `worktreePresets` +
+- **Round 7 (queued 2026-11-27): close the round-6 gaps, then parallel member acceptance.**
+  The D13 and stop/pause steps run on `claude-cli`/`opus`.
+  1. D13 launch fixes: inline child inherits `parentExecution`, materializer keys and overlay,
+     effective `trustedExternalRoots`, naming, no `resolvedWorkflowPath` for inline, `--var`
+     test, docs.
+  2. D13 validation fixes: `_runtime` rejected in the inline arm, boundary check through the
+     prior-context reference parser over every prompt text, `priorContext` keywords,
+     restore the var-policy segment check.
+  3. Stop/pause fixes: non-blocking `cancelPause` forward, stop/pause during `host.launch`,
+     disposed PAUSED child, the continued child re-runs its cancelled step, finalStep
+     stopped-mid-child continuation.
+  4. CLI/MCP/D4c fixes: `subWorkflowRuns` one entry per child run including in-flight ones,
+     single-sourced progress reporting, MCP readers through `RunOutputResolver`, D4c lookup
+     checks branch and prunable state, classification wiring tests.
+  5. Parallel members part 1: parser acceptance (`isParallelMemberSource`), group preflight
+     branch (parse/materialize once, reuse in launch), D4c once per group, R5 CLI headless
+     concurrent children.
+- **Round 8: isolated lanes, part 1 continued (landing step 3).** `MERGE_INTO_SHARED_ROOT`,
+  user-cancelled-lane join rule, fail-fast `cancelledBy: parent` test, D6 recovery of
+  in-flight members, D12c per-member scope (a member may read only runs its own step started),
+  dashboard and CLI for member children.
+- **Round 9: isolated lanes, part 2.** D4d sibling merge wait (R4), D14 `worktreePresets` +
   `append_step`/`edit_step`/`workflow_status`, orchestrator agent and `spec-driven-loop`
   template.
-- **Round 9: landing steps 4–5.** D4b, D4d rule 2, nested fan-out, inheriting members,
+- **Round 10: landing steps 4–5.** D4b, D4d rule 2, nested fan-out, inheriting members,
   `WORKTREE_COLLISION`, named-worktree members.
-- **Round 10: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
-  "Started by" label polish, editor mode + preview + completions polish, and the
+- **Round 11: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
+  "Started by" label polish, editor mode + preview + completions polish (including skipping
+  inline definitions in `StepReferenceShifts.ts` and step-number completions), and the
   `schemaUiPropertyRoundTrip` UI-control coverage for `subWorkflowStep` (the editor control is
   what that suite checks, so it lands with the editor mode, never as an opt-out).
 
@@ -2226,4 +2318,23 @@ Coarse roadmap; re-planned every pass.
 - **Real-instance test steps run on `claude-cli`/`opus` from round 6.** The workflow default
   (`codex-cli`) fell short twice on D6 tests and twice on propagation tests, each time
   reporting the gap honestly but committing little or nothing.
-- No open questions need Nathan yet.
+- **A continued child re-runs the step its stop interrupted** (round 6 review; the spec was
+  silent). Continuing an ordinary stopped run leaves its cancelled step cancelled and moves on
+  (`finalizeCancelledPromptAfterStop`, pinned by `promptQueue.test.ts`). Applied to a D6
+  continuation, that completes a single-step lane at once with its only step CANCELLED and
+  reports the parent step COMPLETED, so the lane's work never happens. Since the parent re-runs
+  its own cancelled workflow step to reconnect, the child it continues re-runs its cancelled
+  step the same way. This applies only to a child continued by D6, not to continuing a
+  top-level run, whose behaviour is unchanged. Nathan: say if you would rather the user-facing
+  continue rule change for every run.
+- **The CLI progress prefix is the nearest child workflow's name** (round 6), not the full
+  ancestor chain, so lines stay short. Same-named siblings will be ambiguous once parallel
+  members land; round 7's CLI step revisits it if it is cheap.
+- **`subWorkflowRuns` has one entry per child run** (round 6 review): the latest settlement for
+  each queue `stepId` or finalStep `pass` and `runRef`, plus in-flight children from `_runtime`
+  with `status: null`, as `f14e72cc5` reported them.
+- **An inline child has no `resolvedWorkflowPath`** (round 6 review): the field is documented
+  as an absolute path and nothing reads it for inline children; the launch source kind already
+  says it is inline.
+- No open questions need Nathan yet, apart from the continued-child rule above, which round 7
+  implements as decided unless he objects.
