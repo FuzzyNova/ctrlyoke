@@ -1520,12 +1520,12 @@ still parsed once up front to fail fast on schema errors; its steps are not used
 
 ### Entry points
 
-| Surface                                                                               | Change                                                                                                                                                                         |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `WorkflowSwitcher.tsx` dropdown row context menu (`hooks/useWorkflowContextMenu.tsx`) | New item **"Queue workflow to run next…"** on running/paused/finished run rows, and **"Run workflow alongside current step…"** on running rows (see Parallel, ad-hoc fan-out). |
-| `WorkflowControls.tsx` queue `SplitButton` (`:110`)                                   | New option **"Queue as sub-workflow…"** next to the existing inline "Queue Workflow".                                                                                          |
-| Workspace viewer file menus (`hooks/useWorkflowFileMenuItems.ts`)                     | Same option for a workflow file.                                                                                                                                               |
-| VS Code explorer                                                                      | New `ctrlyoke.queueAsSubWorkflowFromContext` command next to `ctrlyoke.queueFromContext` (`extension.ts:1110`).                                                                |
+| Surface                                                                               | Change                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WorkflowSwitcher.tsx` dropdown row context menu (`hooks/useWorkflowContextMenu.tsx`) | New item **"Queue Workflow to Run Next…"** on running/paused/finished run rows, and **"Run Workflow Alongside Current Step…"** on running rows (see Parallel, ad-hoc fan-out). Landed (round 13) on the viewed run's row only. |
+| `WorkflowControls.tsx` queue `SplitButton` (`:110`)                                   | New option **"Queue as sub-workflow…"** next to the existing inline "Queue Workflow".                                                                                                                                          |
+| Workspace viewer file menus (`hooks/useWorkflowFileMenuItems.ts`)                     | Same option for a workflow file.                                                                                                                                                                                               |
+| VS Code explorer                                                                      | New `ctrlyoke.queueAsSubWorkflowFromContext` command next to `ctrlyoke.queueFromContext` (`extension.ts:1110`).                                                                                                                |
 
 All of them send the existing `APPEND_FILE` message (`AppendFileMessage`,
 `WebviewMessageTypes.ts:2717`) with a new optional `appendMode` field (`APPEND_MODES` constant;
@@ -1553,7 +1553,8 @@ arm renders:
 - a workflow icon, a **"Workflow"** badge, and the referenced file's name as the subtitle.
   `getStepText` (`WorkflowStepRow.tsx:98`) returns the path for a file reference, and the inner
   step's text for an inline definition. There is no harness/model badge or token count. An inline
-  lane shows its inherited harness/model as the inner step would, plus a worktree badge;
+  lane shows its inherited harness/model as the inner step would ("(expected)" while its child
+  runs, what the child ran with once it settles), plus a worktree badge;
 - a live status badge for the child, looked up by `_runtime.childWorkflowKey` from the
   workflows the store already tracks (running / paused / completed / failed);
 - the warning badge from D9 when the step completed with a `failureMessage`;
@@ -2676,31 +2677,106 @@ summaries instead.
       collisions only between inline members (file children are not parsed, as with
       `MERGE_INTO_SHARED_ROOT`).
 
+- **Round 13 (reviewed 2026-11-27): round-12 gaps, landing step 6 (entry points).** All four
+  `claude-cli`/`opus` steps did what they were asked, each gated by the `committed` preset;
+  `npm test` green (8805 extension, 4984 UI, packaging). Two parallel reviewers read the core
+  and dashboard diffs. Live check (Playwright, 1280 px, default panel widths): the lane title
+  now reads in full beside its worktree badge with the "Workflow" badge folded into the kind
+  icon, and **New → Queue as Sub-workflow…** is present; the switcher row items were not
+  exercised live (they need a run; Vitest covers them). Review fix `e0e0e077a`: the docs no
+  longer say every dashboard entry asks for a file, and say Queue Next is unavailable for a run
+  another process executes.
+  - `62858595d`: a stopped PAUSED worktree run settles (`resolveRunEndReservation` /
+    `settleRunEndReservations`, shared with `settleWorkflowExecution`): worktree landed per
+    `merge`, lease, heartbeat and runner lock released; `stop()` waits for a pause to unwind
+    before choosing a branch; a Continue pressed while that wait runs is ignored; the launcher
+    marks a child settled before its run-file read (`readRunFile` seam); CHANGELOG **Fixed**.
+  - `cfda4254f`: settlements carry `ranWith` (harness/model; inline child: its one step; file
+    child: the last started queue prompt step), read with the worktree from the child's run file
+    (`withRecordedRun`); a reattached COMPLETED child goes through the same read
+    (`SubWorkflowHost.readCompletedChild`); a settled lane shows what it ran with, "(expected)"
+    only while its child runs; `resolveEffectiveStepHarness` takes the ran-with index; the
+    workflow row's title is a `@container/step-title` query that folds the "Workflow" badge
+    below 240 px.
+  - `e3627aea9`: `APPEND_MODES`, `buildSubWorkflowReferenceStep` (`src/core/SubWorkflowReferenceStep.ts`),
+    `appendMode`/`position` on `APPEND_FILE`, `appendFromFileForClient` routing by state, the
+    alongside join through `RunContinuationService` with the child's worktree plan in the join
+    check, `ctrlyoke.queueAsSubWorkflowFromContext`; executor-level joiner `WORKTREE_COLLISION`
+    test; nested fan-out `baseCommit` check; CHANGELOG **Added**, `docs/reference/commands.md`.
+  - `06e5dcf40`: switcher row "Queue Workflow to Run Next…" / "Run Workflow Alongside Current
+    Step…" (only on the viewed run's row), New → "Queue as Sub-workflow…", workspace viewer
+    "Queue as Sub-workflow"; `SUB_WORKFLOW_QUEUE_LABELS`, `PARALLEL_DISPATCH_REFUSALS`,
+    `postSubWorkflowAppend`, `useSubWorkflowFilePicker`; dashboard and workspace-viewer docs.
+  - **Found in review, not yet fixed** (round 14 steps 1–3):
+    - Continue then Stop while a pause unwinds (bug, verified by reading): the unwind wait runs
+      only when the status is PAUSED, and the idle branch requires no live execution, so a Stop
+      after a Continue that made the run RUNNING (executor still unwinding) takes the
+      cancellation path: the next pending step is cancelled/skipped or the 10 s detector runs.
+      The tests only cover the Continue after the execution settled.
+    - Stop of a paused managed run merges without the strict artifact check (bug):
+      `stopIdlePausedRun` passes `strictArtifactCleanupSucceeded: true` as a constant, but the
+      pause ran only the best-effort cleanup, so a harness artifact left in the worktree lands
+      with the merge; integrations parked in `lastRunIntegrations` (terminal tabs) are not
+      closed with `WORKTREE_RELEASED`.
+    - Overlapping `stop()` calls on a paused run (suspect): `stopWaitingOnPause` is a boolean
+      the first stop's `finally` clears; the second stop falls into the cancellation path. The
+      comment after `beginPreDispatchStartup` (`isResumeSuperseded`) says the idle branch
+      settled the reservation, but the setup branch only confirms STOPPED; check for a leak.
+    - A Continue ignored during a stop's wait gives the user no feedback (only `Log.info`).
+    - A late joiner (dispatch or MCP join) failing its member preflight settles FAILED without
+      consulting `onFail`, with no `terminalFailure: false`, so in a `failFast` group it cancels
+      running siblings (`ParallelGroupRun.ts` ~532). Contradicts "Group preflight": a member
+      failing preflight fails that member alone under its `onFail`.
+    - `e3627aea9` smalls: `SUB_WORKFLOW_LIVE_APPEND_STATES` is `ReadonlySet<string>`, a copy of
+      `ACTIVE_EXECUTION_STATES` minus CANCELLING; the instance and orchestrator call the builder
+      with different roots (instance may fall back to `dirname(filePath)`); inline mode with
+      `parallelWithCurrent` throws in the router's picker branch with no `showRunActionFailure`;
+      the alongside path skips `recordSuccessfulRevisions`/`invalidateRunViews`; a test reaches
+      `workflowExecutor` through `as unknown as`; an out-of-workspace file passes queue-time
+      parsing but may be refused by the D5 trust filter only at launch (check).
+    - Launcher smalls: redundant `.catch(() => COMPLETED)` on reattach; a run file read with no
+      started prompt step ignores the in-memory `ranWith`; `SubWorkflowRanWith.harness` is
+      `string`, cast to `HarnessId` unchecked in the webview.
+    - Dashboard: `useSubWorkflowRanWithIndex` subscribes to the live entry arrays, so the steps
+      panel and chip rail now re-render on every streamed chunk (render churn); a D6-continued
+      child (same `childRunRef`) shows its earlier `ranWith` unmarked while running again; New
+      and workspace-viewer "Queue as Sub-workflow" keep a passive label when the view is a
+      settled run (the inline sibling says "Append and Continue…"); the hosted-vs-native picker
+      branch is written twice (`WorkflowControls.tsx`, `useSubWorkflowFilePicker`); the switcher
+      re-implements the parallel-dispatch refusal order and drops `useRunDispatchTargets`'
+      "no step is running" check; the hosted picker reads the mutation address at pick time, not
+      when the menu item was chosen.
+    - Low, left: `package.json`'s Explorer item copies `ctrlyoke.hasQueuedSteps` (so it is hidden
+      on an empty queue, like `queueFromContext`); a model-less `ranWith` shows no model (as a
+      started prompt step does).
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 13 (queued 2026-11-27): round-12 gaps, then landing step 6.** All on
+- **Round 14 (queued 2026-11-27): round-13 gaps, then the start of landing step 7.** All on
   `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Core stop fixes: a stopped PAUSED worktree run settles and releases; re-check after the
-     unwind wait; launcher `settled` before the disk read, plus its fallback test.
-  2. Record what a child actually ran with (harness/model) on its settlement, show it on the
-     lane row instead of "(expected)"; reattached COMPLETED child keeps worktree metadata;
-     narrow-width lane title.
-  3. Entry points backend: `APPEND_MODES`, `buildSubWorkflowReferenceStep`, `appendMode` and
-     `position` on `APPEND_FILE`, orchestrator routing by state, "alongside" through
-     `RunContinuationService.appendStepsToActiveParallelGroup` (with the member preflight for a
-     joining file child), `ctrlyoke.queueAsSubWorkflowFromContext`; executor-level
-     `WORKTREE_COLLISION` tests for late dispatch and joins; nested fan-out `baseCommit` check.
-  4. Entry points UI: switcher row menu ("Queue workflow to run next…", "Run workflow alongside
-     current step…"), `WorkflowControls` "Queue as sub-workflow…", workspace viewer file menu;
-     docs and CHANGELOG.
-- **Round 14: landing step 7.** "Started by" label polish, editor mode + preview + completions polish (including skipping
-  inline definitions in `StepReferenceShifts.ts` and step-number completions), and the
-  `schemaUiPropertyRoundTrip` UI-control coverage for `subWorkflowStep` (the editor control is
-  what that suite checks, so it lands with the editor mode, never as an opt-out). Preview
-  parsing file children so `WORKTREE_COLLISION`/`MERGE_INTO_SHARED_ROOT` show for them too, if
-  cheap. Then the whole-spec requirement-by-requirement audit.
+  1. Core stop fixes: Continue-then-Stop during the unwind; strict artifact cleanup (and
+     integration release) before a paused run's stop lands its worktree; overlapping stops;
+     the `isResumeSuperseded` leak check; feedback for an ignored Continue.
+  2. Late-joiner preflight failure honours `onFail` and never fail-fasts siblings; the
+     `e3627aea9` and launcher smalls.
+  3. Dashboard fixes: ran-with index without per-chunk re-renders; ignore `ranWith` while a
+     continued child runs; "Append and Continue…" label variants; one picker branch and one
+     parallel-dispatch refusal helper; hosted picker captures the address at open.
+  4. Editor, file references: `setStepType` stores the kind (Workflow option),
+     `resetStepKindFields`, `getSubWorkflowStepPropertyUpdate`, the StepEditor workflow-file
+     field + browse + `onFail`, editing an existing file workflow step (inline ones stay
+     read-only until round 15), `schemaUiPropertyRoundTrip` coverage for the fields it adds.
+- **Round 15: rest of landing step 7.** Inline (D13) editor mode: File / Inline switch, the
+  wrapped prompt/script editor, the worktree control reusing the workflow-level editor, a
+  `worktreePresets` list in the workflow properties editor (with round-trip coverage); execution
+  preview ("Runs <file>"; inline child as its wrapped step plus "in its own worktree"), preview
+  parsing file children for `WORKTREE_COLLISION`/`MERGE_INTO_SHARED_ROOT` if cheap.
+- **Round 16:** completions (`SUB_WORKFLOW_STEP` object kind, `workflow` path role,
+  `subWorkflowOnly` root keys, snippet, session-candidate exclusion), `StepReferenceShifts`
+  skipping inline definitions, `ctrlyoke-syntax` skill and tech-support agent `$previous`
+  meaning. Then the whole-spec requirement-by-requirement audit.
 
 ### Decisions
 
@@ -2886,9 +2962,26 @@ Coarse roadmap; re-planned every pass.
 - **D4d rule 2 needs a chain that ends in the same delegator, not an identical chain** (round
   12; the spec was silent). Worktree-owning leases carry no chain, so rule 2 can never admit two
   holders of one named worktree.
-- **A lane's harness/model is labelled "(expected)" once its child exists** (round 12) until
-  round 13 records what the child used on its settlement (an optional field, read tolerantly,
-  so no format bump).
+- **A lane shows what its child ran with once it settles** (round 13; "(expected)" only while
+  the child runs). `ranWith` is an optional `subWorkflowSettled` field, read tolerantly, so no
+  format bump. A file child records its last started queue prompt step's harness/model; the
+  dashboard shows none for file children (as the spec says), so it is history-only for them.
+  `run --json`, MCP `workflow_status` and the prior-context XML do not expose `ranWith`; each
+  would be additive if wanted.
 - **A stopped PAUSED worktree run must settle like any stopped run** (round 13; D3 was silent).
   Pausing keeps the worktree reservation for Continue; a stop ends the run, so it settles the
   managed worktree (merge per config) and releases the lease and runner lock.
+- **A Continue pressed while a Stop waits for a pause to unwind is ignored** (round 13): the
+  Stop was pressed first. The wait is capped at 5 s and the run visibly ends STOPPED; round 14
+  adds a feedback message. A paused worktree run restored after a host restart and then stopped
+  still has nothing in memory to settle (pre-existing, left).
+- **The queue-as-sub-workflow entries act only on the run the dashboard is showing** (round 13):
+  a finished run continues through a revision-checked path, and the client holds revisions only
+  for the view it displays. Queue Next is disabled for a run another process executes (no
+  in-memory queue here); Run Alongside stays enabled (that path works across processes). Menu
+  labels are Title Case to match their menus. Inline mode with `parallelWithCurrent` is refused;
+  a CANCELLING run is not live and is refused by the continuation path; queuing into an empty
+  queue does not record the child file as the parent definition (no false cycle).
+- **Landing step 7 is split over rounds 14–16** (round 13 review): the editor has no workflow
+  mode at all yet (`setStepType` throws for it), so file-reference editing lands first, then the
+  inline mode with preview polish, then completions and the audit.
