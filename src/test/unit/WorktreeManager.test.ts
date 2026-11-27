@@ -7,6 +7,9 @@ import { suite, suiteSetup, suiteTeardown, teardown, test } from "mocha";
 import {
   WorktreeManager,
   WorktreeSetupError,
+  buildManagedAutoCommitMessage,
+  DIRTY_PARENT_WORKTREE_CHILD_MESSAGE,
+  prepareParentCheckoutForWorktreeChild,
   type WorktreeMergeOperations,
   type WorktreeSetupRunner,
 } from "../../core/orchestration/WorktreeManager";
@@ -149,6 +152,75 @@ suite("WorktreeManager", function () {
       },
     });
   }
+
+  test("parent worktree child preflight handles clean, owned and user-owned checkouts", async () => {
+    let fileCount = 0;
+    const commits: Array<[string, string]> = [];
+    const operations = {
+      getFileCount: async () => fileCount,
+      commit: async (dir: string, message: string) => {
+        commits.push([dir, message]);
+        return true;
+      },
+    };
+    await prepareParentCheckoutForWorktreeChild({
+      checkoutRoot: "/repo",
+      managed: false,
+      operations,
+    });
+    assert.deepStrictEqual(commits, []);
+
+    fileCount = 2;
+    await assert.rejects(
+      prepareParentCheckoutForWorktreeChild({
+        checkoutRoot: "/repo",
+        managed: false,
+        operations,
+      }),
+      (error: Error) =>
+        error.message ===
+        DIRTY_PARENT_WORKTREE_CHILD_MESSAGE.replace("N files", "2 files")
+    );
+    await prepareParentCheckoutForWorktreeChild({
+      checkoutRoot: "/repo",
+      managed: true,
+      managedLabel: "parent run",
+      operations,
+    });
+    assert.deepStrictEqual(commits, [
+      ["/repo", buildManagedAutoCommitMessage("parent run")],
+    ]);
+  });
+
+  test("real git parent check rejects dirty main checkouts and checkpoints managed ones", async () => {
+    const { repository } = await makeRepository("d4c-parent");
+    await fs.writeFile(path.join(repository, "README.md"), "parent edits\n");
+    await assert.rejects(
+      prepareParentCheckoutForWorktreeChild({
+        checkoutRoot: repository,
+        managed: false,
+      }),
+      (error: Error) =>
+        error.message ===
+        "Commit or stash the parent's changes before starting worktree sub-workflows (dirty: 1 files)"
+    );
+    await prepareParentCheckoutForWorktreeChild({
+      checkoutRoot: repository,
+      managed: true,
+      managedLabel: "managed parent",
+    });
+    const message = execFileSync(
+      "git",
+      ["-C", repository, "log", "-1", "--pretty=%s"],
+      {
+        encoding: "utf8",
+      }
+    ).trim();
+    assert.strictEqual(
+      message,
+      buildManagedAutoCommitMessage("managed parent")
+    );
+  });
 
   function localBranchExists(repository: string, branchName: string): boolean {
     try {

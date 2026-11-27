@@ -166,6 +166,7 @@ import {
 import { CoordinationParticipantRegistry } from "./orchestration/ExecutionRootCoordination";
 import {
   WorktreeManager,
+  prepareParentCheckoutForWorktreeChild,
   type WorktreeInfo,
   type WorktreeSetupRunner,
 } from "./orchestration/WorktreeManager";
@@ -2246,6 +2247,16 @@ export class WorkflowInstance
         return instance.sourceDefinitionPath;
       },
       subWorkflowHost: this.executionOptions.subWorkflowHost,
+      prepareSubWorkflowWorktreeChild: async () => {
+        const worktree = this.activeWorktree;
+        await prepareParentCheckoutForWorktreeChild({
+          checkoutRoot:
+            this.executionWorkspace.executionCheckoutRoot ??
+            this.executionWorkspace.executionRoot,
+          managed: worktree?.mode === WORKTREE_MODES.MANAGED,
+          managedLabel: worktree?.workflowName ?? worktree?.branchName,
+        });
+      },
       get ancestorPaths() {
         if (instance.executionOptions.ancestorPaths) {
           return instance.executionOptions.ancestorPaths;

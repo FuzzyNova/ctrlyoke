@@ -87,6 +87,9 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
           "Failed to load sub-workflow file"
         );
       }
+      if (instance.promptQueue.getWorkflowFile().worktree) {
+        await request.parentExecution.prepareWorktreeChild?.();
+      }
     } catch (error) {
       return this.createFailedToLoadHandle(instance, errorMessage(error));
     }

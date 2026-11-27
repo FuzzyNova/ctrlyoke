@@ -63,10 +63,14 @@ The child's own `worktree` setting is honoured:
 | Managed or named worktree | Uses the worktree configuration in the child workflow.                             |
 
 A managed worktree child follows the same base and merge rules as a top-level
-run. It does not branch from or merge into the parent's worktree. When starting
-a worktree child, ctrlyoke does not check whether the parent's checkout has
-uncommitted changes; those changes are not included in a newly created
-worktree.
+run. Before a fresh child with a worktree starts, ctrlyoke checks the parent's
+execution checkout. A clean checkout proceeds. Dirty changes in a ctrlyoke
+managed worktree are checkpoint-committed with the same deterministic message
+used when settling that worktree, so the child starts with those changes. If the
+parent is in the main checkout or a named worktree, startup fails with the dirty
+file count; commit or stash those changes first. `worktree` omitted or
+`worktree: false` does not trigger this check. Reattaching to an existing child
+also skips it because its worktree already exists.
 
 ## Outcomes, Stop, and Pause
 

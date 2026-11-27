@@ -24,6 +24,7 @@ export interface SubWorkflowLaunchRequest {
   parentExecution: {
     executionRoot: string;
     executionCheckoutRoot: string;
+    prepareWorktreeChild?: () => Promise<void>;
   };
   delegationChain: readonly string[];
   /** Continue this exact child run instead of creating a new lineage. */

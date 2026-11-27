@@ -258,6 +258,7 @@ export interface WorkflowExecutionContext {
   sourceDefinitionPath?: string;
   /** Host port for launching nested workflow runs. */
   subWorkflowHost?: SubWorkflowHost;
+  prepareSubWorkflowWorktreeChild?: () => Promise<void>;
   /** Resolved active workflow chain, root first. */
   ancestorPaths?: readonly string[];
   delegationChain?: readonly string[];
@@ -3258,6 +3259,7 @@ export class WorkflowExecutor {
               executionCheckoutRoot:
                 context.executionWorkspace.executionCheckoutRoot ??
                 context.executionWorkspace.executionRoot,
+              prepareWorktreeChild: context.prepareSubWorkflowWorktreeChild,
             },
             delegationChain: [
               ...(context.delegationChain ?? []),

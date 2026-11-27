@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Starting a worktree sub-workflow now checkpoint-commits dirty changes in its ctrlyoke managed parent worktree. A dirty main checkout or named worktree fails the child start and follows `onFail`.
 - CLI progress from sub-workflow steps is prefixed with the child workflow name, and `run --json` includes direct child run addresses in `subWorkflowRuns`.
 - Resuming a parent workflow step reconnects to its recorded child run. A completed child is not run twice; an interrupted child continues from its saved run, while a new parent run starts a fresh child.
 - Claude Code's 5-hour and weekly quota now updates after headless steps too. Headless Claude Code never runs its status line, which was ctrlyoke's only source for the quota, so a run of headless Claude steps left **Stats & Usage** and the harness picker showing the value from your last interactive step. ctrlyoke now reads the quota that Claude Code includes in its headless output. This works with the Claude status line turned off.

@@ -15,6 +15,7 @@ import {
   getBranchUpstreamStatus,
   getUnmergedPaths,
   getWorkingTreeCounts,
+  getWorkingTreeFileCount,
   deleteLocalBranch,
   GitLocationMemo,
   getGitTrackedAndUntrackedFiles,
@@ -552,9 +553,37 @@ interface ResolvedRepositoryInputs {
  * did not resupply `workflowName`). Newlines are collapsed so the subject
  * always stays a single line.
  */
-function buildManagedAutoCommitMessage(label: string): string {
+export function buildManagedAutoCommitMessage(label: string): string {
   const singleLine = label.replace(/\s*\n\s*/g, " ").trim();
   return `chore(ctrlyoke): auto-commit changes for "${singleLine}"`;
+}
+
+export const DIRTY_PARENT_WORKTREE_CHILD_MESSAGE =
+  "Commit or stash the parent's changes before starting worktree sub-workflows (dirty: N files)";
+
+/** Ensure a child worktree starts from a checkout that includes parent changes. */
+export async function prepareParentCheckoutForWorktreeChild(args: {
+  checkoutRoot: string;
+  managed: boolean;
+  managedLabel?: string;
+  operations?: {
+    getFileCount: typeof getWorkingTreeFileCount;
+    commit: typeof commitAll;
+  };
+}): Promise<void> {
+  const dirtyCount = await (
+    args.operations?.getFileCount ?? getWorkingTreeFileCount
+  )(args.checkoutRoot);
+  if (dirtyCount === 0) return;
+  if (!args.managed) {
+    throw new Error(
+      DIRTY_PARENT_WORKTREE_CHILD_MESSAGE.replace("N", String(dirtyCount))
+    );
+  }
+  await (args.operations?.commit ?? commitAll)(
+    args.checkoutRoot,
+    buildManagedAutoCommitMessage(args.managedLabel ?? "workflow")
+  );
 }
 
 function pathsOverlap(left: string, right: string): boolean {

@@ -2480,6 +2480,19 @@ export async function getWorkingTreeCounts(
   return countGitWorkingTreeChanges(parseGitPorcelainV1Z(stdout));
 }
 
+/** Count distinct paths reported by Git status, including conflicted paths. */
+export async function getWorkingTreeFileCount(dir: string): Promise<number> {
+  const { stdout } = await execGit([
+    "-C",
+    dir,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "-z",
+  ]);
+  return new Set(parseGitPorcelainV1Z(stdout).map((entry) => entry.path)).size;
+}
+
 /** Merge a ref into the current branch only when Git can fast-forward it. */
 export async function mergeFastForward(
   dir: string,

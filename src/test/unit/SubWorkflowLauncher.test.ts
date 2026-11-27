@@ -155,6 +155,41 @@ function request(): SubWorkflowLaunchRequest {
 }
 
 suite("SubWorkflowLauncher", () => {
+  test("runs parent dirty-check only for a fresh child with worktree enabled", async () => {
+    const factory = new FakeFactory();
+    let checks = 0;
+    factory.child.worktree = { steps: [], worktree: true } as PromptFile;
+    const launchRequest = request();
+    launchRequest.parentExecution.prepareWorktreeChild = async () => {
+      checks += 1;
+    };
+    await new SubWorkflowLauncher(factory.create).launch(launchRequest);
+    assert.strictEqual(checks, 1);
+
+    factory.child.worktree = { steps: [], worktree: false } as PromptFile;
+    await new SubWorkflowLauncher(factory.create).launch(launchRequest);
+    assert.strictEqual(checks, 1);
+  });
+
+  test("reports a parent dirty-check rejection as failedToStart", async () => {
+    const factory = new FakeFactory();
+    factory.child.worktree = { steps: [], worktree: true } as PromptFile;
+    const launchRequest = request();
+    launchRequest.parentExecution.prepareWorktreeChild = async () => {
+      throw new Error("dirty parent");
+    };
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      launchRequest
+    );
+    assert.deepStrictEqual(await handle.done, {
+      status: PROMPT_TERMINAL_STATUS.FAILED,
+      failedToStart: true,
+      failureMessage: "dirty parent",
+      worktree: undefined,
+    });
+    assert.strictEqual(factory.child.executeCalls, 0);
+  });
+
   test("compares parent links by fields regardless of key order", () => {
     const expected = request().parent;
     const reordered = {

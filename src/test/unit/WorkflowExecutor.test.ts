@@ -6303,6 +6303,35 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     });
   });
 
+  test("continues after a worktree child start failure when onFail is continue", async () => {
+    const { queue, executor, context, integration } = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    context.subWorkflowHost = {
+      launch: async (request) => {
+        const check = request.parentExecution.prepareWorktreeChild;
+        assert.ok(check);
+        await assert.rejects(check(), /dirty parent/);
+        throw new Error("dirty parent");
+      },
+    };
+    context.prepareSubWorkflowWorktreeChild = async () => {
+      throw new Error("dirty parent");
+    };
+
+    await executor.execute(integration, context);
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
   test("records one settled event payload for each launched child outcome", async () => {
     const results: SubWorkflowResult[] = [
       {
