@@ -55,10 +55,13 @@ Shipped:
   once-per-group D4c check when the group fans out, `concurrent` from the group width), the
   `cancelledBy` join rule (fail-fast vs a user-stopped lane, resume re-entering the group), stop
   and pause held until a child's cycle starts, and the single-sourced CLI reporter.
+- **Round 9:** registry ownership of launched children, the join rule from persisted state, D4b
+  (source checkout and main-checkout worktrees root) with D4d rule 1 for merge leases,
+  `MERGE_INTO_SHARED_ROOT`, and D6 recovery of in-flight lanes after a reload.
 
-Not shipped (everything else in this plan): D4b, `MERGE_INTO_SHARED_ROOT`, D6 recovery of
-in-flight members, member presentation, entry points, D14 agent lanes and `worktreePresets`,
-and sibling merge wait (D4d rule 2).
+Not shipped (everything else in this plan): member presentation, entry points, D14 agent lanes
+and `worktreePresets`, the sibling merge wait (`purpose: "merge"`), and D4d rule 2 (sibling
+delegation).
 
 Line numbers were re-verified on 2026-11-26 wherever this revision touched a passage, and are
 otherwise pointers; re-locate by symbol. Every symbol and path named below was re-checked on
@@ -476,7 +479,12 @@ repository's main checkout, not from the source checkout. Today `resolveWorktree
 Children of a worktree parent would therefore land in a nested `<parent-wt>.worktrees/` folder.
 Resolve the main checkout as the parent directory of `git rev-parse --git-common-dir` (already
 used by `ExecutionRootScope`), and pass that to `resolveWorktreeRoot`. An explicit `worktrees.root`
-setting still wins. A top-level run resolves the same as today, so this needs only step 4.
+setting still wins. A top-level run started in the main checkout resolves the same as today. A
+top-level run started in a linked worktree now places new worktrees under the main checkout's
+`<main>.worktrees/` too (shipped in round 9, `555dba694`; CHANGELOG **Changed**). A worktree's
+ownership record names the checkout it branched from, which for a child is its parent's
+worktree, so the record, not the caller, is the source of truth when that run is resumed (see
+Progress, round 9 review).
 
 **D4c. Uncommitted parent work before a worktree child starts.** A new worktree branches from
 a commit, so uncommitted changes in the parent's checkout would silently be missing from the
@@ -2382,27 +2390,101 @@ summaries instead.
       D4b; the code gives none and branches from the main checkout, so a D4c checkpoint on a
       managed parent is missing from the grandchild's worktree. Decision below.
 
+- **Round 9 (reviewed 2026-11-27): round-8 bugs, D4b, and the lane merge path.** All six
+  `claude-cli`/`opus` steps did what they were asked and committed tests; `npm test` green (8638
+  extension, 4926 UI, packaging). Three parallel reviewers went over the diffs; no review fix
+  was committed this pass (every finding needs a failing test first and is round 10's first
+  three steps).
+  - `365efda94`: the launcher owns a child from creation until `done` settles
+    (`releaseInstance`); the registry's retire, `unregisterClient` and `createWorkflow` paths skip
+    owned ids; a child disposed while RUNNING is stopped and awaited before `done` settles
+    (CANCELLED, `cancelledBy: "child"`); a PAUSED child is not stopped on dispose; `stop()` on a
+    disposed instance confirms STOPPED directly. Real-registry D6 tests for STOPPED and ERROR
+    children, host-dispose marker test.
+  - `d3032d9e7`: `rewindCancelledStepForContinuation` re-enters a group open at the head as well
+    as one that joined just before it, from persisted state only (cancelled + `childRunRef`); an
+    adopted anchor follows the group rule (membership from the step's group; fail-fast now
+    cancels adopted members too); `anyStepKind` rewinds every cancelled member; condition wait
+    in `waitForChildPausedCycle`.
+  - `b7f0e51a7`: an inline child's trust identity is its own field, read only by
+    `getWorkflowTrustSourcePath()` and the harness trust path (`workflowTrustSourcePath` on the
+    execution context and `WorkflowContext`); its `sourceDefinitionPath` is the parent's
+    (undefined for a no-file parent); empty substituted names fall back to the default label;
+    `isExcludedPolicyField`; structural `getPromptReferenceTexts`; the sanitizer throws for any
+    non-string `workflow` that is not a valid inline definition.
+  - `fd379ec9d`: children keyed by `workflowKey` + `runRef` (`subWorkflowChildKey`); a settlement
+    older than the running step's `startedAt` is ignored (continued child shows `null`);
+    `attributeSubWorkflowSettlements` and `toSubWorkflowSettlement` single-source the old-event
+    rule and the event conversion; MCP `read_output` reads settlements through
+    `RunMetadataScanner.findSubWorkflowSettlements`; the CLI label prefers the file name and a
+    child's subscriptions are released on settle; `gitWorktreeEntryIsRecordCheckout`.
+  - `555dba694`: D4b. A child with a parent link uses the parent's execution checkout as its
+    source checkout (`prepareExecutionWorktree`; `workspaceCheckoutRoot` maps workspace folders
+    into it); the worktrees root comes from the main checkout (`worktreePlacementCheckout`);
+    the merge lease carries the delegation chain (held on `WorktreeInfo`); inline children that
+    create a worktree get the parent file mapped into the parent's checkout
+    (`inlineParentReferenceBase`). Docs table and two CHANGELOG **Changed** entries.
+  - `17702aa39`: `MERGE_INTO_SHARED_ROOT` (`MERGE_INTO_SHARED_ROOT_GUIDANCE`; `worktreePlan`
+    replaces `createsWorktree`; a `worktree: false` child counts as editing only when the parent
+    runs in the main checkout); D6 recovery of in-flight lanes needed no code change, pinned by
+    real-git reload and crash tests.
+  - **Found in review, not yet fixed** (round 10 steps 1–3):
+    - Dispose hang (bug, medium): a child disposed during a sequential AI prompt step never
+      settles `done`. `dispose()` disposes the integration, which removes the
+      `onResponseComplete` listener `waitForResponseComplete` relies on; a top-level step has no
+      abort signal; `stop()` on the disposed instance confirms STOPPED without waking the
+      executor, so `endDisposedExecution` waits forever and the id stays launcher-owned. The
+      host-dispose test uses scripts only.
+    - Join marks (bug, low): `membersStoppingWorkflowAtJoin` is never cleared at cycle start or
+      when a step is reset, so a stale mark from a previous cycle can make a re-run anchor that
+      a sibling cancels stop the parent at the join instead of failing it. The rewind checks the
+      joined group before the open one (check the open one first). A released child that is not
+      in a spent state (IDLE, PAUSED) stays in the registry until shutdown. No tests for the
+      `unregisterClient`/`createWorkflow` ownership guards or for fail-fast against an adopted
+      _prompt_ anchor (it runs outside the group's abort signal and may settle COMPLETED/FAILED).
+    - Worktree record on a direct resume (bug): a child run continued on its own (its own row,
+      `ctrlyoke run --run`) has no parent link, so it passes the main checkout as
+      `sourceCheckoutRoot`; `ensureManagedWorktree` matches records by
+      `sourceCheckoutRoot` + identity, misses the record that names the parent's worktree, and
+      `writeRecord` overwrites it with main's base and target, so a later `merge: true` lands in
+      main. Blocked or failed-setup child records are skipped by
+      `discoverRecoverableManagedWorktreesIn`/`reconcileBlockedManagedWorktrees` (they filter
+      on `sourceCheckoutRoot`) once the parent's worktree is gone. Missing tests: a
+      managed-parent merge lane resumed after a crash (stale lease reclaim + record match),
+      `parentRunsInMainCheckout` in the executor and the preview, a top-level run in a linked
+      user worktree, `workspaceToSourcePathMapper` with a subfolder state root.
+    - D13: the D6 continuation test never makes the _continued_ child resolve a `./` reference
+      or check its trust identity (removing the re-adopt in `executeContinuationAtRun` would
+      still pass); `isInlineSubWorkflowDefinition` accepts `{}` and `{ name }`, and `null`
+      gets the "single prompt or script step" message; `HarnessAdapterUtils` repeats the trust
+      fallback; the execution preview of an inline child has no `./` base and keys trust by its
+      working copy (pre-existing).
+    - Nits: `MERGE_INTO_SHARED_ROOT` fires at `maxParallelSteps: 1` (spec gives no exemption;
+      document it); a misplaced doc comment above `HEADLESS` in the integration test.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 9 (queued 2026-11-27): round-8 bugs, D4b, and the lane merge path.** All on
-  `claude-cli`/`opus`.
-  1. Registry ownership of launched children; dispose of a running child stops and waits.
-  2. Join rule from persisted state across a restart, adopted anchors, `anyStepKind` group
-     rewind.
-  3. D13 trust identity separate from the reference base, plus the missing D13 tests.
-  4. CLI/MCP identity by `workflowKey` + `runRef`, in-flight continued child, old-event parity,
-     label order, subscription lifetime; D4c sibling matcher and log test.
-  5. D4b (source checkout and worktrees root) plus D4d rule 1 for merge leases.
-  6. `MERGE_INTO_SHARED_ROOT` preflight and D6 recovery of in-flight members after a reload.
-- **Round 10: isolated lanes, part 2.** D4d sibling merge wait (R4), D14 `worktreePresets` +
-  `append_step`/`edit_step`/`workflow_status` (including the `parallelWithCurrent` merge-lane
-  rejection), orchestrator agent and `spec-driven-loop` template, dashboard and CLI JSON for
-  member children.
-- **Round 11: landing steps 4–5.** D4d rule 2, nested fan-out, inheriting members,
+- **Round 10 (queued 2026-11-27): round-9 gaps, the sibling merge wait, and D14 MCP lanes.**
+  All on `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
+  1. Dispose of a child mid-prompt settles; join marks cleared; open group first; registry
+     retire of released non-spent children; guard and adopted-prompt-anchor tests.
+  2. Worktree record is the source of truth on resume; child-record reclaim; D4b/preflight
+     tests.
+  3. D13 continued-child test, inline guard tightening, trust-rule and preview single-sourcing.
+  4. D4d sibling merge wait (`purpose: "merge"`, `WORKTREE_MERGE_LEASE_WAIT_MS`).
+  5. D14 part 1: `worktreePresets` schema/types/R10, `McpWorktreePresetResolver`,
+     `workflow_status` metadata, `append_step` `worktree: { use }` wrapping and its errors.
+  6. D14 part 2: `edit_step` wrap/unwrap, `parallelWithCurrent` merge-lane rejection, ungated
+     lane warning, docs.
+- **Round 11: lanes for agents and users.** Orchestrator agent `<parallelSteps>` lane guidance
+  and the `spec-driven-loop` template (`worktreePresets.lane`, `laneSetup`); dashboard lane row
+  (worktree badge, D4e merge-outcome warning badge, member output chips) and CLI JSON for
+  member children; a dev-host/Playwright check of a lane group.
+- **Round 12: landing steps 4–5.** D4d rule 2, nested fan-out, inheriting members,
   `WORKTREE_COLLISION`, named-worktree members.
-- **Round 12: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
+- **Round 13: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
   "Started by" label polish, editor mode + preview + completions polish (including skipping
   inline definitions in `StepReferenceShifts.ts` and step-number completions), and the
   `schemaUiPropertyRoundTrip` UI-control coverage for `subWorkflowStep` (the editor control is
@@ -2538,3 +2620,22 @@ Coarse roadmap; re-planned every pass.
 - **"D12c per-member scope" is dropped from the roadmap** (round 8). It was a forecast idea,
   not a spec requirement: D12c's rule is descendants of the attached run, and every member's
   child already is one.
+- **A PAUSED child is not stopped when its instance is disposed** (round 9): nothing is
+  running, and a shutdown keeps a user's pause across a restart, as `shutdown()` does for
+  top-level runs. A RUNNING child is stopped and awaited, so no executor outlives its instance.
+- **After a restart, Continue re-runs a lane that fail-fast had already cancelled** (round 9):
+  the persisted rule (cancelled + `childRunRef`) cannot tell a fail-fast cancel from a user
+  stop without the timeline's `cancelledBy`. The group then fails on the original failure.
+  Accepted; revisit only if it proves costly.
+- **A top-level run in a linked user worktree now places new worktrees beside the main
+  checkout** (round 9, D4b): the worktrees root is resolved from the main checkout for every
+  run, not only children. Existing records keep their stored paths. CHANGELOG **Changed**.
+- **A worktree's ownership record is the source of truth for its source checkout on resume**
+  (round 9 review; the spec was silent). A resumed run, whether continued by D6 or directly,
+  keeps the record's `sourceCheckoutRoot`, base and target branch; the caller's source checkout
+  applies only when the record is created. Round 10 step 2.
+- **`MERGE_INTO_SHARED_ROOT` applies at any group width** (round 9 review), including
+  `maxParallelSteps: 1`: the spec gives no exemption and an author who widens the group later
+  would otherwise meet it only at run time. Documented.
+- **Lane surfaces (orchestrator agent, template, dashboard lane row) wait for round 11**, after
+  D14's MCP surface lands, so the agent guidance is written against working tools.
