@@ -30,6 +30,10 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       delegationChain: request.delegationChain,
     });
     let parentStopped = false;
+    const parentDefinition =
+      request.source.kind === SUB_WORKFLOW_SOURCE_KINDS.INLINE
+        ? request.source.parentDefinition
+        : undefined;
 
     let loaded: boolean;
     try {
@@ -57,6 +61,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
             parentRun: request.parent,
             parentExecution: request.parentExecution,
             delegationChain: request.delegationChain,
+            ...(parentDefinition ? { parentDefinition } : {}),
           }
         );
         const identity = await this.waitForRunIdentity(instance, execution);
@@ -94,6 +99,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
             parentRun: request.parent,
             parentExecution: request.parentExecution,
             delegationChain: request.delegationChain,
+            parentDefinition: request.source.parentDefinition,
           }
         );
         loaded = !!instance.promptQueue.getWorkflowFile().steps?.length;

@@ -36,10 +36,18 @@ steps:
 ## Inline definitions
 
 Use an inline prompt or script when the child needs its own run or worktree but
-does not need a separate workflow file. The child inherits the parent's harness,
-model, permissions, and effective variables; values on the inline step take
-precedence. Host-provided `--var` values are available in the child prompt or
-script.
+does not need a separate workflow file. The child inherits the parent's
+workflow-level settings as an ordinary step of the parent would: harness,
+model, execution mode, agent, skills, MCP servers, hooks, secrets, additional
+arguments, tool permissions, sandbox and sandbox mode, prior-context detail,
+error behavior, and the workflow-level pre- and end conditions. It also gets
+the parent's effective variables, including host-provided `--var` values,
+substituted once in the child. Values on the inline step take precedence.
+
+Without its own `worktree`, the child runs where the parent runs, including
+the parent's worktree. Relative file references in the inline step resolve
+from the parent workflow file's folder, and external roots approved for the
+parent workflow file apply to the child.
 
 ```yaml
 vars:
@@ -55,10 +63,14 @@ steps:
 ```
 
 Inline definitions contain exactly one prompt or script step. Only `worktree`
-is accepted as a workflow-only key; `vars`, `trustedExternalRoots`, and other
-workflow defaults come from the parent. The child is materialized at launch and
-its run file is self-contained. It starts a new session, so inherited session
-resume and relative prior-context selectors are dropped.
+is accepted as a workflow-only key; `vars`, `maxSteps`, `trustedExternalRoots`,
+and other workflow defaults come from the parent. The child is materialized at
+launch and its run file is self-contained. It starts a new session, so the
+parent's `sessionId`, `resumeSession`, and relative `priorContext` selectors are
+not inherited; a run-address `priorContext` (`{ workflow, run }`) is.
+
+The child workflow is named after the step's `name`, or else after the parent
+and its position, such as `Release · step 3` or `Release · final step pass 2`.
 
 Sub-workflow steps can appear in `steps` or `finalStep`. A file can also consist
 of a single workflow step at its root:

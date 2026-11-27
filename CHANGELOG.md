@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Sub-workflow steps can now define a single prompt or script inline, inheriting the parent's execution defaults and effective variables.
+- Sub-workflow steps can now define a single prompt or script inline. The child inherits the parent's execution defaults (sandbox included), effective variables, trusted external roots and, without its own `worktree`, the parent's worktree.
 - The dashboard now shows sub-workflow steps, child run links and settlement metadata; child runs identify the parent run when it is available in the project.
 - MCP `read_output` and `workflow_status` can inspect a descendant run started by a workflow's sub-workflow steps, at any depth.
 - **Sub-workflow steps** run another workflow file to completion as a child run, with its own harness, variables, final step, and run history. The parent waits for the child and can use its nested output in later steps. A run bundle containing a sub-workflow step cannot be imported by an earlier ctrlyoke version.

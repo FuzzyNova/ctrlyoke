@@ -33,6 +33,7 @@ export interface SubWorkflowLaunchRequest {
         kind: typeof SUB_WORKFLOW_SOURCE_KINDS.INLINE;
         definition: PromptFile;
         displayName: string;
+        parentDefinition: InlineParentDefinition;
       };
   parent: SubWorkflowParentLink;
   parentExecution: {
@@ -48,6 +49,28 @@ export interface SubWorkflowLaunchRequest {
   ancestorPaths?: readonly string[];
   /** Passed to the instance factory; host-specific capability behavior is deferred. */
   concurrent?: boolean;
+}
+
+/**
+ * The parent definition an inline child was authored in. The child has no
+ * file of its own, so it resolves definition-relative references and
+ * workflow-scoped trust approvals against the parent's file, mapped from the
+ * same source checkout the parent maps it from.
+ */
+export interface InlineParentDefinition {
+  /** The parent's authored definition path, before any worktree mapping. */
+  sourceDefinitionPath?: string;
+  /** The checkout that path lives in (the parent's source checkout). */
+  sourceCheckoutRoot?: string;
+}
+
+/** Load-time inputs a parent hands to the child instance it launches. */
+export interface SubWorkflowLoadOptions {
+  parentRun?: SubWorkflowParentLink;
+  parentExecution?: SubWorkflowLaunchRequest["parentExecution"];
+  delegationChain?: readonly string[];
+  /** Only for an inline child; see {@link InlineParentDefinition}. */
+  parentDefinition?: InlineParentDefinition;
 }
 
 /** Durable identity of the parent step requesting the child run. */
@@ -128,11 +151,7 @@ export interface SubWorkflowInstance {
   loadFromMemoryOrThrow(
     promptFile: PromptFile,
     displayName: string,
-    options?: {
-      parentRun?: SubWorkflowParentLink;
-      parentExecution?: SubWorkflowLaunchRequest["parentExecution"];
-      delegationChain?: readonly string[];
-    }
+    options?: SubWorkflowLoadOptions
   ): Promise<string | undefined>;
   executeLoadedPromptFile(): Promise<void>;
   executeContinuationAtRun(
@@ -144,6 +163,7 @@ export interface SubWorkflowInstance {
       parentRun: SubWorkflowParentLink;
       parentExecution: SubWorkflowLaunchRequest["parentExecution"];
       delegationChain: readonly string[];
+      parentDefinition?: InlineParentDefinition;
     }
   ): Promise<void>;
   pause(): Promise<void>;

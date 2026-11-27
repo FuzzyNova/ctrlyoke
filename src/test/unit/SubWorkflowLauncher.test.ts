@@ -90,7 +90,13 @@ class FakeChild implements SubWorkflowInstance {
     return this.loadResult;
   }
 
-  async loadFromMemoryOrThrow(): Promise<string> {
+  memoryLoadOptions?: Parameters<
+    SubWorkflowInstance["loadFromMemoryOrThrow"]
+  >[2];
+  async loadFromMemoryOrThrow(
+    ...args: Parameters<SubWorkflowInstance["loadFromMemoryOrThrow"]>
+  ): Promise<string> {
+    this.memoryLoadOptions = args[2];
     if (this.loadError) throw this.loadError;
     return "memory";
   }
@@ -116,7 +122,13 @@ class FakeChild implements SubWorkflowInstance {
   }
 
   continuationError?: Error;
-  async executeContinuationAtRun(): Promise<void> {
+  continuationOptions?: Parameters<
+    SubWorkflowInstance["executeContinuationAtRun"]
+  >[4];
+  async executeContinuationAtRun(
+    ...args: Parameters<SubWorkflowInstance["executeContinuationAtRun"]>
+  ): Promise<void> {
+    this.continuationOptions = args[4];
     this.executeCalls += 1;
     this.status = EXECUTION_STATES.RUNNING;
     await Promise.resolve();
@@ -299,6 +311,7 @@ suite("SubWorkflowLauncher", () => {
       kind: "inline",
       definition: { steps: [] },
       displayName: "inline child",
+      parentDefinition: {},
     };
     const handle = await new SubWorkflowLauncher(factory.create).launch(
       launchRequest
@@ -307,6 +320,73 @@ suite("SubWorkflowLauncher", () => {
     assert.equal(result.failedToStart, true);
     assert.equal(result.failureMessage, "invalid child document");
     assert.equal(factory.child.executeCalls, 0);
+  });
+
+  test("hands an inline child its parent definition on launch and on reattach", async () => {
+    const parentDefinition = {
+      sourceDefinitionPath: "/repo/flows/parent.ctrlyoke.yaml",
+      sourceCheckoutRoot: "/repo",
+    };
+    const inlineSource = {
+      kind: "inline" as const,
+      definition: { steps: [{ prompt: "child" }] },
+      displayName: "inline child",
+      parentDefinition,
+    };
+    const factory = new FakeFactory();
+    await (
+      await new SubWorkflowLauncher(factory.create).launch({
+        ...request(),
+        source: inlineSource,
+      })
+    ).done;
+    assert.deepStrictEqual(
+      factory.child.memoryLoadOptions?.parentDefinition,
+      parentDefinition
+    );
+
+    const stateRoot = makeTempDir("ctrlyoke-launcher-inline-resume-");
+    try {
+      const childRunRef = WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 27));
+      const launchRequest = { ...request(), stateRoot, source: inlineSource };
+      const childRunDir = WorkflowPaths.runDir(
+        stateRoot,
+        "child-key" as WorkflowKey,
+        childRunRef
+      );
+      await fs.mkdir(childRunDir, { recursive: true });
+      await new TimelineRecorder().initializeRunAt(
+        childRunDir,
+        "child-key",
+        1,
+        Date.now(),
+        EXECUTION_STATES.STOPPED,
+        1,
+        undefined,
+        launchRequest.parent
+      );
+      const resumeFactory = new FakeFactory();
+      resumeFactory.child.continuationError = new Error("stop here");
+      await (
+        await new SubWorkflowLauncher(resumeFactory.create).launch({
+          ...launchRequest,
+          resumeChildRun: {
+            workflowKey: "child-key" as WorkflowKey,
+            runRef: childRunRef,
+          },
+        })
+      ).done;
+      assert.deepStrictEqual(
+        resumeFactory.child.continuationOptions?.parentDefinition,
+        parentDefinition
+      );
+    } finally {
+      await fs.rm(path.dirname(WorkflowPaths.runsRoot(stateRoot)), {
+        recursive: true,
+        force: true,
+      });
+      removeTempDir(stateRoot);
+    }
   });
 
   test("classifies stop through the handle as parent cancellation", async () => {

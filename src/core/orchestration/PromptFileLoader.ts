@@ -150,11 +150,17 @@ export class PromptFileLoader {
     }
   }
 
-  /** Throwing in-memory load for callers that route start failures themselves. */
+  /**
+   * Throwing in-memory load for callers that route start failures themselves.
+   * @param lineageName The exact name for the new lineage. Without it the
+   *   name is derived from `displayName` like a file name, which keeps only
+   *   the text after its last slash.
+   */
   async loadFromMemoryOrThrow(
     promptFile: PromptFile,
     displayName: string,
-    workspaceFolderPath?: string
+    workspaceFolderPath?: string,
+    lineageName?: string
   ): Promise<string | undefined> {
     return this.loadParsedPromptFile(
       promptFile,
@@ -162,7 +168,7 @@ export class PromptFileLoader {
       workspaceFolderPath,
       undefined,
       [],
-      undefined,
+      lineageName,
       true
     );
   }

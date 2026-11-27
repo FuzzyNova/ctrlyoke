@@ -23,6 +23,10 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { isSubWorkflowStep } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUtils";
+import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 
 suite("Sub-workflow host end to end", () => {
   function buildInstance(
@@ -92,9 +96,15 @@ suite("Sub-workflow host end to end", () => {
     assert.deepStrictEqual(fallbacks, [], "stop settled without the fallback");
   }
 
-  function makeInstanceFactory(workspace: string) {
+  function makeInstanceFactory(
+    workspace: string,
+    executionIntegration?: MockHarnessIntegration
+  ) {
     const platform = new MockPlatform(workspace);
-    const integrationFactory = new MockIntegrationFactory(platform);
+    const integrationFactory = new MockIntegrationFactory(
+      platform,
+      executionIntegration
+    );
     const detector = new MockHarnessIntegration(undefined, false);
     const instances: WorkflowInstance[] = [];
     /** Child instances in launch order, keyed by depth (1 = child, 2 = grandchild). */
@@ -1113,6 +1123,286 @@ suite("Sub-workflow host end to end", () => {
         instance.dispose();
       }
       removeTempDir(workspace);
+    }
+  });
+  /** A one-commit git repository, so a managed worktree can branch from it. */
+  function initGitRepository(workspace: string): void {
+    execFileSync("git", ["init", workspace], { stdio: "ignore" });
+    execFileSync("git", ["-C", workspace, "config", "user.name", "Tests"]);
+    execFileSync("git", [
+      "-C",
+      workspace,
+      "config",
+      "user.email",
+      "tests@example.com",
+    ]);
+  }
+
+  function commitAll(workspace: string, message: string): void {
+    execFileSync("git", ["-C", workspace, "add", "."]);
+    execFileSync("git", ["-C", workspace, "commit", "-m", message], {
+      stdio: "ignore",
+    });
+  }
+
+  /** The child launched by `parent`'s step, identified by its runtime link. */
+  function launchedChild(
+    instances: readonly WorkflowInstance[],
+    parent: WorkflowInstance,
+    stepIndex = 0
+  ): WorkflowInstance {
+    const step = parent.promptQueue.getState().steps[stepIndex];
+    assert.ok(isSubWorkflowStep(step));
+    const child = instances.find(
+      (instance) =>
+        instance !== parent &&
+        instance.promptQueue.getState().runRef === step._runtime?.childRunRef
+    );
+    assert.ok(child, "the step's child instance");
+    return child;
+  }
+
+  test("an inline child without worktree runs in its managed parent's worktree", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(120_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-inline-inherit-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          {
+            type: "workflow",
+            workflow: {
+              type: "script",
+              script:
+                "node -e \"require('fs').writeFileSync('inline-cwd.txt',process.cwd())\"",
+            },
+          },
+        ],
+      });
+      commitAll(workspace, "add parent");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      const worktree = execFileSync(
+        "git",
+        ["-C", workspace, "worktree", "list", "--porcelain"],
+        { encoding: "utf8" }
+      )
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("worktree "))
+        .map((line) => line.slice("worktree ".length))
+        .find(
+          (candidate) =>
+            path.resolve(candidate) !== path.resolve(workspace) &&
+            candidate !== workspace
+        );
+      assert.ok(worktree, "the managed parent created a linked worktree");
+      const ranIn = await fs.readFile(
+        path.join(worktree, "inline-cwd.txt"),
+        "utf8"
+      );
+      assert.strictEqual(await fs.realpath(ranIn), await fs.realpath(worktree));
+      await assert.rejects(fs.access(path.join(workspace, "inline-cwd.txt")));
+      assert.strictEqual(
+        launchedChild(instances, parent).promptQueue.getState().status,
+        "completed"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("an inline child resolves references and trust from its parent's file", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-definition-");
+    const recorder = new MockHarnessIntegration(undefined, false);
+    const seenDefinitionPaths: (string | undefined)[] = [];
+    recorder.prepareSentPrompt = (prompt, workflowContext) => {
+      seenDefinitionPaths.push(workflowContext?.sourceDefinitionPath);
+      return prompt.prompt;
+    };
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      recorder
+    );
+    try {
+      const flows = path.join(workspace, "flows");
+      const external = makeTempDir("ctrlyoke-inline-external-");
+      await fs.mkdir(flows, { recursive: true });
+      await fs.writeFile(path.join(flows, "notes.prompt.md"), "FROM-FLOWS");
+      // A workspace-root decoy: resolving without the parent's file finds it.
+      await fs.writeFile(path.join(workspace, "notes.prompt.md"), "WRONG");
+      const parentPath = path.join(flows, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        trustedExternalRoots: [external],
+        steps: [
+          { type: "workflow", workflow: { prompt: "./notes.prompt.md" } },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.deepStrictEqual(recorder.sentPrompts, ["FROM-FLOWS"]);
+      assert.deepStrictEqual(seenDefinitionPaths, [parentPath]);
+
+      const child = launchedChild(instances, parent);
+      assert.strictEqual(child.getWorkflowTrustSourcePath(), parentPath);
+      // Approvals recorded for the parent's file alone reach the child.
+      const parentIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          workspace,
+          parentPath
+        );
+      const trustStore = {
+        getApprovedRoots: (identity: string, roots: readonly string[]) =>
+          identity === parentIdentity ? [...roots] : [],
+        getPendingRoots: () => [],
+      };
+      const effectiveRoots = (instance: WorkflowInstance) => {
+        const context = HarnessAdapterUtils.getWorkflowExternalRootsContext(
+          workspace,
+          {
+            sourceDefinitionPath: instance.getWorkflowTrustSourcePath(),
+            stateRoot: workspace,
+            workflowFile: instance.promptQueue.getWorkflowFile(),
+          }
+        );
+        assert.ok(context);
+        return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          context.workspaceIdentity,
+          { identity: context.identity, declaredRoots: context.declaredRoots },
+          trustStore
+        );
+      };
+      assert.deepStrictEqual(effectiveRoots(parent), [external]);
+      assert.deepStrictEqual(effectiveRoots(child), effectiveRoots(parent));
+      removeTempDir(external);
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("an inline child gets a host var override substituted exactly once, named and linked without a path", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-vars-");
+    const recorder = new MockHarnessIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      recorder
+    );
+    try {
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Vars parent",
+        vars: { value: "authored", other: "EXPANDED" },
+        steps: [
+          {
+            type: "workflow",
+            name: "check src/core",
+            workflow: {
+              type: "script",
+              script:
+                "node -e \"require('fs').writeFileSync('inline-var.txt','{{value}}')\"",
+            },
+          },
+          { type: "workflow", workflow: { prompt: "say {{value}}" } },
+        ],
+        finalStep: {
+          type: "workflow",
+          workflow: { prompt: "final {{value}}" },
+        },
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      // What `ctrlyoke run --var` does after loading.
+      const workflowFile = parent.promptQueue.getWorkflowFile();
+      parent.promptQueue.updateWorkflowProperty("vars", {
+        ...workflowFile.vars,
+        value: "cli-{{other}}",
+      });
+      await parent.promptQueue.updateWorkingFile(true);
+      await parent.executeLoadedPromptFile();
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "inline-var.txt"), "utf8"),
+        "cli-{{other}}"
+      );
+      assert.deepStrictEqual(recorder.sentPrompts, [
+        "say cli-{{other}}",
+        "final cli-{{other}}",
+      ]);
+
+      assert.strictEqual(
+        launchedChild(instances, parent, 0).promptQueue.getState().workflowName,
+        "check src/core"
+      );
+      assert.strictEqual(
+        launchedChild(instances, parent, 1).promptQueue.getState().workflowName,
+        "Vars parent · step 2"
+      );
+      const finalRuntime = (
+        parent.promptQueue.getWorkflowFile().finalStep as {
+          _runtime?: { childRunRef?: string };
+        }
+      )._runtime;
+      const finalChild = instances.find(
+        (instance) =>
+          instance.promptQueue.getState().runRef === finalRuntime?.childRunRef
+      );
+      assert.strictEqual(
+        finalChild?.promptQueue.getState().workflowName,
+        "Vars parent · final step pass 1"
+      );
+
+      for (const step of state.steps) {
+        assert.ok(isSubWorkflowStep(step));
+        assert.ok(step._runtime?.childRunRef);
+        assert.ok(!("resolvedWorkflowPath" in (step._runtime ?? {})));
+      }
+      const events = await new TimelineRecorder().readEvents(
+        parent.outputHistoryManager.getHistoryFilePath(
+          state.workflowKey!,
+          state.runRef!
+        )
+      );
+      const settled = events.filter(
+        (event) => event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+      );
+      assert.strictEqual(settled.length, 3);
+      for (const event of settled) {
+        assert.ok(!("resolvedWorkflowPath" in (event.payload as object)));
+      }
+    } finally {
+      await disposeAll(instances, workspace);
     }
   });
 });

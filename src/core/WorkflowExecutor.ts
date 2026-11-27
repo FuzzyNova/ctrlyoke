@@ -213,7 +213,10 @@ import {
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
-import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
+import {
+  formatFinalPassPhrase,
+  formatParallelStepsLabel,
+} from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { materializeInlineSubWorkflow } from "../utils/InlineSubWorkflowMaterializer";
@@ -3171,22 +3174,34 @@ export class WorkflowExecutor {
       return settleFailure("Sub-workflow steps are not supported in this host");
     }
     const inline = typeof resolvedStep.workflow !== "string";
-    let resolvedPath = "";
+    // An inline child has no file, so it records no resolved path.
+    let resolvedPath: string | undefined;
     let source: SubWorkflowLaunchRequest["source"];
     if (inline) {
-      const parent = this.getRunStartWorkflow(context);
+      // Materialize from the authored definition: the child substitutes its
+      // own fields with the copied effective vars, exactly once.
       const materialized = materializeInlineSubWorkflow(
-        parent,
+        this.promptQueue.getWorkflowFile(),
         this.getRunStartView(context).vars,
-        context.executionWorkspace.approvedExternalRoots,
         authoredStep,
-        stepIndex >= 0
-          ? stepIndex + 1
-          : this.promptQueue.getState().steps.length + 1,
+        {
+          label:
+            target.kind === FINAL_STEP_PHASES.FINAL_STEP
+              ? formatFinalPassPhrase(target.loopIndex + 1)
+              : `step ${stepIndex + 1}`,
+        },
         this.promptQueue.getState().workflowName
       );
-      resolvedPath = materialized.displayName;
-      source = { kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE, ...materialized };
+      source = {
+        kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        ...materialized,
+        // The inline step was authored in, and validated against, the
+        // parent's file: the child resolves references and trust from it.
+        parentDefinition: {
+          sourceDefinitionPath: context.sourceDefinitionPath,
+          sourceCheckoutRoot: context.executionWorkspace.sourceCheckoutRoot,
+        },
+      };
     } else {
       const workflowPath = resolvedStep.workflow as string;
       const { promptFileResolver, sourceDefinitionPath } =
@@ -3206,15 +3221,17 @@ export class WorkflowExecutor {
     const ancestors = context.ancestorPaths ?? [];
     const comparisonPath = (candidate: string) =>
       process.platform === "win32" ? candidate.toLowerCase() : candidate;
-    const cycleIndex = inline
-      ? -1
-      : ancestors.findIndex(
-          (ancestor) =>
-            comparisonPath(path.resolve(ancestor)) ===
-            comparisonPath(resolvedPath)
-        );
-    if (cycleIndex >= 0) {
-      const chain = [...ancestors, resolvedPath]
+    const filePath = resolvedPath;
+    const cycleIndex =
+      filePath === undefined
+        ? -1
+        : ancestors.findIndex(
+            (ancestor) =>
+              comparisonPath(path.resolve(ancestor)) ===
+              comparisonPath(filePath)
+          );
+    if (filePath !== undefined && cycleIndex >= 0) {
+      const chain = [...ancestors, filePath]
         .map((candidate) => path.basename(candidate))
         .join(" → ");
       return settleFailure(`Sub-workflow cycle detected: ${chain}`);
@@ -3280,7 +3297,8 @@ export class WorkflowExecutor {
                 ? [context.getExecutionLeaseOwnerToken()!]
                 : []),
             ],
-            ancestorPaths: inline ? ancestors : [...ancestors, resolvedPath],
+            ancestorPaths:
+              filePath === undefined ? ancestors : [...ancestors, filePath],
           });
       } catch (error) {
         // No child run exists yet (e.g. the file failed to load before the
@@ -3299,7 +3317,7 @@ export class WorkflowExecutor {
       await this.promptQueue.persistRuntimeMetadata(runtimeIndex, {
         childWorkflowKey: handle.workflowKey,
         childRunRef: handle.runRef,
-        resolvedWorkflowPath: resolvedPath,
+        ...(filePath !== undefined ? { resolvedWorkflowPath: filePath } : {}),
       });
       const result: SubWorkflowResult = await handle.done;
       const settlementAlreadyRecorded =
@@ -3316,7 +3334,7 @@ export class WorkflowExecutor {
         context.outputHistoryManager
       ) {
         const settledOutput = {
-          resolvedWorkflowPath: resolvedPath,
+          ...(filePath !== undefined ? { resolvedWorkflowPath: filePath } : {}),
           childWorkflowKey: handle.workflowKey,
           childRunRef: handle.runRef,
           outcome: {

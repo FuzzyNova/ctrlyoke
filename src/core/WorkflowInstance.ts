@@ -66,7 +66,9 @@ import type {
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowInstance,
+  SubWorkflowLoadOptions,
   SubWorkflowParentLink,
+  InlineParentDefinition,
 } from "../types/SubWorkflowTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
@@ -357,6 +359,8 @@ export class WorkflowInstance
     executionCheckoutRoot: string;
   };
   private loadedDelegationChain: readonly string[] = [];
+  /** The parent definition an inline child was authored in, if this is one. */
+  private inheritedParentDefinition?: InlineParentDefinition;
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
   /**
@@ -1619,6 +1623,48 @@ export class WorkflowInstance
     return this.currentPromptFile?.filePath;
   }
 
+  /** Record what a launching parent handed this child instance. */
+  private adoptSubWorkflowLoadOptions(
+    options: SubWorkflowLoadOptions | undefined
+  ): void {
+    this.loadedParentRun = options?.parentRun;
+    this.inheritedParentExecution = options?.parentExecution;
+    this.loadedDelegationChain = options?.delegationChain ?? [];
+    this.inheritedParentDefinition = options?.parentDefinition;
+  }
+
+  /**
+   * D4a: a child whose definition has no `worktree` key runs in its parent's
+   * execution root. Every way a child is loaded (a file, an inline definition,
+   * a continued child run) applies this one rule. An inline child's paths are
+   * mapped from its parent's source checkout, the checkout its definition
+   * (the parent's file) lives in; a file child's definition was resolved in
+   * the parent's execution checkout, so that is its source checkout.
+   */
+  private inheritParentExecutionRoot(definition: PromptFile): void {
+    const parentExecution = this.inheritedParentExecution;
+    if (
+      !parentExecution ||
+      Object.prototype.hasOwnProperty.call(definition, "worktree")
+    ) {
+      return;
+    }
+    const executionRoot = parentExecution.executionRoot;
+    const checkoutRoot = parentExecution.executionCheckoutRoot;
+    const workspace = this.executionWorkspace;
+    this.executionWorkspace = {
+      ...workspace,
+      executionRoot,
+      sourceCheckoutRoot: this.inheritedParentDefinition
+        ? (this.inheritedParentDefinition.sourceCheckoutRoot ?? checkoutRoot)
+        : checkoutRoot,
+      executionCheckoutRoot: checkoutRoot,
+      workspaceRoots: workspace.workspaceRoots.map((root) =>
+        root === workspace.stateRoot ? executionRoot : root
+      ),
+    };
+  }
+
   /**
    * The path workflow-scoped trust approvals are keyed by: the authored file.
    * Once a run starts, the current prompt file is the run's working copy, so
@@ -1683,18 +1729,9 @@ export class WorkflowInstance
   async loadPromptFile(
     filePath: string,
     parsedPromptFile?: ParsedPromptFile | null,
-    options?: {
-      parentRun?: SubWorkflowParentLink;
-      parentExecution?: {
-        executionRoot: string;
-        executionCheckoutRoot: string;
-      };
-      delegationChain?: readonly string[];
-    }
+    options?: SubWorkflowLoadOptions
   ): Promise<boolean> {
-    this.loadedParentRun = options?.parentRun;
-    this.inheritedParentExecution = options?.parentExecution;
-    this.loadedDelegationChain = options?.delegationChain ?? [];
+    this.adoptSubWorkflowLoadOptions(options);
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
@@ -1721,23 +1758,7 @@ export class WorkflowInstance
       return false;
     }
 
-    if (
-      options?.parentExecution &&
-      !Object.prototype.hasOwnProperty.call(promptFile, "worktree")
-    ) {
-      const executionRoot = options.parentExecution.executionRoot;
-      const checkoutRoot = options.parentExecution.executionCheckoutRoot;
-      const workspace = this.executionWorkspace;
-      this.executionWorkspace = {
-        ...workspace,
-        executionRoot,
-        sourceCheckoutRoot: checkoutRoot,
-        executionCheckoutRoot: checkoutRoot,
-        workspaceRoots: workspace.workspaceRoots.map((root) =>
-          root === workspace.stateRoot ? executionRoot : root
-        ),
-      };
-    }
+    this.inheritParentExecutionRoot(promptFile);
 
     this.currentPromptFile = { filePath, promptFile };
     this.setupPromptFileWatcher(workingFilePath);
@@ -1773,30 +1794,30 @@ export class WorkflowInstance
     this.propagateWorkflowNameToIntegrations();
   }
 
+  /**
+   * Load an in-memory definition as a new lineage, throwing on failure. An
+   * inline sub-workflow child loads this way: `displayName` is its exact
+   * lineage name, and `options.parentDefinition` makes the parent's file its
+   * semantic base for references and trust (it has no file of its own).
+   */
   async loadFromMemoryOrThrow(
     promptFile: PromptFile,
     displayName: string,
-    options?: {
-      parentRun?: SubWorkflowParentLink;
-      parentExecution?: {
-        executionRoot: string;
-        executionCheckoutRoot: string;
-      };
-      delegationChain?: readonly string[];
-    }
+    options?: SubWorkflowLoadOptions
   ): Promise<string | undefined> {
-    this.loadedParentRun = options?.parentRun;
-    this.inheritedParentExecution = options?.parentExecution;
-    this.loadedDelegationChain = options?.delegationChain ?? [];
+    this.adoptSubWorkflowLoadOptions(options);
     this.promptQueue.clearQueue();
     this.filePath = displayName;
-    this.sourceDefinitionPath = undefined;
+    this.sourceDefinitionPath =
+      this.inheritedParentDefinition?.sourceDefinitionPath;
     const workingFilePath = await this.promptFileLoader.loadFromMemoryOrThrow(
       promptFile,
       displayName,
-      this.workspaceFolderPath
+      this.workspaceFolderPath,
+      displayName
     );
     if (workingFilePath) {
+      this.inheritParentExecutionRoot(promptFile);
       this.currentPromptFile = { filePath: displayName, promptFile };
       this.setupPromptFileWatcher(workingFilePath);
     }
@@ -2563,12 +2584,11 @@ export class WorkflowInstance
       parentRun: SubWorkflowParentLink;
       parentExecution: { executionRoot: string; executionCheckoutRoot: string };
       delegationChain: readonly string[];
+      parentDefinition?: InlineParentDefinition;
     }
   ): Promise<void> {
     if (subWorkflowOptions) {
-      this.loadedParentRun = subWorkflowOptions.parentRun;
-      this.inheritedParentExecution = subWorkflowOptions.parentExecution;
-      this.loadedDelegationChain = subWorkflowOptions.delegationChain;
+      this.adoptSubWorkflowLoadOptions(subWorkflowOptions);
     }
     const workspaceRoot = this.getStateRoot();
     if (!workspaceRoot) {
@@ -2582,6 +2602,15 @@ export class WorkflowInstance
 
     // Binding is intentionally done only here, as part of an explicit action.
     await this.loadWorkingFile(workingFilePath);
+    if (subWorkflowOptions) {
+      // An inline child's lineage records no source file, so restoring it
+      // cleared the parent definition it resolves against.
+      if (this.inheritedParentDefinition) {
+        this.sourceDefinitionPath =
+          this.inheritedParentDefinition.sourceDefinitionPath;
+      }
+      this.inheritParentExecutionRoot(this.promptQueue.getWorkflowFile());
+    }
     const state = this.promptQueue.getState();
     if (state.workflowKey !== workflowKey || state.runRef !== runRef) {
       throw new Error("Continuation target did not bind to the requested run");
