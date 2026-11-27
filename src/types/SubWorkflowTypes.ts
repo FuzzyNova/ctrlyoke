@@ -9,6 +9,7 @@ import type {
 import type {
   PromptTerminalStatus,
   SubWorkflowCancellationSource,
+  SubWorkflowWorktreePlacement,
 } from "./DashboardConstants";
 import { FINAL_STEP_PHASES } from "./DashboardConstants";
 
@@ -66,6 +67,13 @@ export interface SubWorkflowLaunchRequest {
   concurrent: boolean;
 }
 
+/** How a sub-workflow child uses checkouts, from its own `worktree` key. */
+export interface SubWorkflowWorktreePlan {
+  readonly placement: SubWorkflowWorktreePlacement;
+  /** A managed worktree with `merge: true`: it merges into the parent's checkout (D4b). */
+  readonly mergesIntoParent: boolean;
+}
+
 /**
  * A sub-workflow step's child, resolved (and, for a file, parsed) before it
  * launches. Parallel-group preflight builds one per member and the launch
@@ -77,8 +85,11 @@ export type PreparedSubWorkflowLaunch =
       readonly source: SubWorkflowLaunchRequest["source"];
       /** The child file's absolute path; absent for an inline child. */
       readonly resolvedPath?: string;
-      /** The child definition creates its own worktree (D4c applies). */
-      readonly createsWorktree: boolean;
+      /**
+       * How the child uses checkouts, from its definition's `worktree` key.
+       * Absent while a file child is still unparsed.
+       */
+      readonly worktreePlan?: SubWorkflowWorktreePlan;
       /**
        * The group already ran the D4c parent-checkout check for this member
        * before fan-out, so its launch must not run it again.

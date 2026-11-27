@@ -13,6 +13,7 @@ import {
 } from "../helpers/mockHarness";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { captureLog } from "../helpers/logCapture";
+import { MERGE_INTO_SHARED_ROOT_GUIDANCE } from "../../core/ParallelGroupPreflight";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -4068,6 +4069,283 @@ suite("Sub-workflow host end to end", () => {
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  /** `git worktree list --porcelain` paths of `workspace`'s repository. */
+  function gitWorktreePaths(workspace: string): string[] {
+    return execFileSync(
+      "git",
+      ["-C", workspace, "worktree", "list", "--porcelain"],
+      { encoding: "utf8" }
+    )
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => line.slice("worktree ".length));
+  }
+
+  /**
+   * How the host goes away while both lanes run. `reload`: the window
+   * reloads, disposing every instance, so each lane's child settles CANCELLED
+   * and the parent stops at the join. `crash`: the process dies, so every
+   * run directory stays as it was mid-group (RUNNING, members unsettled).
+   */
+  type HostLoss = "reload" | "crash";
+
+  async function reattachesManagedLanesAfter(loss: HostLoss): Promise<void> {
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir(`ctrlyoke-lanes-${loss}-`);
+    // Lanes run in their own worktrees, so the gate script and its records
+    // live outside the repository at absolute paths.
+    const recordDir = makeTempDir(`ctrlyoke-lanes-${loss}-record-`);
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const gate = (lane: string) =>
+      `node ${JSON.stringify(path.join(recordDir, "gate.js"))} ${JSON.stringify(
+        path.join(recordDir, lane)
+      )}`;
+    try {
+      initGitRepository(workspace);
+      await writeGateScript(recordDir);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Reloaded lanes",
+        steps: [
+          {
+            parallel: [
+              inlineLane("Lane A", gate("a"), {
+                worktree: { mode: "managed", keep: true },
+              }),
+              inlineLane("Lane B", gate("b"), {
+                worktree: { mode: "managed", keep: true },
+              }),
+            ],
+            failFast: false,
+          },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      const execution = parent.executeLoadedPromptFile();
+      await waitForLanesRunning(recordDir, instances, parent, {
+        0: "a",
+        1: "b",
+      });
+      const laneRunRefs = [0, 1].map((stepIndex) =>
+        childRunRefOf(parent.promptQueue.getState().steps[stepIndex])
+      );
+      assert.ok(laneRunRefs.every(Boolean), "both lanes recorded a child run");
+      const laneStates = [0, 1].map((stepIndex) =>
+        laneChildOf(instances, parent, stepIndex)!.promptQueue.getState()
+      );
+      const laneKeys = laneStates.map((state) => state.workflowKey!);
+      const worktreesBefore = gitWorktreePaths(workspace);
+      assert.strictEqual(worktreesBefore.length, 3, worktreesBefore.join("\n"));
+      const { workflowKey, runRef, workingFilePath } =
+        parent.promptQueue.getState();
+
+      const runDirs = [
+        workingFilePath!,
+        ...laneStates.map((state) => state.workingFilePath!),
+      ].map((filePath) => WorkflowPaths.runDirectoryForWorkingFile(filePath));
+      const crashSnapshot = path.join(recordDir, "crash-snapshot");
+      if (loss === "crash") {
+        // Every lane is parked in its gate script, so nothing is mid-write.
+        for (const [index, runDir] of runDirs.entries()) {
+          await fs.cp(runDir, path.join(crashSnapshot, String(index)), {
+            recursive: true,
+          });
+        }
+      }
+
+      await withoutStopFallback(async () => {
+        if (loss === "reload") {
+          // The host disposes every instance it holds.
+          for (const instance of [...instances]) instance.dispose();
+        } else {
+          // This process lives on, so end the old host's execution here and
+          // put the run directories back as the crash left them below.
+          await parent.stop();
+        }
+        await execution;
+      });
+      for (const instance of instances) {
+        await instance.whenExecutionSettled();
+        instance.dispose();
+      }
+      if (loss === "crash") {
+        for (const [index, runDir] of runDirs.entries()) {
+          await fs.rm(runDir, { recursive: true, force: true });
+          await fs.cp(path.join(crashSnapshot, String(index)), runDir, {
+            recursive: true,
+          });
+        }
+      }
+      // A reloaded host reclaims the shut-down process's runner locks. This
+      // process is still alive, so remove them the way that reclaim would.
+      for (const key of [workflowKey!, ...laneKeys]) {
+        await fs.rm(WorkflowPaths.runnerLockPath(workspace, key), {
+          force: true,
+        });
+      }
+      const reloadedFile = JSON.parse(
+        await fs.readFile(workingFilePath!, "utf8")
+      ) as { definitionRevision?: number; steps: WorkflowStep[] };
+      assert.notStrictEqual(
+        reloadedFile.steps[2]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.COMPLETED,
+        "the step after the group has not run"
+      );
+      assert.deepStrictEqual(
+        reloadedFile.steps
+          .slice(0, 2)
+          .map((step) => step._runtime?.terminalStatus),
+        loss === "crash"
+          ? [undefined, undefined]
+          : [
+              PROMPT_TERMINAL_STATUS.CANCELLED,
+              PROMPT_TERMINAL_STATUS.CANCELLED,
+            ],
+        "the lanes are in flight after a crash and cancelled after a reload"
+      );
+
+      const reloaded = createInstance();
+      instances.push(reloaded);
+      await fs.writeFile(path.join(recordDir, "a-go"), "");
+      await fs.writeFile(path.join(recordDir, "b-go"), "");
+      await withoutStopFallback(() =>
+        reloaded.executeContinuationAtRun(
+          workflowKey!,
+          runRef!,
+          reloadedFile.definitionRevision ?? 1
+        )
+      );
+
+      const resumed = reloaded.promptQueue.getState();
+      assert.strictEqual(
+        resumed.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(resumed.results)
+      );
+      assert.deepStrictEqual(
+        [0, 1].map((stepIndex) => childRunRefOf(resumed.steps[stepIndex])),
+        laneRunRefs,
+        "each lane reattached to its recorded child run"
+      );
+      const worktreesAfter = gitWorktreePaths(workspace);
+      assert.deepStrictEqual(
+        worktreesAfter,
+        worktreesBefore,
+        "no lane created a second worktree for the same work"
+      );
+      for (const stepIndex of [0, 1]) {
+        const lane = laneChildOf(instances, reloaded, stepIndex);
+        assert.strictEqual(
+          lane?.promptQueue.getState().status,
+          EXECUTION_STATES.COMPLETED
+        );
+        assert.ok(
+          worktreesBefore.includes(
+            (await worktreeRuntimeOf(lane)).worktreePath
+          ),
+          "the continued lane ran in its original worktree"
+        );
+      }
+      for (const lane of ["a", "b"]) {
+        // The reload interrupted each lane's step, and the continued child
+        // re-ran it.
+        assert.strictEqual(
+          await fs.readFile(path.join(recordDir, `${lane}-runs`), "utf8"),
+          "ran\nran\n",
+          lane
+        );
+      }
+      await fs.access(path.join(workspace, "after"));
+    } finally {
+      await fs.writeFile(path.join(recordDir, "a-go"), "").catch(() => {});
+      await fs.writeFile(path.join(recordDir, "b-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+      removeTempDir(recordDir);
+    }
+  }
+
+  test("a window reload mid-group reattaches each managed-worktree lane to its child run and worktree (D6)", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    await reattachesManagedLanesAfter("reload");
+  });
+
+  test("a host crash mid-group reattaches each in-flight managed-worktree lane to its child run and worktree (D6)", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    await reattachesManagedLanesAfter("crash");
+  });
+
+  test("a group that runs a merge lane beside a member editing the parent's checkout fails preflight before any lane launches", async () => {
+    const workspace = makeTempDir("ctrlyoke-merge-into-shared-root-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      await writeJson(path.join(workspace, "merge-lane.ctrlyoke.json"), {
+        worktree: { mode: "managed", merge: true },
+        steps: [{ type: "script", script: 'node -e ""' }],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            parallel: [
+              {
+                type: "script",
+                name: "Edit in place",
+                script: "node -e \"require('fs').writeFileSync('edited','')\"",
+              },
+              {
+                type: "workflow",
+                name: "Merge lane",
+                workflow: "merge-lane.ctrlyoke.json",
+              },
+            ],
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const log = captureLog();
+      try {
+        await parent.executeLoadedPromptFile();
+      } finally {
+        log.restore();
+      }
+
+      assert.notStrictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.ok(
+        log.lines.some((line) =>
+          line.message.includes(
+            `Step 2 ("Merge lane") merges into the parent's checkout, which Step 1 ("Edit in place") edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`
+          )
+        ),
+        log.lines.map((line) => line.message).join("\n")
+      );
+      assert.deepStrictEqual(concurrentLaunches, [], "no lane launched");
+      await assert.rejects(fs.access(path.join(workspace, "edited")));
+    } finally {
+      await disposeAll(instances, workspace);
     }
   });
 });

@@ -1588,6 +1588,7 @@ export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
   INTEGRATION_CREATION: "parallelGroup.preflight.integrationCreation",
   INTERACTIVE_MULTIPLEX: "parallelGroup.preflight.interactiveMultiplex",
   EFFECTIVE_WIDTH: "parallelGroup.preflight.effectiveWidth",
+  MERGE_INTO_SHARED_ROOT: "parallelGroup.preflight.mergeIntoSharedRoot",
 } as const;
 
 export type ParallelGroupPreflightDiagnosticCode =
@@ -3017,6 +3018,21 @@ export type WorktreeIdentityKind =
   (typeof WORKTREE_IDENTITY_KINDS)[keyof typeof WORKTREE_IDENTITY_KINDS];
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
+
+/**
+ * Where a sub-workflow child runs, from its own `worktree` key (the D4
+ * table): absent inherits the parent's execution root, `false` runs in the
+ * workspace's main checkout, and the object forms create a worktree.
+ */
+export const SUB_WORKFLOW_WORKTREE_PLACEMENTS = {
+  INHERITED: "inherited",
+  MAIN_CHECKOUT: "mainCheckout",
+  MANAGED: "managed",
+  NAMED: "named",
+} as const;
+
+export type SubWorkflowWorktreePlacement =
+  (typeof SUB_WORKFLOW_WORKTREE_PLACEMENTS)[keyof typeof SUB_WORKFLOW_WORKTREE_PLACEMENTS];
 
 /** Whether a named worktree `directory` value is a path or a bare name. */
 export const WORKTREE_DIRECTORY_VALUE_KINDS = {

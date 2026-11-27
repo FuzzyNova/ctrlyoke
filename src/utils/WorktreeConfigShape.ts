@@ -1,4 +1,5 @@
 import {
+  SUB_WORKFLOW_WORKTREE_PLACEMENTS,
   WORKTREE_DIRECTORY_VALUE_KINDS,
   WORKTREE_DIRECTORY_FIELD,
   WORKTREE_MODES,
@@ -7,6 +8,7 @@ import type {
   WorktreeConfig,
   WorktreeObjectConfig,
 } from "../types/CtrlYokeTypes";
+import type { SubWorkflowWorktreePlan } from "../types/SubWorkflowTypes";
 
 export type WorktreeDirectoryValueKind =
   (typeof WORKTREE_DIRECTORY_VALUE_KINDS)[keyof typeof WORKTREE_DIRECTORY_VALUE_KINDS];
@@ -88,4 +90,42 @@ export function withWorktreeField<T extends object>(
     delete next.directory;
   }
   return next;
+}
+
+/** Classify a child definition's `worktree` key by the D4 table. */
+export function classifySubWorkflowWorktree(
+  worktree: WorktreeConfig | undefined
+): SubWorkflowWorktreePlan {
+  if (worktree === undefined) {
+    return {
+      placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.INHERITED,
+      mergesIntoParent: false,
+    };
+  }
+  const config = toWorktreeObjectConfig(worktree);
+  if (config === false) {
+    return {
+      placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.MAIN_CHECKOUT,
+      mergesIntoParent: false,
+    };
+  }
+  return config.mode === WORKTREE_MODES.MANAGED
+    ? {
+        placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.MANAGED,
+        mergesIntoParent: config.merge === true,
+      }
+    : {
+        placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.NAMED,
+        mergesIntoParent: false,
+      };
+}
+
+/** Whether a classified child creates (or reuses) a worktree of its own. */
+export function subWorkflowCreatesWorktree(
+  plan: SubWorkflowWorktreePlan | undefined
+): boolean {
+  return (
+    plan?.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.MANAGED ||
+    plan?.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.NAMED
+  );
 }

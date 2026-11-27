@@ -187,6 +187,10 @@ import type { RunSecretRedactor } from "../utils/SecretRedactionService";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootResolver";
 import { pathsEqual } from "../utils/PathCasing";
+import {
+  classifySubWorkflowWorktree,
+  subWorkflowCreatesWorktree,
+} from "../utils/WorktreeConfigShape";
 import { summarizeCompactionEvents } from "../utils/TokenUsage";
 import { calculateAttemptCost } from "../utils/ModelPricing";
 import { HARNESS_TOKEN_SEMANTICS } from "../utils/TokenSemantics";
@@ -1232,6 +1236,12 @@ export class WorkflowExecutor {
       finalStepSessionId: getExecutionRuntime(workflow.finalStep)?.sessionId as
         string | undefined,
       workflowSessionIdFromOverride: context.workflowSessionIdFromOverride,
+      // A `worktree: false` child runs in the workspace's main checkout,
+      // which is this parent's checkout only when the parent runs there.
+      parentRunsInMainCheckout: pathsEqual(
+        path.resolve(context.executionWorkspace.executionRoot),
+        path.resolve(context.executionWorkspace.stateRoot)
+      ),
       prepareSubWorkflowMember: (memberStep, stepIndex) =>
         this.prepareParallelSubWorkflowMember(memberStep, stepIndex, context),
     };
@@ -3623,6 +3633,9 @@ export class WorkflowExecutor {
             target.kind === FINAL_STEP_PHASES.FINAL_STEP ? -1 : stepIndex
           ).name
         );
+        const worktreePlan = classifySubWorkflowWorktree(
+          materialized.definition.worktree
+        );
         return {
           ok: true,
           source: {
@@ -3633,12 +3646,12 @@ export class WorkflowExecutor {
             parentDefinition: {
               ...this.inlineParentReferenceBase(
                 context,
-                Boolean(materialized.definition.worktree)
+                subWorkflowCreatesWorktree(worktreePlan)
               ),
               trustIdentityPath: context.workflowTrustSourcePath,
             },
           },
-          createsWorktree: Boolean(materialized.definition.worktree),
+          worktreePlan,
         };
       }
       // A workflow path is never variable-substituted (D11).
@@ -3676,7 +3689,6 @@ export class WorkflowExecutor {
         ok: true,
         source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath },
         resolvedPath,
-        createsWorktree: false,
       };
     } catch (error) {
       return {
@@ -3740,7 +3752,7 @@ export class WorkflowExecutor {
         ok: true,
         source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath, parsed },
         resolvedPath,
-        createsWorktree: Boolean(parsed.worktree),
+        worktreePlan: classifySubWorkflowWorktree(parsed.worktree),
       });
     } catch (error) {
       return withFile({
@@ -3849,7 +3861,10 @@ export class WorkflowExecutor {
       const entry = stepId
         ? this.preparedSubWorkflowMembers.get(stepId)
         : undefined;
-      return entry?.launch.ok && entry.launch.createsWorktree ? [entry] : [];
+      return entry?.launch.ok &&
+        subWorkflowCreatesWorktree(entry.launch.worktreePlan)
+        ? [entry]
+        : [];
     });
     if (entries.length === 0) return;
     let refusal: string | undefined;

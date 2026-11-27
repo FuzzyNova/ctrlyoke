@@ -7,6 +7,7 @@ import {
   FINAL_STEP_PHASES,
   getEffectiveParallelGroupWidth,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
+  SUB_WORKFLOW_WORKTREE_PLACEMENTS,
   type HarnessId,
   type ParallelGroupPreflightDiagnosticCode,
 } from "../types/DashboardConstants";
@@ -46,6 +47,15 @@ import {
   type PromptTextFileResolver,
 } from "./PromptTextResolver";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { classifySubWorkflowWorktree } from "../utils/WorktreeConfigShape";
+
+/**
+ * What an author does about a `MERGE_INTO_SHARED_ROOT` issue. One constant,
+ * so every place that refuses a merge lane beside an editing member says the
+ * same thing.
+ */
+export const MERGE_INTO_SHARED_ROOT_GUIDANCE =
+  "Give the editing member its own worktree (a workflow step whose child sets worktree), or drop merge from the merging lane.";
 
 export interface ParallelGroupPreflightIssue {
   readonly code: ParallelGroupPreflightDiagnosticCode;
@@ -137,6 +147,11 @@ export interface ParallelGroupPreflightOptions {
   readonly finalStepSessionId?: string;
   readonly workflowSessionIdFromOverride?: boolean;
   /**
+   * The parent runs in the workspace's main checkout, so a sub-workflow
+   * member whose child sets `worktree: false` edits the parent's checkout.
+   */
+  readonly parentRunsInMainCheckout?: boolean;
+  /**
    * Resolve, cycle-check and parse (file) or materialize (inline) a
    * sub-workflow member's child. Omitted outside a run, where a sub-workflow
    * member is reported without a prepared launch.
@@ -182,6 +197,79 @@ function memberLabel(workflow: PromptFile, stepIndex: number): string {
 
 function memberList(workflow: PromptFile, indices: readonly number[]): string {
   return indices.map((index) => memberLabel(workflow, index)).join(", ");
+}
+
+/** How a member uses the parent's checkout, for `MERGE_INTO_SHARED_ROOT`. */
+interface ParentCheckoutUse {
+  /** The member edits the parent's checkout while it runs. */
+  readonly edits: boolean;
+  /** The member's child merges its worktree into the parent's checkout. */
+  readonly mergesInto: boolean;
+}
+
+const NO_PARENT_CHECKOUT_USE: ParentCheckoutUse = {
+  edits: false,
+  mergesInto: false,
+};
+
+/**
+ * A prompt or script member runs in the parent's root. A sub-workflow member
+ * is classified from its child's `worktree` key (D4): the prepared launch's
+ * plan, or for an inline child without one (a preview) its authored
+ * definition. A file child that was never parsed, and any member that fails
+ * alone before it runs, uses nothing.
+ */
+function parentCheckoutUse(
+  member: ParallelGroupPreflightMember,
+  parentRunsInMainCheckout: boolean
+): ParentCheckoutUse {
+  if (member.varSubstitutionError !== undefined) return NO_PARENT_CHECKOUT_USE;
+  if (!isSubWorkflowStep(member.step)) {
+    return { edits: true, mergesInto: false };
+  }
+  const launch = member.subWorkflowLaunch;
+  if (launch && !launch.ok) return NO_PARENT_CHECKOUT_USE;
+  const plan =
+    launch?.worktreePlan ??
+    (typeof member.step.workflow === "string"
+      ? undefined
+      : classifySubWorkflowWorktree(member.step.workflow.worktree));
+  if (!plan) return NO_PARENT_CHECKOUT_USE;
+  return {
+    edits:
+      plan.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.INHERITED ||
+      (plan.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.MAIN_CHECKOUT &&
+        parentRunsInMainCheckout),
+    mergesInto: plan.mergesIntoParent,
+  };
+}
+
+/**
+ * A lane whose child merges into the parent's checkout cannot run beside a
+ * member editing that checkout: the merge would land under an agent still
+ * editing, or the merge's dirty-tree guard would turn it into `blocked`.
+ */
+function mergeIntoSharedRootIssue(
+  workflow: PromptFile,
+  member: ParallelGroupPreflightMember,
+  reservedMembers: readonly ParallelGroupPreflightMember[],
+  parentRunsInMainCheckout: boolean
+): ParallelGroupPreflightIssue | undefined {
+  const use = parentCheckoutUse(member, parentRunsInMainCheckout);
+  if (!use.edits && !use.mergesInto) return undefined;
+  const counterparts = reservedMembers.filter((reserved) => {
+    const other = parentCheckoutUse(reserved, parentRunsInMainCheckout);
+    return (use.edits && other.mergesInto) || (use.mergesInto && other.edits);
+  });
+  if (counterparts.length === 0) return undefined;
+  const others = counterparts.map((reserved) => reserved.stepIndex);
+  const mergers = use.mergesInto ? [member.stepIndex] : others;
+  const editors = use.mergesInto ? others : [member.stepIndex];
+  return {
+    code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT,
+    memberIndices: [...others, member.stepIndex].sort((a, b) => a - b),
+    message: `${memberList(workflow, mergers)} ${mergers.length > 1 ? "merge" : "merges"} into the parent's checkout, which ${memberList(workflow, editors)} ${editors.length > 1 ? "edit" : "edits"} in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`,
+  };
 }
 
 function sameGroupNumericReferences(
@@ -267,17 +355,26 @@ export async function preflightParallelGroupMember(
       authoredStep as SubWorkflowStep,
       options.stepIndex
     );
+    const subWorkflowMember: ParallelGroupPreflightMember = {
+      stepIndex: options.stepIndex,
+      step,
+      resolvedTarget,
+      resolvedProperties,
+      variables,
+      ...(subWorkflowLaunch ? { subWorkflowLaunch } : {}),
+    };
+    const mergeIssue = mergeIntoSharedRootIssue(
+      workflow,
+      subWorkflowMember,
+      options.reservedMembers ?? [],
+      options.parentRunsInMainCheckout ?? false
+    );
     return {
-      member: {
-        stepIndex: options.stepIndex,
-        step,
-        resolvedTarget,
-        resolvedProperties,
-        variables,
-        ...(subWorkflowLaunch ? { subWorkflowLaunch } : {}),
-      },
-      issues: [],
-      failureMessage: "",
+      member: subWorkflowMember,
+      issues: mergeIssue ? [mergeIssue] : [],
+      failureMessage: mergeIssue
+        ? formatMemberPreflightFailure(options.stepIndex, [mergeIssue])
+        : "",
     };
   }
   const prompt = promptProjection(step);
@@ -408,6 +505,14 @@ export async function preflightParallelGroupMember(
     });
   }
 
+  const mergeIssue = mergeIntoSharedRootIssue(
+    workflow,
+    member,
+    reservedMembers,
+    options.parentRunsInMainCheckout ?? false
+  );
+  if (mergeIssue) issues.push(mergeIssue);
+
   if (isPromptStep(step) && options.checkHarnessReady) {
     const reason = await options.checkHarnessReady(resolvedProperties.harness);
     if (reason) {
@@ -453,12 +558,19 @@ export async function preflightParallelGroupMember(
   const result: ParallelGroupMemberPreflightResult = {
     member: memberWithIntegration,
     issues,
-    failureMessage: [
-      `Parallel step ${options.stepIndex + 1} failed preflight:`,
-      ...issues.map((issue) => `- ${issue.message}`),
-    ].join("\n"),
+    failureMessage: formatMemberPreflightFailure(options.stepIndex, issues),
   };
   return result;
+}
+
+function formatMemberPreflightFailure(
+  stepIndex: number,
+  issues: readonly ParallelGroupPreflightIssue[]
+): string {
+  return [
+    `Parallel step ${stepIndex + 1} failed preflight:`,
+    ...issues.map((issue) => `- ${issue.message}`),
+  ].join("\n");
 }
 
 /** Resolve and validate every enabled member before any group member launches. */

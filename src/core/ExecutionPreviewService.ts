@@ -369,6 +369,10 @@ export class ExecutionPreviewService {
         },
         finalStepSessionId: getExecutionRuntime(preparedWorkflow.finalStep)
           ?.sessionId as string | undefined,
+        parentRunsInMainCheckout: !resolveWorktreeSelection(
+          preparedWorkflow.worktree,
+          runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree()
+        ).config,
       });
       parallelGroupPreflights.push({
         parallelGroupId: group.id,

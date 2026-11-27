@@ -159,6 +159,16 @@ that waits for a free slot starts from its child file as it is when the member
 starts, so an edit made in the meantime is picked up, as it is for a step that
 runs on its own.
 
+A member whose child sets `merge: true` merges into the parent's checkout, so
+it cannot share a group with a member that works in that checkout: a prompt or
+script member, a workflow member whose child has no `worktree`, or, when the
+parent runs in the main checkout, one whose child sets `worktree: false`. The
+merge would land while that member is still editing. The group fails before
+any member starts and names both members. Give the editing member its own
+worktree, or drop `merge` and leave the merge to a step after the group.
+Members whose children all have their own worktrees, with or without
+`merge`, can share a group.
+
 When the group runs members side by side, the parent's checkout is checked once
 for the whole group, using the
 [worktree rule](#execution-directory-and-worktrees) above, so every worktree
@@ -181,6 +191,12 @@ member. Its siblings keep running, and once they finish the parent stops rather
 than moving on without that member's work. Continuing the parent keeps the
 members that finished and reconnects the stopped member to its child run, which
 re-runs the step its stop interrupted, then continues after the group.
+
+A window reload or a crash while members run leaves the parent stopped inside
+the group. Continuing it keeps the members that finished and reconnects each
+member that was still running to its child run, in the worktree that child
+already has, so no lane starts over in a second worktree. Each reconnected
+child re-runs the step the reload interrupted.
 
 Two members with `merge: true` that finish at the same moment can leave the
 later merge reported as blocked. Leave the merge to a step after the group, as
