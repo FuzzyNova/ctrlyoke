@@ -464,6 +464,100 @@ suite("SubWorkflowLauncher", () => {
     }
   });
 
+  test("a stop while the settled child's run file is read does not stop the finished child", async () => {
+    const factory = new FakeFactory();
+    factory.child.workingFilePath = "/tmp/held/workflow.ctrlyoke.json";
+    let signalReading!: () => void;
+    const reading = new Promise<void>((resolve) => (signalReading = resolve));
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => (releaseRead = resolve));
+    const launcher = new SubWorkflowLauncher(
+      factory.create,
+      undefined,
+      async () => {
+        signalReading();
+        await readGate;
+        return { steps: [], startedAt: 0, definitionRevision: 1 };
+      }
+    );
+    const handle = await launcher.launch(request());
+
+    await reading;
+    await handle.stop();
+    await handle.pause();
+    await handle.cancelPause();
+    releaseRead();
+
+    assert.strictEqual(
+      (await handle.done).status,
+      PROMPT_TERMINAL_STATUS.COMPLETED
+    );
+    assert.strictEqual(factory.child.stopCalls, 0);
+    assert.strictEqual(factory.child.pauseCalls, 0);
+    assert.strictEqual(factory.child.cancelPauseCalls, 0);
+    assert.strictEqual(factory.child.status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("falls back to the in-memory worktree when the child's run file is missing or corrupt", async () => {
+    const directory = makeTempDir("ctrlyoke-launcher-fallback-");
+    try {
+      const runFiles = {
+        missing: path.join(directory, "missing", "workflow.ctrlyoke.json"),
+        corrupt: path.join(directory, "workflow.ctrlyoke.json"),
+      };
+      await fs.writeFile(runFiles.corrupt, "{ not json");
+      for (const workingFilePath of Object.values(runFiles)) {
+        const factory = new FakeFactory();
+        factory.child.workingFilePath = workingFilePath;
+        factory.child.worktree = {
+          steps: [],
+          _runtime: {
+            worktree: {
+              schemaVersion: 1,
+              mode: WORKTREE_MODES.MANAGED,
+              origin: "created",
+              branchName: "in-memory-branch",
+              worktreePath: "/tmp/worktree",
+              executionRoot: "/tmp/worktree",
+              executionCheckoutRoot: "/tmp/worktree",
+              sourceCheckoutRoot: "/tmp/source",
+              namedWorkspaceRoots: [],
+              baseCommit: "abc",
+              lifecycleOwner: "workflow",
+              lifecycleState: "active",
+              directoryState: "present",
+              branchState: "present",
+            },
+          },
+        };
+
+        const result = await (
+          await new SubWorkflowLauncher(factory.create).launch(request())
+        ).done;
+
+        assert.deepStrictEqual(
+          result,
+          {
+            status: PROMPT_TERMINAL_STATUS.COMPLETED,
+            worktree: {
+              mode: WORKTREE_MODES.MANAGED,
+              branchName: "in-memory-branch",
+              baseCommit: "abc",
+              finalBranchTip: undefined,
+              changedFileCount: undefined,
+              landingOutcome: undefined,
+              mergeOutcome: undefined,
+              conflictFiles: undefined,
+            },
+          },
+          workingFilePath
+        );
+      }
+    } finally {
+      removeTempDir(directory);
+    }
+  });
+
   test("marks a child that fails mid-run as started", async () => {
     const factory = new FakeFactory();
     factory.child.nextScenario = "mid-run-error";

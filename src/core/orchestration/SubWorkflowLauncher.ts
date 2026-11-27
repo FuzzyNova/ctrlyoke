@@ -20,7 +20,10 @@ import { manifestPath } from "../../utils/WorkflowPaths";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { Log } from "../../utils/Log";
 import { WorkingFileManager } from "../WorkingFileManager";
-import type { WorkingFileWorktreeRuntime } from "../../types/CtrlYokeTypes";
+import type {
+  WorkingFile,
+  WorkingFileWorktreeRuntime,
+} from "../../types/CtrlYokeTypes";
 import { forwardSubWorkflowControl } from "./SubWorkflowControlRelay";
 
 const LOG_SOURCE = "SubWorkflowLauncher";
@@ -96,7 +99,12 @@ class LaunchedChildWatch {
 export class SubWorkflowLauncher implements SubWorkflowHost {
   constructor(
     private readonly createInstance: SubWorkflowInstanceFactory,
-    private readonly releaseInstance?: (instance: SubWorkflowInstance) => void
+    private readonly releaseInstance?: (instance: SubWorkflowInstance) => void,
+    /** Reads a settled child's run file; tests hold or fail it. */
+    private readonly readRunFile: (
+      workingFilePath: string
+    ) => Promise<WorkingFile> = (workingFilePath) =>
+      WorkingFileManager.readWorkingFileFromDisk(workingFilePath)
   ) {}
 
   async launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle> {
@@ -304,7 +312,12 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
             }
           : result
       )
-      .then(async (result) => this.withRecordedWorktree(instance, result))
+      .then(async (result) => {
+        // Settled before the run-file read below: a parent stop or fail-fast
+        // in that window must not stop the finished child again.
+        settled = true;
+        return this.withRecordedWorktree(instance, result);
+      })
       .finally(() => {
         settled = true;
         watch.dispose();
@@ -649,9 +662,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     if (!workingFilePath) return result;
     let recorded: WorkingFileWorktreeRuntime | undefined;
     try {
-      recorded = (
-        await WorkingFileManager.readWorkingFileFromDisk(workingFilePath)
-      )._runtime?.worktree;
+      recorded = (await this.readRunFile(workingFilePath))._runtime?.worktree;
     } catch (error) {
       Log.warn(
         `[${LOG_SOURCE}] Could not read the child's worktree from ${workingFilePath}: ${errorMessage(error)}`
