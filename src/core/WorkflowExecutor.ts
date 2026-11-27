@@ -147,6 +147,7 @@ import type {
   SubWorkflowHost,
   SubWorkflowResult,
 } from "../types/SubWorkflowTypes";
+import { isSameSubWorkflowParentLink } from "../types/SubWorkflowTypes";
 import {
   resolvePromptFileTextWithVariables,
   resolvePromptTextWithVariables,
@@ -3218,7 +3219,7 @@ export class WorkflowExecutor {
                 childRunRef
               )
             );
-            if (JSON.stringify(manifest.parentRun) === JSON.stringify(parent)) {
+            if (isSameSubWorkflowParentLink(manifest.parentRun, parent)) {
               completedChild =
                 manifest.executionState === EXECUTION_STATES.COMPLETED;
               if (!completedChild)
@@ -3286,16 +3287,17 @@ export class WorkflowExecutor {
         resolvedWorkflowPath: resolvedPath,
       });
       const result: SubWorkflowResult = await handle.done;
-      const settlementAlreadyRecorded = context.historyFilePath
-        ? (
-            await new TimelineRecorder().readEvents(context.historyFilePath)
-          ).some(
-            (event) =>
-              event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
-              event.payload.childWorkflowKey === handle!.workflowKey &&
-              event.payload.childRunRef === handle!.runRef
-          )
-        : false;
+      const settlementAlreadyRecorded =
+        completedChild && context.historyFilePath
+          ? (
+              await new TimelineRecorder().readEvents(context.historyFilePath)
+            ).some(
+              (event) =>
+                event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+                event.payload.childWorkflowKey === handle!.workflowKey &&
+                event.payload.childRunRef === handle!.runRef
+            )
+          : false;
       if (
         !settlementAlreadyRecorded &&
         context.historyFilePath &&

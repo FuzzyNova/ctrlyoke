@@ -27,7 +27,7 @@ export interface SubWorkflowLaunchRequest {
   delegationChain: readonly string[];
   /** Continue this exact child run instead of creating a new lineage. */
   resumeChildRun?: { workflowKey: WorkflowKey; runRef: RunRef };
-  stateRoot?: string;
+  stateRoot: string;
   /** Reserved for cycle detection; ignored by this launcher round. */
   ancestorPaths?: readonly string[];
   /** Passed to the instance factory; host-specific capability behavior is deferred. */
@@ -42,6 +42,23 @@ export type SubWorkflowParentLink = {
   | { phase: typeof FINAL_STEP_PHASES.QUEUE; stepId: string }
   | { phase: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number }
 );
+
+export function isSameSubWorkflowParentLink(
+  left: SubWorkflowParentLink | undefined,
+  right: SubWorkflowParentLink
+): boolean {
+  if (
+    !left ||
+    left.workflowKey !== right.workflowKey ||
+    left.runRef !== right.runRef ||
+    left.phase !== right.phase
+  )
+    return false;
+  return left.phase === FINAL_STEP_PHASES.QUEUE
+    ? right.phase === FINAL_STEP_PHASES.QUEUE && left.stepId === right.stepId
+    : right.phase === FINAL_STEP_PHASES.FINAL_STEP &&
+        left.loopIndex === right.loopIndex;
+}
 
 /** Control surface and run identity for a launched child. */
 export interface SubWorkflowHandle {

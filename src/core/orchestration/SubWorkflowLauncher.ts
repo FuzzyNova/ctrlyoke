@@ -6,6 +6,7 @@ import type {
   SubWorkflowLaunchRequest,
   SubWorkflowResult,
 } from "../../types/SubWorkflowTypes";
+import { isSameSubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 import {
   EXECUTION_STATES,
   PROMPT_TERMINAL_STATUS,
@@ -31,11 +32,13 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       if (request.resumeChildRun) {
         const target = request.resumeChildRun;
         const recordedManifest = await new TimelineRecorder().readManifest(
-          manifestPath(request.stateRoot!, target.workflowKey, target.runRef)
+          manifestPath(request.stateRoot, target.workflowKey, target.runRef)
         );
         if (
-          JSON.stringify(recordedManifest.parentRun) !==
-          JSON.stringify(request.parent)
+          !isSameSubWorkflowParentLink(
+            recordedManifest.parentRun,
+            request.parent
+          )
         ) {
           throw new Error(
             "Recorded child run does not belong to this parent step"
@@ -59,22 +62,15 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
             "Sub-workflow continuation did not bind to a run identity"
           );
         }
-        const done = this.collectExecution(
+        return this.executionHandle(
           instance,
           execution,
-          () => parentStopped
-        );
-        return {
-          workflowKey: identity.workflowKey,
-          runRef: identity.runRef,
-          done,
-          pause: () => instance.pause(),
-          cancelPause: () => instance.cancelPause(),
-          stop: async () => {
+          identity as { workflowKey: string; runRef: string },
+          () => parentStopped,
+          () => {
             parentStopped = true;
-            await instance.stop();
-          },
-        };
+          }
+        );
       }
       loaded = await instance.loadPromptFile(
         request.source.resolvedPath,
@@ -108,26 +104,43 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
 
     const workflowKey = initialState.workflowKey;
     const runRef = initialState.runRef;
+    return this.executionHandle(
+      instance,
+      execution,
+      { workflowKey, runRef },
+      () => parentStopped,
+      () => {
+        parentStopped = true;
+      }
+    );
+  }
+
+  private executionHandle(
+    instance: SubWorkflowInstance,
+    execution: Promise<void>,
+    identity: { workflowKey: string; runRef: string },
+    wasStoppedByParent: () => boolean,
+    markParentStopped: () => void
+  ): SubWorkflowHandle {
     const done = this.collectExecution(
       instance,
       execution,
-      () => parentStopped
+      wasStoppedByParent
     ).catch((error): SubWorkflowResult => ({
       status: PROMPT_TERMINAL_STATUS.FAILED,
       failureMessage: errorMessage(error),
     }));
-    const handle: SubWorkflowHandle = {
-      workflowKey,
-      runRef,
+    return {
+      workflowKey: identity.workflowKey as SubWorkflowHandle["workflowKey"],
+      runRef: identity.runRef as SubWorkflowHandle["runRef"],
       done,
       pause: () => instance.pause(),
       cancelPause: () => instance.cancelPause(),
       stop: async () => {
-        parentStopped = true;
+        markParentStopped();
         await instance.stop();
       },
     };
-    return handle;
   }
 
   private async collectExecution(

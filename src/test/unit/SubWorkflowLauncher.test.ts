@@ -5,6 +5,7 @@ import type {
   SubWorkflowInstance,
   SubWorkflowLaunchRequest,
 } from "../../types/SubWorkflowTypes";
+import { isSameSubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 import type {
   PromptFile,
   QueueState,
@@ -149,10 +150,29 @@ function request(): SubWorkflowLaunchRequest {
     },
     parentExecution: { executionRoot: "/tmp", executionCheckoutRoot: "/tmp" },
     delegationChain: [],
+    stateRoot: "/tmp/state",
   };
 }
 
 suite("SubWorkflowLauncher", () => {
+  test("compares parent links by fields regardless of key order", () => {
+    const expected = request().parent;
+    const reordered = {
+      stepId: "step-1",
+      phase: "queue",
+      runRef: "run-parent" as RunRef,
+      workflowKey: "parent-key" as WorkflowKey,
+    } as const;
+    assert.strictEqual(isSameSubWorkflowParentLink(reordered, expected), true);
+    assert.strictEqual(
+      isSameSubWorkflowParentLink(
+        { ...expected, runRef: "other-run" as RunRef },
+        expected
+      ),
+      false
+    );
+  });
+
   test("maps a completed child and projects its worktree", async () => {
     const factory = new FakeFactory();
     factory.child.worktree = {
