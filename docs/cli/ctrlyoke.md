@@ -184,6 +184,8 @@ passes the harness's own terminal UI through with minimal ctrlyoke framing.
 Headless mode streams formatted output: step headers, streamed text, tool
 calls, diffs, script verdicts, and per-step statistics. Subagent output is
 indented and labeled beneath its spawn, including when child work interleaves.
+Sub-workflow step progress uses the nearest child workflow name as a prefix,
+so nested child output remains identifiable in the shared terminal stream.
 
 ### Tool permissions
 

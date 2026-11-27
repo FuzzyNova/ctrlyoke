@@ -195,6 +195,11 @@ export interface RunOutputProjection {
   /** Queue targets only. Final-step loops are reduced into `finalStep`. */
   targets: Map<string, RunAttemptProjection>;
   finalStep?: RunFinalStepProjection;
+  /** Settled direct child runs, in the order their timeline events were written. */
+  subWorkflowRuns?: Array<{
+    target: OutputExecutionTarget;
+    output: SubWorkflowOutput;
+  }>;
 }
 
 export interface RunOutputProjectionOptions {
@@ -834,11 +839,20 @@ export class RunOutputResolver {
     }
 
     const finalAccumulator = new ProjectionAccumulator();
+    const subWorkflowRuns: RunOutputProjection["subWorkflowRuns"] = [];
     let latestFinalLoop: ProjectionAccumulator | undefined;
     let latestFinalLoopIndex = -1;
 
     try {
       for await (const event of this.stream(manifestPath)) {
+        if (
+          event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED
+        ) {
+          subWorkflowRuns.push({
+            target: event.attempt.target,
+            output: event.subWorkflowOutput,
+          });
+        }
         if (
           event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
           event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION
@@ -988,6 +1002,7 @@ export class RunOutputResolver {
           : {}),
       };
     }
+    projection.subWorkflowRuns = subWorkflowRuns;
     return projection;
   }
 
@@ -1007,6 +1022,7 @@ export class RunOutputResolver {
     }
     return {
       projection: {
+        subWorkflowRuns: [],
         targets: new Map(
           [...accumulators].map(([key, accumulator]) => [
             key,

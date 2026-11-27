@@ -327,36 +327,33 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     input.outputProjection?.finalStep,
     input
   );
-  const subWorkflowRuns: CliJsonSubWorkflowRun[] = state.steps.flatMap(
-    (step) => {
-      if (!isSubWorkflowStep(step)) return [];
-      const runtime = step._runtime;
-      return runtime?.childWorkflowKey && runtime.childRunRef && runtime.stepId
+  const settledChildren = input.outputProjection?.subWorkflowRuns ?? [];
+  const subWorkflowRuns: CliJsonSubWorkflowRun[] =
+    settledChildren.flatMap<CliJsonSubWorkflowRun>(({ target, output }) => {
+      if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+        return [
+          {
+            pass: target.loopIndex + 1,
+            workflowKey: output.childWorkflowKey,
+            runRef: output.childRunRef,
+            status: output.outcome.status,
+          },
+        ];
+      }
+      const step = state.steps[target.stepIndex];
+      if (!step || !isSubWorkflowStep(step)) return [];
+      const stepId = step._runtime?.stepId;
+      return stepId
         ? [
             {
-              stepId: runtime.stepId,
-              workflowKey: runtime.childWorkflowKey,
-              runRef: runtime.childRunRef,
-              status: runtime.terminalStatus ?? null,
+              stepId,
+              workflowKey: output.childWorkflowKey,
+              runRef: output.childRunRef,
+              status: output.outcome.status,
             },
           ]
         : [];
-    }
-  );
-  const finalStepDefinition = promptFile?.finalStep;
-  const finalRuntime =
-    finalStepDefinition && isSubWorkflowStep(finalStepDefinition)
-      ? finalStepDefinition._runtime
-      : undefined;
-  if (finalRuntime?.childWorkflowKey && finalRuntime.childRunRef) {
-    const pass = Math.max(1, getFinalStepPassCount(input.finalStepRuntime));
-    subWorkflowRuns.push({
-      pass,
-      workflowKey: finalRuntime.childWorkflowKey,
-      runRef: finalRuntime.childRunRef,
-      status: finalRuntime.terminalStatus ?? null,
     });
-  }
   const startedAt = toIso(state.startTime);
   const completedAt = toIso(state.executionEndTime);
 

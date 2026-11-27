@@ -535,6 +535,19 @@ suite("CliJsonResultBuilder", () => {
       steps: [child],
       results: [],
       status: EXECUTION_STATES.COMPLETED,
+      outputProjection: {
+        targets: new Map(),
+        subWorkflowRuns: [
+          {
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            output: {
+              childWorkflowKey: childKey,
+              childRunRef: childRun,
+              outcome: { status: "completed" },
+            },
+          },
+        ],
+      },
     });
     assert.deepStrictEqual(result.subWorkflowRuns, [
       {
@@ -542,6 +555,55 @@ suite("CliJsonResultBuilder", () => {
         workflowKey: childKey,
         runRef: childRun,
         status: "completed",
+      },
+    ]);
+  });
+
+  test("includes one final-step child run address for each settled pass", () => {
+    const child1 = {
+      childWorkflowKey: "child-workflow" as WorkflowKey,
+      childRunRef: "child-run-1" as RunRef,
+      outcome: { status: "completed" as const },
+    };
+    const child2 = {
+      childWorkflowKey: "child-workflow" as WorkflowKey,
+      childRunRef: "child-run-2" as RunRef,
+      outcome: { status: "failed" as const },
+    };
+    const result = build({
+      promptFile: {
+        finalStep: {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: "child.ctrlyoke.json",
+        },
+      } as PromptFile,
+      outputProjection: {
+        targets: new Map(),
+        subWorkflowRuns: [
+          {
+            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+            output: child1,
+          },
+          {
+            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
+            output: child2,
+          },
+        ],
+      },
+    });
+
+    assert.deepStrictEqual(result.subWorkflowRuns, [
+      {
+        pass: 1,
+        workflowKey: child1.childWorkflowKey,
+        runRef: child1.childRunRef,
+        status: "completed",
+      },
+      {
+        pass: 2,
+        workflowKey: child2.childWorkflowKey,
+        runRef: child2.childRunRef,
+        status: "failed",
       },
     ]);
   });

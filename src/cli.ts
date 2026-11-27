@@ -924,6 +924,76 @@ function toCliOutputTarget(
       };
 }
 
+let nextCliChildReporterId = 1;
+
+/** Subscribe child instances to the same formatter and terminal gate as the CLI root. */
+function subscribeCliChildProgress(
+  child: WorkflowInstance,
+  outputGate: CliTerminalOutputGate
+): void {
+  const reporterId = nextCliChildReporterId++;
+  const prefixStepName = (stepName: string): string => {
+    const childName =
+      child.promptQueue.getWorkflowFile().name?.trim() || "child workflow";
+    return `[${childName}] ${stepName}`;
+  };
+  const outputTarget = (target: OutputExecutionTarget, stepName?: string) => {
+    const resolvedName = stepName ?? getCliOutputStepName(child, target);
+    return {
+      ...toCliOutputTarget(target, prefixStepName(resolvedName)),
+      key: `child-${reporterId}:${outputTargetKey(target)}`,
+    };
+  };
+
+  child.onTargetAttemptStart(({ target }) =>
+    outputGate.write(() =>
+      CliTerminalFormatter.replaceEventStream(outputTarget(target))
+    )
+  );
+  child.onTargetAttemptComplete(({ target, stats }) =>
+    outputGate.write(() => {
+      const renderedTarget = outputTarget(target);
+      CliTerminalFormatter.finishEventStream(renderedTarget);
+      CliTerminalFormatter.renderStats(stats);
+    })
+  );
+  child.onPromptStart((data) =>
+    outputGate.write(() =>
+      CliTerminalFormatter.renderPromptHeader({
+        ...data,
+        stepName: prefixStepName(data.stepName),
+      })
+    )
+  );
+  child.onTargetScriptOutput((data) =>
+    outputGate.write(() =>
+      CliTerminalFormatter.renderScriptOutput(
+        data.output,
+        outputTarget(data.target),
+        data.output.scriptOutput
+      )
+    )
+  );
+  child.onTargetStreamingEvents((data) => {
+    if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
+    outputGate.write(() =>
+      CliTerminalFormatter.renderEvents(
+        data.events,
+        outputTarget(data.target, data.stepName)
+      )
+    );
+  });
+  child.onTargetStreamingChunk((data) => {
+    if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
+    outputGate.write(() =>
+      CliTerminalFormatter.renderStreamingChunk(
+        data.chunk,
+        outputTarget(data.target, data.stepName)
+      )
+    );
+  });
+}
+
 interface ValidateCommandOptions {
   harness?: string;
   allInstalledHarnesses?: boolean;
@@ -1309,13 +1379,16 @@ async function runCommand(
     workflowSessionIdFromOverride: options.sessionId !== undefined,
   };
   let subWorkflowLauncher: SubWorkflowLauncher;
-  subWorkflowLauncher = new SubWorkflowLauncher((options) =>
-    createCliSubWorkflowInstance(
+  let registerChildProgressReporter = (_child: WorkflowInstance): void => {};
+  subWorkflowLauncher = new SubWorkflowLauncher((options) => {
+    const child = createCliSubWorkflowInstance(
       instanceDependencies,
       options,
       subWorkflowLauncher
-    )
-  );
+    );
+    registerChildProgressReporter(child);
+    return child;
+  });
   const instance = createCliWorkflowInstance(instanceDependencies, {
     subWorkflowHost: subWorkflowLauncher,
   });
@@ -1335,6 +1408,8 @@ async function runCommand(
       (deferredCount) =>
         CliTerminalFormatter.renderTerminalReturned(deferredCount)
     );
+    registerChildProgressReporter = (child) =>
+      subscribeCliChildProgress(child, outputGate);
     const parallelGroups = new Map<string, CliParallelGroupState>();
     const attempts = new CliAttemptTally();
     const renderedFinalStepLabels = new Set<number>();
