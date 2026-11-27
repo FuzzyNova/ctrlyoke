@@ -162,9 +162,12 @@ function inlineRunBoundaryErrors(
       `${boundary}; numeric or relative priorContext selectors cannot cross into the child run`
     );
   }
-  const hasRunLocalReferences = getPromptReferenceTexts(inline).some(
-    (text) => parseInlinePriorContextRefs(text).length > 0
-  );
+  // A script step has no prompt text, so only a prompt step can carry one.
+  const hasRunLocalReferences =
+    isPromptStep(inline) &&
+    getPromptReferenceTexts(inline).some(
+      (text) => parseInlinePriorContextRefs(text).length > 0
+    );
   if (hasRunLocalReferences) {
     errors.push(
       `${boundary}; inline prior-context references cannot select parent-run output`

@@ -184,4 +184,16 @@ suite("InlineSubWorkflowMaterializer", () => {
       "{{name}}"
     );
   });
+
+  test("a name that substitutes to nothing gets the default label", () => {
+    const result = materializeInlineSubWorkflow(
+      { vars: { name: "" }, steps: [] },
+      { name: "" },
+      inlineStep({ prompt: "child", name: "{{name}}" }),
+      STEP_2,
+      "Parent",
+      ""
+    );
+    assert.strictEqual(result.displayName, "Parent · step 2");
+  });
 });

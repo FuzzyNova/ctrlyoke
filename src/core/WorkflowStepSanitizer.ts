@@ -976,8 +976,18 @@ export function buildWorkflowStepFromProperties(
         ...buildPromptStepProperties(properties),
       };
     case STEP_TYPES.WORKFLOW:
-      if (isRecord(props.workflow) && "_runtime" in props.workflow) {
-        throw new Error("Inline workflow definition cannot contain _runtime");
+      // Only a path or an inline definition is a workflow reference. Any other
+      // value is an invalid definition, never one to fall back to the text.
+      if (
+        props.workflow !== undefined &&
+        typeof props.workflow !== "string" &&
+        !isInlineSubWorkflowDefinition(props.workflow)
+      ) {
+        throw new Error(
+          isRecord(props.workflow) && "_runtime" in props.workflow
+            ? "Inline workflow definition cannot contain _runtime"
+            : "Inline workflow definition must be a single prompt or script step"
+        );
       }
       return {
         type: STEP_TYPES.WORKFLOW,

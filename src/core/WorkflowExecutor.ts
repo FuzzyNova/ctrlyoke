@@ -272,6 +272,11 @@ export interface WorkflowExecutionContext {
   currentPromptFilePath: string | undefined;
   /** Authored workflow definition used as the semantic base for prompt-file refs. */
   sourceDefinitionPath?: string;
+  /**
+   * The identity workflow-scoped trust approvals are keyed by
+   * (`WorkflowInstance.getWorkflowTrustSourcePath`). Never a reference base.
+   */
+  workflowTrustSourcePath?: string;
   /** Host port for launching nested workflow runs. */
   subWorkflowHost?: SubWorkflowHost;
   prepareSubWorkflowWorktreeChild?: () => Promise<void>;
@@ -2938,6 +2943,7 @@ export class WorkflowExecutor {
           allPrompts: state.steps,
           filePath: context.currentPromptFilePath,
           sourceDefinitionPath: context.sourceDefinitionPath,
+          workflowTrustSourcePath: context.workflowTrustSourcePath,
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
@@ -3627,8 +3633,7 @@ export class WorkflowExecutor {
             parentDefinition: {
               sourceDefinitionPath: context.sourceDefinitionPath,
               sourceCheckoutRoot: context.executionWorkspace.sourceCheckoutRoot,
-              trustIdentityPath:
-                context.sourceDefinitionPath ?? context.currentPromptFilePath,
+              trustIdentityPath: context.workflowTrustSourcePath,
             },
           },
           createsWorktree: Boolean(materialized.definition.worktree),
@@ -6279,6 +6284,7 @@ export class WorkflowExecutor {
             allPrompts: state.steps,
             filePath: context.currentPromptFilePath,
             sourceDefinitionPath: context.sourceDefinitionPath,
+            workflowTrustSourcePath: context.workflowTrustSourcePath,
             workflowName: this.promptQueue.getState().workflowName,
             instanceId: context.instanceId,
             workingFilePath: context.workingFilePath,

@@ -81,6 +81,31 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
     );
   });
 
+  test("rejects every object that is not an inline definition", () => {
+    for (const workflow of [
+      { type: "parallel", prompt: "child" },
+      { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+      ["child.ctrlyoke.yaml"],
+      42,
+    ]) {
+      assert.throws(
+        () =>
+          buildWorkflowStepFromProperties("display text", {
+            type: STEP_TYPES.WORKFLOW,
+            workflow,
+          }),
+        /must be a single prompt or script step/,
+        JSON.stringify(workflow)
+      );
+    }
+    assert.deepStrictEqual(
+      buildWorkflowStepFromProperties("child.ctrlyoke.yaml", {
+        type: STEP_TYPES.WORKFLOW,
+      }),
+      { type: STEP_TYPES.WORKFLOW, workflow: "child.ctrlyoke.yaml" }
+    );
+  });
+
   test("preserves sandbox booleans and leaves an absent override absent", () => {
     for (const sandbox of [true, false]) {
       assert.strictEqual(

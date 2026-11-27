@@ -1049,15 +1049,14 @@ export function parseInlinePriorContextRefs(
 }
 
 /** Prompt-bearing text fields whose inline references are expanded at runtime. */
-export function getPromptReferenceTexts(step: object): string[] {
-  const promptStep = step as {
-    prompt?: unknown;
-    endCondition?: { retryPrompt?: unknown; passRetryPrompt?: unknown } | null;
-  };
+export function getPromptReferenceTexts(step: {
+  prompt?: unknown;
+  endCondition?: { retryPrompt?: unknown; passRetryPrompt?: unknown } | null;
+}): string[] {
   return [
-    promptStep.prompt,
-    promptStep.endCondition?.retryPrompt,
-    promptStep.endCondition?.passRetryPrompt,
+    step.prompt,
+    step.endCondition?.retryPrompt,
+    step.endCondition?.passRetryPrompt,
   ].filter((text): text is string => typeof text === "string");
 }
 

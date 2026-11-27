@@ -2293,6 +2293,299 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  test("a template parent's inline child shares its trust identity but gets no reference base", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-template-");
+    const external = makeTempDir("ctrlyoke-inline-template-external-");
+    const recorder = new MockHarnessIntegration(undefined, false);
+    const seen: Array<{
+      sourceDefinitionPath?: string;
+      workflowTrustSourcePath?: string;
+    }> = [];
+    recorder.prepareSentPrompt = (prompt, workflowContext) => {
+      seen.push({
+        sourceDefinitionPath: workflowContext?.sourceDefinitionPath,
+        workflowTrustSourcePath: workflowContext?.workflowTrustSourcePath,
+      });
+      return prompt.prompt;
+    };
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      recorder
+    );
+    try {
+      const parent = createInstance();
+      instances.push(parent);
+      await parent.loadFromTemplate(
+        {
+          trustedExternalRoots: [external],
+          steps: [{ type: "workflow", workflow: { prompt: "hello" } }],
+        },
+        "Review loop"
+      );
+      await parent.executeLoadedPromptFile();
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      const child = launchedChild(instances, parent);
+      const parentIdentityPath = parent.getWorkflowTrustSourcePath();
+      assert.ok(parentIdentityPath);
+      assert.strictEqual(
+        child.getWorkflowTrustSourcePath(),
+        parentIdentityPath
+      );
+      // The harness sees the parent's identity for trust, and no file to
+      // resolve `./` references against: the template has none.
+      assert.deepStrictEqual(seen, [
+        {
+          sourceDefinitionPath: undefined,
+          workflowTrustSourcePath: parentIdentityPath,
+        },
+      ]);
+
+      const parentIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          workspace,
+          parentIdentityPath
+        );
+      const trustStore = {
+        getApprovedRoots: (identity: string, roots: readonly string[]) =>
+          identity === parentIdentity ? [...roots] : [],
+        getPendingRoots: () => [],
+      };
+      const effectiveRoots = (instance: WorkflowInstance) => {
+        const context = HarnessAdapterUtils.getWorkflowExternalRootsContext(
+          workspace,
+          {
+            workflowTrustSourcePath: instance.getWorkflowTrustSourcePath(),
+            stateRoot: workspace,
+            workflowFile: instance.promptQueue.getWorkflowFile(),
+          }
+        );
+        assert.ok(context);
+        return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          context.workspaceIdentity,
+          { identity: context.identity, declaredRoots: context.declaredRoots },
+          trustStore
+        );
+      };
+      assert.deepStrictEqual(effectiveRoots(parent), [external]);
+      assert.deepStrictEqual(effectiveRoots(child), [external]);
+
+      // `./x` in the child fails exactly as it does in a template step.
+      const runTemplate = async (step: object): Promise<WorkflowInstance> => {
+        const instance = createInstance();
+        instances.push(instance);
+        await instance.loadFromTemplate(
+          { steps: [step as never] },
+          "Review loop"
+        );
+        await instance.executeLoadedPromptFile();
+        assert.strictEqual(instance.promptQueue.getState().status, "error");
+        return instance;
+      };
+      const direct = await runTemplate({ prompt: "./notes.prompt.md" });
+      const inlineParent = await runTemplate({
+        type: "workflow",
+        workflow: { prompt: "./notes.prompt.md" },
+      });
+      const inlineChild = launchedChild(instances, inlineParent);
+      assert.strictEqual(inlineChild.promptQueue.getState().status, "error");
+      const directError = direct.promptQueue.getState().results[0].error;
+      assert.ok(directError);
+      assert.strictEqual(
+        inlineChild.promptQueue.getState().results[0].error,
+        directError
+      );
+      assert.strictEqual(seen.length, 1, "neither ./x prompt was sent");
+    } finally {
+      removeTempDir(external);
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a continued inline child stays in its managed parent's worktree and later inline steps resolve from the parent's folder", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(120_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-inline-continue-worktree-");
+    // Outside the repository, so probing never dirties either checkout.
+    const probe = makeTempDir("ctrlyoke-inline-continue-probe-");
+    const recorder = new MockHarnessIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      recorder
+    );
+    try {
+      initGitRepository(workspace);
+      const flows = path.join(workspace, "flows");
+      await fs.mkdir(flows, { recursive: true });
+      await fs.writeFile(path.join(flows, "notes.prompt.md"), "FROM-FLOWS");
+      // A root decoy: losing the parent's folder as the base finds it.
+      await fs.writeFile(path.join(workspace, "notes.prompt.md"), "WRONG");
+      const probeDir = probe.replace(/\\/g, "\\\\");
+      const waitScript =
+        "node -e \"const fs=require('fs');fs.appendFileSync('" +
+        probeDir +
+        "/cwd',process.cwd()+'\\n');const t=setInterval(()=>{if(fs.existsSync('" +
+        probeDir +
+        "/sentinel')){clearInterval(t);process.exit(0)}},50)\"";
+      const parentPath = path.join(flows, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          {
+            type: "workflow",
+            workflow: { type: "script", script: waitScript },
+          },
+          { type: "workflow", workflow: { prompt: "./notes.prompt.md" } },
+        ],
+      });
+      commitAll(workspace, "add parent");
+
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(probe, "cwd"));
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        await execution;
+      });
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      const stoppedChild = launchedChild(instances, parent);
+      const childRunRef = stoppedChild.promptQueue.getState().runRef;
+
+      await fs.writeFile(path.join(probe, "sentinel"), "go");
+      const state = parent.promptQueue.getState();
+      await parent.executeContinuationAtRun(
+        state.workflowKey!,
+        state.runRef!,
+        state.definitionRevision
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+
+      // The step still names the stopped child's run, and a second instance
+      // continued that run rather than launching a new lineage.
+      assert.strictEqual(
+        launchedChild(instances, parent).promptQueue.getState().runRef,
+        childRunRef
+      );
+      const continued = instances.filter(
+        (instance) =>
+          instance !== stoppedChild &&
+          instance.promptQueue.getState().runRef === childRunRef
+      );
+      assert.strictEqual(
+        continued.length,
+        1,
+        "the stopped child is reattached"
+      );
+      assert.strictEqual(
+        continued[0].promptQueue.getState().status,
+        "completed"
+      );
+
+      const worktree = execFileSync(
+        "git",
+        ["-C", workspace, "worktree", "list", "--porcelain"],
+        { encoding: "utf8" }
+      )
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("worktree "))
+        .map((line) => line.slice("worktree ".length))
+        .find(
+          (candidate) => path.resolve(candidate) !== path.resolve(workspace)
+        );
+      assert.ok(worktree, "the managed parent created a linked worktree");
+      const cwds = (await fs.readFile(path.join(probe, "cwd"), "utf8"))
+        .split("\n")
+        .filter(Boolean);
+      assert.strictEqual(cwds.length, 2, "ran once, then once more continued");
+      for (const cwd of cwds) {
+        assert.strictEqual(await fs.realpath(cwd), await fs.realpath(worktree));
+      }
+      assert.deepStrictEqual(recorder.sentPrompts, ["FROM-FLOWS"]);
+    } finally {
+      restoreGitTimeouts();
+      await fs.writeFile(path.join(probe, "sentinel"), "go").catch(() => {});
+      await disposeAll(instances, workspace);
+      removeTempDir(probe);
+    }
+  });
+
+  test("an inline child checks exported assets beside its parent's file", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-assets-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const missingAssetWarnings = async (child: WorkflowInstance) => {
+      const state = child.promptQueue.getState();
+      const events = await new TimelineRecorder().readEvents(
+        child.outputHistoryManager.getHistoryFilePath(
+          state.workflowKey!,
+          state.runRef!
+        )
+      );
+      return events
+        .filter(
+          (event) =>
+            event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED
+        )
+        .map(
+          (event) =>
+            (event.payload as { statusMessage: { message: string } })
+              .statusMessage.message
+        )
+        .filter((message) => message.includes("missing exported assets"));
+    };
+    const runParent = async (): Promise<WorkflowInstance> => {
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      return launchedChild(instances, parent);
+    };
+    const flows = path.join(workspace, "flows");
+    const assets = path.join(flows, "parent.assets");
+    const parentPath = path.join(flows, "parent.ctrlyoke.json");
+    try {
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(path.join(assets, "x.md"), "asset");
+      // No `parent.assets` at the workspace root.
+      await writeJson(parentPath, {
+        steps: [
+          {
+            type: "workflow",
+            workflow: { prompt: "Review @./parent.assets/x.md" },
+          },
+        ],
+      });
+      assert.deepStrictEqual(await missingAssetWarnings(await runParent()), []);
+
+      await fs.rm(assets, { recursive: true, force: true });
+      const warnings = await missingAssetWarnings(await runParent());
+      assert.strictEqual(warnings.length, 1, JSON.stringify(warnings));
+      assert.match(
+        warnings[0],
+        /missing exported assets: flows\/parent\.assets\./
+      );
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
   test("an inline child gets a host var override substituted exactly once, named and linked without a path", async () => {
     const workspace = makeTempDir("ctrlyoke-inline-vars-");
     const recorder = new MockHarnessIntegration(undefined, false);
@@ -2304,18 +2597,23 @@ suite("Sub-workflow host end to end", () => {
       const parentPath = path.join(workspace, "parent.ctrlyoke.json");
       await writeJson(parentPath, {
         name: "Vars parent",
-        vars: { value: "authored", other: "EXPANDED" },
+        vars: { value: "authored", other: "EXPANDED", blank: "" },
         steps: [
           {
             type: "workflow",
-            name: "check src/core",
+            name: "check {{value}} in src/core",
             workflow: {
               type: "script",
               script:
                 "node -e \"require('fs').writeFileSync('inline-var.txt','{{value}}')\"",
             },
           },
-          { type: "workflow", workflow: { prompt: "say {{value}}" } },
+          {
+            type: "workflow",
+            // Substitutes to nothing: the default label, not the `{{…}}` text.
+            name: "{{blank}}",
+            workflow: { prompt: "say {{value}}" },
+          },
         ],
         finalStep: {
           type: "workflow",
@@ -2350,7 +2648,8 @@ suite("Sub-workflow host end to end", () => {
 
       assert.strictEqual(
         launchedChild(instances, parent, 0).promptQueue.getState().workflowName,
-        "check src/core"
+        // Substituted once, with the host override: not "cli-EXPANDED".
+        "check cli-{{other}} in src/core"
       );
       assert.strictEqual(
         launchedChild(instances, parent, 1).promptQueue.getState().workflowName,

@@ -57,7 +57,7 @@ export function materializeInlineSubWorkflow(
   step: SubWorkflowStep,
   position: InlineSubWorkflowPosition,
   parentName?: string,
-  displayNameOverride?: string
+  substitutedStepName?: string
 ): { definition: PromptFile; displayName: string } {
   if (typeof step.workflow === "string") {
     throw new Error("Cannot materialize a file-backed sub-workflow");
@@ -89,10 +89,12 @@ export function materializeInlineSubWorkflow(
   if (worktree !== undefined) definition.worktree = worktree;
 
   const workflowName = parentName?.trim() || parent.name?.trim() || "Workflow";
-  const displayName =
-    displayNameOverride?.trim() ||
-    step.name?.trim() ||
-    `${workflowName} · ${position.label}`;
+  // `steps[].name` substitutes at dispatch, so the caller passes the step's
+  // dispatch-substituted name. A name that substitutes to nothing falls back
+  // to the default label, never to the authored `{{…}}` text.
+  const stepName =
+    substitutedStepName !== undefined ? substitutedStepName : step.name;
+  const displayName = stepName?.trim() || `${workflowName} · ${position.label}`;
   definition.name = displayName;
   return { definition, displayName };
 }

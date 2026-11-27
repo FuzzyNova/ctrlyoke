@@ -53,6 +53,8 @@ interface GetCliVersionOptions extends CliCommandOptions {
 export interface HarnessAdapterWorkflowContext {
   filePath?: string;
   sourceDefinitionPath?: string;
+  /** See `WorkflowContext.workflowTrustSourcePath`; preferred when set. */
+  workflowTrustSourcePath?: string;
   stateRoot?: string;
   workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
 }
@@ -362,7 +364,9 @@ export class HarnessAdapterUtils {
     // Approvals are recorded against the authored file. In a real run
     // `filePath` is the run's working copy, which has none of them.
     const workflowSourcePath =
-      workflowContext.sourceDefinitionPath ?? workflowContext.filePath;
+      workflowContext.workflowTrustSourcePath ??
+      workflowContext.sourceDefinitionPath ??
+      workflowContext.filePath;
     if (
       !workflowSourcePath ||
       workflowSourcePath.startsWith("<") ||

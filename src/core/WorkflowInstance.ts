@@ -309,6 +309,11 @@ export class WorkflowInstance
   filePath: string = "";
   /** Authored source used as the semantic base for standalone prompt-file refs. */
   private sourceDefinitionPath?: string;
+  /**
+   * An inline child's trust identity, inherited from its parent (D13); only
+   * {@link getWorkflowTrustSourcePath} reads it, never reference resolution.
+   */
+  private inheritedTrustIdentityPath?: string;
   /** Creation timestamp (ms since epoch) */
   readonly createdAt: number;
   /** Timestamp when execution last started (ms since epoch), 0 if never started */
@@ -1701,7 +1706,37 @@ export class WorkflowInstance
    * it is only the fallback for workflows with no authored file.
    */
   getWorkflowTrustSourcePath(): string | undefined {
-    return this.sourceDefinitionPath ?? this.currentPromptFile?.filePath;
+    return (
+      this.inheritedTrustIdentityPath ??
+      this.sourceDefinitionPath ??
+      this.currentPromptFile?.filePath
+    );
+  }
+
+  /**
+   * Set the authored definition this instance resolves workflow-relative
+   * references against. Any definition this instance loads for itself has its
+   * own trust identity, so an inherited one is dropped.
+   */
+  private setSourceDefinition(sourceDefinitionPath: string | undefined): void {
+    this.sourceDefinitionPath = sourceDefinitionPath;
+    this.inheritedTrustIdentityPath = undefined;
+  }
+
+  /**
+   * An inline child has no file of its own (D13). It resolves references
+   * against the parent's authored file, and nothing else: a parent with no
+   * file gives the child none, so `./x` fails exactly as it would in the
+   * parent. Trust is keyed by the parent's trust identity, which can be a
+   * path no reference may resolve against (a template's display name, a run
+   * working copy), so it is held apart and read only by
+   * {@link getWorkflowTrustSourcePath}.
+   */
+  private adoptInheritedParentDefinition(
+    parentDefinition: InlineParentDefinition | undefined
+  ): void {
+    this.sourceDefinitionPath = parentDefinition?.sourceDefinitionPath;
+    this.inheritedTrustIdentityPath = parentDefinition?.trustIdentityPath;
   }
 
   /**
@@ -1766,7 +1801,7 @@ export class WorkflowInstance
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
     this.filePath = filePath;
-    this.sourceDefinitionPath = filePath;
+    this.setSourceDefinition(filePath);
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
@@ -1808,7 +1843,7 @@ export class WorkflowInstance
   ): Promise<void> {
     this.promptQueue.clearQueue();
     this.filePath = displayName;
-    this.sourceDefinitionPath = undefined;
+    this.setSourceDefinition(undefined);
 
     const workingFilePath = await this.promptFileLoader.loadFromMemory(
       promptFile,
@@ -1838,9 +1873,7 @@ export class WorkflowInstance
     this.adoptSubWorkflowLoadOptions(options);
     this.promptQueue.clearQueue();
     this.filePath = displayName;
-    this.sourceDefinitionPath =
-      this.inheritedParentDefinition?.trustIdentityPath ??
-      this.inheritedParentDefinition?.sourceDefinitionPath;
+    this.adoptInheritedParentDefinition(this.inheritedParentDefinition);
     const workingFilePath = await this.promptFileLoader.loadFromMemoryOrThrow(
       promptFile,
       displayName,
@@ -1867,7 +1900,7 @@ export class WorkflowInstance
   ): void {
     this.promptQueue.clearQueue();
     this.filePath = "";
-    this.sourceDefinitionPath = undefined;
+    this.setSourceDefinition(undefined);
     const promptFile: PromptFile = {
       steps: [{ prompt: promptText }],
       ...workflowOverrides,
@@ -1892,7 +1925,7 @@ export class WorkflowInstance
   ): Promise<void> {
     this.promptQueue.clearQueue();
     this.filePath = "";
-    this.sourceDefinitionPath = undefined;
+    this.setSourceDefinition(undefined);
     const promptFile: PromptFile = {
       steps: [{ prompt: promptText }],
       ...workflowOverrides,
@@ -1937,7 +1970,7 @@ export class WorkflowInstance
     if (workingFile?.steps) {
       const filePath = originalFile || workingFilePath;
       this.filePath = filePath;
-      this.sourceDefinitionPath = originalFile;
+      this.setSourceDefinition(originalFile);
       this.currentPromptFile = {
         filePath,
         promptFile: {
@@ -1997,7 +2030,7 @@ export class WorkflowInstance
     if (workingFile?.steps) {
       const filePath = originalFile || workingFilePath;
       this.filePath = filePath;
-      this.sourceDefinitionPath = originalFile;
+      this.setSourceDefinition(originalFile);
       this.currentPromptFile = {
         filePath,
         promptFile: {
@@ -2331,6 +2364,9 @@ export class WorkflowInstance
       get sourceDefinitionPath() {
         return instance.sourceDefinitionPath;
       },
+      get workflowTrustSourcePath() {
+        return instance.getWorkflowTrustSourcePath();
+      },
       subWorkflowHost: this.executionOptions.subWorkflowHost,
       prepareSubWorkflowWorktreeChild: async () => {
         const worktree = this.activeWorktree;
@@ -2644,9 +2680,7 @@ export class WorkflowInstance
       // An inline child's lineage records no source file, so restoring it
       // cleared the parent definition it resolves against.
       if (this.inheritedParentDefinition) {
-        this.sourceDefinitionPath =
-          this.inheritedParentDefinition.trustIdentityPath ??
-          this.inheritedParentDefinition.sourceDefinitionPath;
+        this.adoptInheritedParentDefinition(this.inheritedParentDefinition);
       }
       this.inheritParentExecutionRoot(this.promptQueue.getWorkflowFile());
     }
@@ -6352,7 +6386,7 @@ export class WorkflowInstance
   ): Promise<string | undefined> {
     // Set instance-level name so getSummary() returns it immediately
     this.workflowName = displayName;
-    this.sourceDefinitionPath = originalFilePath;
+    this.setSourceDefinition(originalFilePath);
 
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] initializeNewWorkflow: displayName="${displayName}" ` +

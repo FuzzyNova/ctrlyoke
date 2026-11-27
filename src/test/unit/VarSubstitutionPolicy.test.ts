@@ -26,6 +26,19 @@ import {
   type VarSubstitutionPolicyEntry,
 } from "../../utils/VarSubstitutionPolicy";
 
+/**
+ * Whether a policy field (authored workflow coordinates, e.g.
+ * `steps[].workflow.prompt`) is one of the excluded fields or nested under one.
+ */
+function isExcludedPolicyField(
+  field: string,
+  excludedPaths: readonly string[]
+): boolean {
+  return excludedPaths.some(
+    (excluded) => field === excluded || field.startsWith(`${excluded}.`)
+  );
+}
+
 const POLICY_ENTRIES = Object.entries(VAR_SUBSTITUTION_POLICY) as Array<
   [string, VarSubstitutionPolicyEntry]
 >;
@@ -326,29 +339,26 @@ suite("VarSubstitutionPolicy documentation", () => {
       assert.ok(!seen.has(key), `${field} and ${seen.get(key)} share ${key}`);
       seen.set(key, field);
     }
-    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS) {
+    const excludedPaths = VAR_SUBSTITUTION_EXCLUDED_FIELDS.map(
+      ({ path: excluded }) => excluded
+    );
+    for (const [field] of POLICY_ENTRIES) {
       assert.ok(
-        !POLICY_ENTRIES.some(
-          ([field]) => field === excluded || field.startsWith(`${excluded}.`)
-        ),
-        `${excluded} is excluded but has a policy entry`
+        !isExcludedPolicyField(field, excludedPaths),
+        `${field} is excluded but has a policy entry`
       );
     }
   });
 
-  test("dotted exclusions match entries in authored workflow coordinates", () => {
-    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS.filter(
-      ({ path: candidate }) =>
-        candidate === "steps[].workflow" || candidate === "finalStep.workflow"
-    )) {
-      const entries = [`${excluded}.prompt`, `${excluded}.script`];
-      assert.ok(
-        entries.some(
-          (field) => field === excluded || field.startsWith(`${excluded}.`)
-        ),
-        `${excluded} should exclude at least one nested inline entry`
-      );
-    }
+  test("an exclusion owns its own field and the fields nested under it", () => {
+    assert.ok(
+      isExcludedPolicyField("steps[].workflow.prompt", ["steps[].workflow"])
+    );
+    assert.ok(isExcludedPolicyField("steps[].workflow", ["steps[].workflow"]));
+    assert.ok(!isExcludedPolicyField("steps[].prompt", ["steps[].workflow"]));
+    assert.ok(
+      !isExcludedPolicyField("steps[].workflowName", ["steps[].workflow"])
+    );
   });
 
   test("walker: text fields substitute, keep advisory placeholders, and honor fences", () => {

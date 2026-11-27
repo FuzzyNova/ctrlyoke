@@ -145,6 +145,13 @@ export interface WorkflowContext {
    * real run `filePath` names the run's working copy instead.
    */
   sourceDefinitionPath?: string;
+  /**
+   * The trust identity `trustedExternalRoots` approvals are keyed by, as
+   * `WorkflowInstance.getWorkflowTrustSourcePath` resolves it. It differs from
+   * `sourceDefinitionPath` for a workflow with no authored file and for an
+   * inline sub-workflow child, which inherits its parent's identity (D13).
+   */
+  workflowTrustSourcePath?: string;
   /** Human-readable workflow name (derived from file basename or first prompt text).
    *  Used for temp file naming — avoids ISO timestamps embedded in working file paths. */
   workflowName?: string;
