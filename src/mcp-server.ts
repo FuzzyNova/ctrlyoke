@@ -40,7 +40,6 @@ import type {
   WorkflowStep,
   WorkingFile,
   CoordinationParticipant,
-  SubWorkflowOutput,
 } from "./types/CtrlYokeTypes";
 import type { WorkflowRunManifest } from "./types/WorkflowTimelineTypes";
 import {
@@ -273,6 +272,10 @@ import {
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 import { PromptFileParser } from "./core/PromptFileParser";
 import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
+import {
+  selectLatestSubWorkflowSettlements,
+  type SubWorkflowSettlement,
+} from "./core/orchestration/SubWorkflowSettlements";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
 import { getErrorMessage, hasErrnoCode } from "./utils/ErrorUtils";
@@ -1366,17 +1369,19 @@ export class CtrlYokeMCPServer {
       runtime.finalStep?.phase
     );
     let workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
+    let subWorkflowSettlements: SubWorkflowSettlement[] = [];
     try {
-      workspaceSnapshots =
-        await new RunMetadataScanner().findLatestQueueWorkspaceSnapshots(
+      ({ workspaceSnapshots, subWorkflowSettlements } =
+        await new RunMetadataScanner().scanQueueStatusMetadata(
           WorkflowPaths.manifestPath(
             this.workspaceRoot,
             selected.workflowKey,
             selected.runRef
           )
-        );
+        ));
     } catch {
-      // Git outcome is advisory; status stays available if history is missing.
+      // Git outcomes and child links are advisory; status stays available if
+      // history is missing.
     }
     let schemaWarnings: WorkflowValidationWarning[] = [];
     const workflowDescriptor = await lineageRepository.readDescriptor(
@@ -1409,40 +1414,8 @@ export class CtrlYokeMCPServer {
     const workflowExecutionMode =
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
-    const subWorkflowProjection =
-      await new RunOutputResolver().resolveAttemptProjection(
-        WorkflowPaths.manifestPath(
-          this.workspaceRoot,
-          selected.workflowKey,
-          selected.runRef
-        ),
-        allSteps.map((_step, stepIndex) => ({
-          kind: FINAL_STEP_PHASES.QUEUE,
-          stepIndex,
-        })),
-        queueData.finalStep
-          ? [{ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 }]
-          : [],
-        { workspaceRoot: this.workspaceRoot }
-      );
-    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
-    let finalStepSubWorkflow:
-      { passNumber: number; output: SubWorkflowOutput } | undefined;
-    for (const child of subWorkflowProjection.subWorkflowRuns ?? []) {
-      if (child.target.kind === FINAL_STEP_PHASES.QUEUE)
-        subWorkflowOutputs.set(child.target.stepIndex, child.output);
-      else if (
-        !finalStepSubWorkflow ||
-        // `>=`: runs are in event order, so a pass whose child was stopped
-        // and continued reports its latest settlement, as queue steps do.
-        child.target.loopIndex + 1 >= finalStepSubWorkflow.passNumber
-      ) {
-        finalStepSubWorkflow = {
-          passNumber: child.target.loopIndex + 1,
-          output: child.output,
-        };
-      }
-    }
+    const { queue: subWorkflowOutputs, finalStep: finalStepSubWorkflow } =
+      selectLatestSubWorkflowSettlements(subWorkflowSettlements, allSteps);
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -2268,11 +2241,10 @@ export class CtrlYokeMCPServer {
           { workspaceRoot: this.workspaceRoot }
         )
       : undefined;
-    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
-    for (const child of workflowProjection?.subWorkflowRuns ?? []) {
-      if (child.target.kind === FINAL_STEP_PHASES.QUEUE)
-        subWorkflowOutputs.set(child.target.stepIndex, child.output);
-    }
+    const subWorkflowOutputs = selectLatestSubWorkflowSettlements(
+      workflowProjection?.subWorkflowRuns ?? [],
+      allSteps
+    ).queue;
     const outputs = await Promise.all(
       requestedIndices
         .filter((i) => i >= 0 && i < allSteps.length)

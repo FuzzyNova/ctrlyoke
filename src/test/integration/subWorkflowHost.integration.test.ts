@@ -360,6 +360,18 @@ suite("Sub-workflow host end to end", () => {
           },
         ]
       );
+      // The settlement names its parent step by stepId, which survives a
+      // reorder where the recorded stepIndex does not.
+      const parentStepId = parentState.steps[0]._runtime?.stepId;
+      assert.ok(parentStepId);
+      assert.deepStrictEqual(
+        events.flatMap((event) =>
+          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+            ? [event.stepId]
+            : []
+        ),
+        [parentStepId]
+      );
     } finally {
       await disposeAll(instances, workspace);
     }

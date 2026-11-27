@@ -3049,4 +3049,52 @@ suite("RunOutputResolver", () => {
     assert.strictEqual(projection.targets.get("queue:0")?.attempts, 0);
     assert.deepStrictEqual(projection.targets.get("queue:0")?.filesChanged, []);
   });
+  test("projects each settlement with the stepId its event recorded", async () => {
+    const settle = (
+      stepIndex: number,
+      childRunRef: string,
+      stepId?: string
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+      timestampMs: 1,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      ...(stepId !== undefined ? { stepId } : {}),
+      payload: {
+        childWorkflowKey: "child" as never,
+        childRunRef: childRunRef as never,
+        outcome: { status: "completed" },
+      },
+    });
+    await recorder.appendEvents(manifestPath, [
+      settle(0, "run-recorded", "step-a"),
+      // Written before the field existed.
+      settle(1, "run-legacy"),
+    ]);
+
+    const projection = await new RunOutputResolver(
+      recorder
+    ).resolveAttemptProjection(
+      manifestPath,
+      [
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+      ],
+      [],
+      { workspaceRoot }
+    );
+
+    assert.deepStrictEqual(
+      projection.subWorkflowRuns?.map((run) => [
+        run.output.childRunRef,
+        run.stepId,
+      ]),
+      [
+        ["run-recorded", "step-a"],
+        ["run-legacy", undefined],
+      ]
+    );
+  });
 });

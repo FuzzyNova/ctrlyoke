@@ -739,7 +739,8 @@ export class OutputHistoryManager {
     attemptIndex: number,
     output: import("../../types/CtrlYokeTypes").SubWorkflowOutput,
     definitionContext?: DefinitionRevisionContext,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    stepId?: string
   ): Promise<{ timestampMs: number; sequence: number } | undefined> {
     if (!historyFilePath) return undefined;
     const [event] = await this.timelineRecorder.appendEvents(historyFilePath, [
@@ -751,6 +752,7 @@ export class OutputHistoryManager {
         attemptIndex,
         phase,
         definitionRevision: definitionContext?.definitionRevision ?? 1,
+        ...(stepId !== undefined ? { stepId } : {}),
         payload: output,
       },
     ]);

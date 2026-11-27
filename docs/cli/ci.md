@@ -83,7 +83,7 @@ Exit code `3` means only that the harness's executable wasn't found.
 | `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`, `noTurnStarted`                                                                                                                                                                 |
 | `steps[]`                  | Per step: `status` (including `noTurnStarted` when a TUI handles the input without starting an AI turn), `success`, `attempts`, `sessionId`, `preCondition`, `endCondition`, `filesChanged`, `script` output, `failureKind` and `error` |
 | `finalStep`                | The final step's result, `passCount`, and its last pass (`lastPass`), or `null`                                                                                                                                                         |
-| `subWorkflowRuns`          | Direct child runs, with queue children addressed by `stepId` and a `finalStep` child by its 1-based `pass`; each includes its `workflowKey`, `runRef` and status                                                                        |
+| `subWorkflowRuns`          | One entry per direct child run, with queue children addressed by `stepId` and a `finalStep` child by its 1-based `pass`; each includes its `workflowKey`, `runRef` and the child's own `status` (`null` while it is still running)      |
 | `error`                    | `{ step, pass, attempt, message }` for the failure that ended the run, or `null`; `pass` is the 1-based final-step pass (as in `--step final:N`)                                                                                        |
 
 Secret values are redacted from the result. Check `success` rather than parsing `status` or

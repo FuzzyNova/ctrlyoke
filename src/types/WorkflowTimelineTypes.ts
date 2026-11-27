@@ -422,6 +422,12 @@ export interface SubWorkflowSettledEventDraft extends TargetedTimelineEventDraft
   attemptIndex: number;
   phase?: ExecutionPhase;
   definitionRevision: number;
+  /**
+   * The parent queue step's `_runtime.stepId`, which survives reorders where
+   * `target.stepIndex` does not. Optional and additive: events written before
+   * it existed omit it, and readers fall back to the current step list.
+   */
+  stepId?: string;
   payload: SubWorkflowOutput;
 }
 
@@ -606,6 +612,12 @@ export interface SubWorkflowSettledEvent extends TargetedTimelineEventBase {
   attemptIndex: number;
   phase?: ExecutionPhase;
   definitionRevision: number;
+  /**
+   * The parent queue step's `_runtime.stepId`, which survives reorders where
+   * `target.stepIndex` does not. Optional and additive: events written before
+   * it existed omit it, and readers fall back to the current step list.
+   */
+  stepId?: string;
   payload: SubWorkflowOutput;
 }
 

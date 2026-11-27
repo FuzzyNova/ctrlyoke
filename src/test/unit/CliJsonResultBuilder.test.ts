@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
 import { executionStepText } from "../helpers/stepAssertions";
 import * as path from "path";
 import { suite, test } from "mocha";
@@ -17,22 +19,31 @@ import {
   STEP_TYPES,
   WORKFLOW_VALIDATION_WARNING_CODES,
   GUARDRAIL_STOP_CODES,
+  PROMPT_TERMINAL_STATUS,
 } from "../../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
+  FinalStepRuntimeState,
   PromptFile,
   PromptResult,
   QueueState,
+  SubWorkflowOutput,
+  SubWorkflowStep,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
+import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import { buildDefinitionSnapshot } from "../../core/WorkflowStepSanitizer";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { queueTargetKey } from "../../utils/OutputTargetKeys";
 import {
+  RunOutputResolver,
   type RunAttemptProjection,
   type RunOutputProjection,
 } from "../../core/orchestration/RunOutputResolver";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
   TIMELINE_ATTEMPT_TERMINAL_STATES,
+  TIMELINE_EVENT_TYPES,
 } from "../../types/WorkflowTimelineTypes";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 
@@ -518,7 +529,7 @@ suite("CliJsonResultBuilder", () => {
     }
   });
 
-  test("includes direct child run addresses using the parent link identity", () => {
+  test("addresses a settlement recorded before stepId through the step that links its child", () => {
     const childKey = "child-workflow" as WorkflowKey;
     const childRun = "child-run" as RunRef;
     const child: WorkflowStep = {
@@ -773,3 +784,310 @@ function projectionMap(
 ): RunOutputProjection {
   return { targets: new Map(entries) };
 }
+
+suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
+  const childKey = "child-workflow" as WorkflowKey;
+  let runDirectory: string;
+  let manifestPath: string;
+  let recorder: TimelineRecorder;
+  let timestampMs = 10;
+
+  setup(async () => {
+    runDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cy-cli-json-"));
+    recorder = new TimelineRecorder();
+    timestampMs = 10;
+  });
+
+  teardown(async () => {
+    await fs.rm(runDirectory, { recursive: true, force: true });
+  });
+
+  /** Start the run as the executor does: the snapshot has `_runtime` stripped. */
+  async function startRun(steps: WorkflowStep[], finalStep?: WorkflowStep) {
+    manifestPath = await recorder.initializeRunAt(
+      runDirectory,
+      workflowKey,
+      1,
+      1,
+      EXECUTION_STATES.RUNNING,
+      1,
+      buildDefinitionSnapshot("parent", steps, undefined, finalStep)
+    );
+  }
+
+  /** The events `executeSubWorkflowStep` writes when a child settles. */
+  async function settle(
+    target: OutputExecutionTarget,
+    runIndex: number,
+    childRunRef: string,
+    status: SubWorkflowOutput["outcome"]["status"],
+    stepId?: string
+  ): Promise<void> {
+    const identity = {
+      target,
+      runIndex,
+      attemptIndex: 0,
+      definitionRevision: 1,
+    };
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: timestampMs++,
+        ...identity,
+        ...(stepId !== undefined ? { stepId } : {}),
+        payload: {
+          childWorkflowKey: childKey,
+          childRunRef: childRunRef as RunRef,
+          outcome: { status },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        timestampMs: timestampMs++,
+        ...identity,
+        payload: {
+          terminalState:
+            status === PROMPT_TERMINAL_STATUS.COMPLETED
+              ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+              : status === PROMPT_TERMINAL_STATUS.CANCELLED
+                ? TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
+                : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+        },
+      },
+    ]);
+  }
+
+  const queue = (stepIndex: number): OutputExecutionTarget => ({
+    kind: FINAL_STEP_PHASES.QUEUE,
+    stepIndex,
+  });
+  const pass = (loopIndex: number): OutputExecutionTarget => ({
+    kind: FINAL_STEP_PHASES.FINAL_STEP,
+    loopIndex,
+  });
+
+  function workflowStep(
+    stepId: string,
+    runtime: Partial<NonNullable<SubWorkflowStep["_runtime"]>> = {}
+  ): SubWorkflowStep {
+    return {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: `${stepId}.ctrlyoke.yaml`,
+      _runtime: { stepId, childWorkflowKey: childKey, ...runtime },
+    };
+  }
+
+  async function subWorkflowRuns(
+    steps: WorkflowStep[],
+    options: {
+      finalStep?: WorkflowStep;
+      finalStepRuntime?: FinalStepRuntimeState;
+    } = {}
+  ) {
+    const projection = await new RunOutputResolver(
+      recorder
+    ).resolveAttemptProjection(
+      manifestPath,
+      steps.map((_step, stepIndex) => queue(stepIndex)),
+      options.finalStep ? [pass(0)] : [],
+      { workspaceRoot }
+    );
+    return buildCliJsonResult({
+      state: makeState(steps, [], EXECUTION_STATES.COMPLETED, 1_000, 5_000),
+      promptFile: { steps, finalStep: options.finalStep },
+      workspaceRoot,
+      outputProjection: projection,
+      finalStepRuntime: options.finalStepRuntime,
+    }).subWorkflowRuns;
+  }
+
+  const entry = (stepId: string, runRef: string, status: string | null) => ({
+    stepId,
+    workflowKey: childKey,
+    runRef,
+    status,
+  });
+
+  test("lists both child runs of a step that launched two", async () => {
+    const step = workflowStep("step-a");
+    await startRun([step]);
+    await settle(queue(0), 0, "child-1", "failed", "step-a");
+    await settle(queue(0), 1, "child-2", "completed", "step-a");
+    step._runtime = {
+      ...step._runtime,
+      childRunRef: "child-2" as RunRef,
+      terminalStatus: "completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([step]), [
+      entry("step-a", "child-1", "failed"),
+      entry("step-a", "child-2", "completed"),
+    ]);
+  });
+
+  test("reports one entry with the latest outcome for a child stopped and continued", async () => {
+    // onFail: continue settles the parent COMPLETED, so only the child's own
+    // outcome can say the continued child failed.
+    const step: SubWorkflowStep = {
+      ...workflowStep("step-a"),
+      onFail: CONDITION_ACTIONS.CONTINUE,
+    };
+    await startRun([step]);
+    await settle(queue(0), 0, "child-1", "cancelled", "step-a");
+    await settle(queue(0), 1, "child-1", "failed", "step-a");
+    step._runtime = {
+      ...step._runtime,
+      childRunRef: "child-1" as RunRef,
+      terminalStatus: "completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([step]), [
+      entry("step-a", "child-1", "failed"),
+    ]);
+  });
+
+  test("lists an in-flight child after the step's earlier settled child", async () => {
+    const step = workflowStep("step-a");
+    await startRun([step]);
+    await settle(queue(0), 0, "child-1", "failed", "step-a");
+    step._runtime = {
+      ...step._runtime,
+      startedAt: 20,
+      childRunRef: "child-2" as RunRef,
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([step]), [
+      entry("step-a", "child-1", "failed"),
+      entry("step-a", "child-2", null),
+    ]);
+  });
+
+  test("addresses children by stepId after the queue is reordered", async () => {
+    const first = workflowStep("step-a");
+    const second = workflowStep("step-b");
+    await startRun([first, second]);
+    await settle(queue(0), 0, "child-a1", "failed", "step-a");
+    await settle(queue(0), 1, "child-a2", "failed", "step-a");
+    first._runtime = {
+      ...first._runtime,
+      childRunRef: "child-a2" as RunRef,
+      terminalStatus: "failed",
+    };
+
+    // step-a now sits at index 1; the events still say stepIndex 0.
+    assert.deepStrictEqual(await subWorkflowRuns([second, first]), [
+      entry("step-a", "child-a1", "failed"),
+      entry("step-a", "child-a2", "failed"),
+    ]);
+  });
+
+  test("reads an event recorded before stepId through the step that links its child", async () => {
+    const first = workflowStep("step-a");
+    const second = workflowStep("step-b");
+    await startRun([first, second]);
+    await settle(queue(0), 0, "child-a", "completed");
+    first._runtime = {
+      ...first._runtime,
+      childRunRef: "child-a" as RunRef,
+      terminalStatus: "completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([second, first]), [
+      entry("step-a", "child-a", "completed"),
+    ]);
+  });
+
+  test("reports the child's outcome, not the parent step's terminal status", async () => {
+    const step = workflowStep("step-a");
+    await startRun([step]);
+    await settle(queue(0), 0, "child-1", "completed", "step-a");
+    step._runtime = {
+      ...step._runtime,
+      childRunRef: "child-1" as RunRef,
+      terminalStatus: "failed",
+      failureMessage: "parent failed after its child completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([step]), [
+      entry("step-a", "child-1", "completed"),
+    ]);
+  });
+
+  test("lists one child per finalStep pass", async () => {
+    const finalStep = workflowStep("final");
+    delete finalStep._runtime?.stepId;
+    await startRun([], finalStep);
+    await settle(pass(0), 0, "child-1", "completed");
+    await settle(pass(1), 0, "child-2", "failed");
+    finalStep._runtime = {
+      ...finalStep._runtime,
+      childRunRef: "child-2" as RunRef,
+    };
+
+    assert.deepStrictEqual(
+      await subWorkflowRuns([], {
+        finalStep,
+        finalStepRuntime: {
+          phase: FINAL_STEP_PHASES.QUEUE,
+          loopCount: 2,
+          status: STEP_STATUS.FAILED,
+        },
+      }),
+      [
+        {
+          pass: 1,
+          workflowKey: childKey,
+          runRef: "child-1",
+          status: "completed",
+        },
+        { pass: 2, workflowKey: childKey, runRef: "child-2", status: "failed" },
+      ]
+    );
+  });
+
+  test("never reports a previous pass's child under the running pass", async () => {
+    const finalStep = workflowStep("final");
+    delete finalStep._runtime?.stepId;
+    await startRun([], finalStep);
+    await settle(pass(0), 0, "child-1", "completed");
+    // Pass 2 is running but has not launched its child yet.
+    finalStep._runtime = {
+      ...finalStep._runtime,
+      childRunRef: "child-1" as RunRef,
+    };
+    const finalStepRuntime: FinalStepRuntimeState = {
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: 1,
+    };
+
+    assert.deepStrictEqual(
+      await subWorkflowRuns([], { finalStep, finalStepRuntime }),
+      [
+        {
+          pass: 1,
+          workflowKey: childKey,
+          runRef: "child-1",
+          status: "completed",
+        },
+      ]
+    );
+
+    // Once pass 2 launches its child, that child is in flight under pass 2.
+    finalStep._runtime = {
+      ...finalStep._runtime,
+      childRunRef: "child-2" as RunRef,
+    };
+    assert.deepStrictEqual(
+      await subWorkflowRuns([], { finalStep, finalStepRuntime }),
+      [
+        {
+          pass: 1,
+          workflowKey: childKey,
+          runRef: "child-1",
+          status: "completed",
+        },
+        { pass: 2, workflowKey: childKey, runRef: "child-2", status: null },
+      ]
+    );
+  });
+});

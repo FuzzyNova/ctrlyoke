@@ -30,6 +30,7 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import type { SubWorkflowSettlement } from "./SubWorkflowSettlements";
 import {
   outputAttemptKey,
   outputTargetKey,
@@ -217,11 +218,7 @@ export interface RunOutputProjection {
   targets: Map<string, RunAttemptProjection>;
   finalStep?: RunFinalStepProjection;
   /** Settled direct child runs, in the order their timeline events were written. */
-  subWorkflowRuns?: Array<{
-    target: OutputExecutionTarget;
-    output: SubWorkflowOutput;
-    step?: WorkflowStep;
-  }>;
+  subWorkflowRuns?: SubWorkflowSettlement[];
 }
 
 export interface RunOutputProjectionOptions {
@@ -255,6 +252,8 @@ export type RunOutputResolverEvent =
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED;
       attempt: ResolvedRunAttempt;
       subWorkflowOutput: SubWorkflowOutput;
+      /** The parent queue step's `stepId`, when the event recorded one. */
+      stepId?: string;
     }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED;
@@ -561,6 +560,7 @@ export class RunOutputResolver {
               event.phase
             ),
             subWorkflowOutput: event.payload,
+            ...(event.stepId !== undefined ? { stepId: event.stepId } : {}),
           };
           break;
         case TIMELINE_EVENT_TYPES.RETRY_SCHEDULED:
@@ -888,12 +888,12 @@ export class RunOutputResolver {
         if (
           event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED
         ) {
+          // The definition snapshot has `_runtime` stripped, so a step's
+          // identity comes from the event itself, never from that snapshot.
           subWorkflowRuns.push({
             target: event.attempt.target,
             output: event.subWorkflowOutput,
-            ...(event.attempt.definition?.step
-              ? { step: event.attempt.definition.step }
-              : {}),
+            ...(event.stepId !== undefined ? { stepId: event.stepId } : {}),
           });
         }
         if (

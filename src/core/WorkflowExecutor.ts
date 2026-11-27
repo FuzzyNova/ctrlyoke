@@ -3364,7 +3364,8 @@ export class WorkflowExecutor {
             attemptIndex,
             settledOutput,
             context.getDefinitionRevisionContext?.(),
-            undefined
+            undefined,
+            target.kind === FINAL_STEP_PHASES.QUEUE ? stepId : undefined
           );
         if (eventAddress) {
           context.dashboardProvider?.updateSubWorkflowSettled?.({

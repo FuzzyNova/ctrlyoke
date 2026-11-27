@@ -55,6 +55,10 @@ import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { selectTerminalFailure } from "./CliExitCode";
+import {
+  resolveSettlementStepId,
+  type SubWorkflowSettlement,
+} from "../core/orchestration/SubWorkflowSettlements";
 
 /** Redact again at the standalone CLI serialization boundary. */
 export function buildCliPreviewJsonResult(
@@ -327,65 +331,12 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     input.outputProjection?.finalStep,
     input
   );
-  const settledChildren = input.outputProjection?.subWorkflowRuns ?? [];
-  const childrenByIdentity = new Map<string, CliJsonSubWorkflowRun>();
-  for (const { target, output, step } of settledChildren) {
-    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      childrenByIdentity.set(
-        `final:${target.loopIndex}:${output.childRunRef}`,
-        {
-          pass: target.loopIndex + 1,
-          workflowKey: output.childWorkflowKey,
-          runRef: output.childRunRef,
-          status: output.outcome.status,
-        }
-      );
-      continue;
-    }
-    if (!step || !isSubWorkflowStep(step)) continue;
-    const stepId = step._runtime?.stepId;
-    if (stepId)
-      childrenByIdentity.set(`queue:${stepId}:${output.childRunRef}`, {
-        stepId,
-        workflowKey: output.childWorkflowKey,
-        runRef: output.childRunRef,
-        status: output.outcome.status,
-      });
-  }
-  for (const step of state.steps) {
-    if (!isSubWorkflowStep(step)) continue;
-    const runtime = step._runtime;
-    if (!runtime?.childWorkflowKey || !runtime.childRunRef || !runtime.stepId)
-      continue;
-    const key = `queue:${runtime.stepId}:${runtime.childRunRef}`;
-    const existing = childrenByIdentity.get(key);
-    if (existing) {
-      existing.status = runtime.terminalStatus ?? existing.status;
-    } else {
-      childrenByIdentity.set(key, {
-        stepId: runtime.stepId,
-        workflowKey: runtime.childWorkflowKey,
-        runRef: runtime.childRunRef,
-        status: runtime.terminalStatus ?? null,
-      });
-    }
-  }
-  const finalRuntime = promptFile?.finalStep;
-  if (finalRuntime && isSubWorkflowStep(finalRuntime)) {
-    const runtime = finalRuntime._runtime;
-    if (runtime?.childWorkflowKey && runtime.childRunRef) {
-      const pass = Math.max(1, getFinalStepPassCount(input.finalStepRuntime));
-      const key = `final:${pass - 1}:${runtime.childRunRef}`;
-      if (!childrenByIdentity.has(key))
-        childrenByIdentity.set(key, {
-          pass,
-          workflowKey: runtime.childWorkflowKey,
-          runRef: runtime.childRunRef,
-          status: null,
-        });
-    }
-  }
-  const subWorkflowRuns = [...childrenByIdentity.values()];
+  const subWorkflowRuns = buildSubWorkflowRuns(
+    state.steps,
+    input.outputProjection?.subWorkflowRuns ?? [],
+    promptFile?.finalStep,
+    input.finalStepRuntime
+  );
   const startedAt = toIso(state.startTime);
   const completedAt = toIso(state.executionEndTime);
 
@@ -403,6 +354,79 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     subWorkflowRuns,
     error: selectTopLevelError(state, steps, finalStep, input.finalStepRuntime),
   });
+}
+
+/**
+ * One entry per direct child run: the latest settlement for each queue
+ * `stepId` or finalStep `pass` and `runRef` (its status is the child's own
+ * outcome), then children whose address is in `_runtime` but that have not
+ * settled yet, with `status: null`.
+ */
+function buildSubWorkflowRuns(
+  steps: readonly WorkflowStep[],
+  settlements: readonly SubWorkflowSettlement[],
+  finalStep: WorkflowStep | undefined,
+  finalStepRuntime: FinalStepRuntimeState | undefined
+): CliJsonSubWorkflowRun[] {
+  const children = new Map<string, CliJsonSubWorkflowRun>();
+  const settledRunRefs = new Set<string>();
+  for (const settlement of settlements) {
+    const { target, output } = settlement;
+    settledRunRefs.add(output.childRunRef);
+    const address = {
+      workflowKey: output.childWorkflowKey,
+      runRef: output.childRunRef,
+      status: output.outcome.status,
+    };
+    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      const pass = target.loopIndex + 1;
+      children.set(`final:${pass}:${output.childRunRef}`, {
+        pass,
+        ...address,
+      });
+      continue;
+    }
+    const stepId = resolveSettlementStepId(settlement, steps);
+    if (stepId)
+      children.set(`queue:${stepId}:${output.childRunRef}`, {
+        stepId,
+        ...address,
+      });
+  }
+  for (const step of steps) {
+    if (!isSubWorkflowStep(step)) continue;
+    const runtime = step._runtime;
+    if (!runtime?.childWorkflowKey || !runtime.childRunRef || !runtime.stepId)
+      continue;
+    const key = `queue:${runtime.stepId}:${runtime.childRunRef}`;
+    if (!children.has(key) && !settledRunRefs.has(runtime.childRunRef))
+      children.set(key, {
+        stepId: runtime.stepId,
+        workflowKey: runtime.childWorkflowKey,
+        runRef: runtime.childRunRef,
+        status: null,
+      });
+  }
+  // The final step's `_runtime` holds only the latest pass's child. It is in
+  // flight only while a pass is running and it has no settlement; a child
+  // from an earlier pass is never reported under the current one.
+  const finalRuntime =
+    finalStep && isSubWorkflowStep(finalStep) ? finalStep._runtime : undefined;
+  if (
+    finalRuntime?.childWorkflowKey &&
+    finalRuntime.childRunRef &&
+    !settledRunRefs.has(finalRuntime.childRunRef) &&
+    finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP
+  ) {
+    const pass = getFinalStepPassCount(finalStepRuntime);
+    children.set(`final:${pass}:${finalRuntime.childRunRef}`, {
+      pass,
+      workflowKey: finalRuntime.childWorkflowKey,
+      runRef: finalRuntime.childRunRef,
+      status: null,
+    });
+  }
+  return [...children.values()];
 }
 
 function buildStepResult(

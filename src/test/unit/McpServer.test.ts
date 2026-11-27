@@ -73,7 +73,7 @@ import {
 } from "../../utils/RunHistoryStoragePolicy";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
-import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
+import { PriorContextPreviewBuilder } from "../../utils/PriorContextPreviewBuilder";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
@@ -1570,23 +1570,22 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         `workflowKey="${child.workflowKey}"`
       )
     );
-    const sharedItem = await new RunOutputResolver(
-      recorder
-    ).resolveWorkflowPriorContextItem(
-      parentManifest,
-      0,
-      { type: STEP_TYPES.WORKFLOW, workflow: "child.yaml" },
-      {
-        childWorkflowKey: child.workflowKey,
-        childRunRef: child.runRef,
-        outcome: { status: "completed" },
-      },
-      { workspaceRoot }
-    );
-    assert.strictEqual(
-      parentStepOutput.outputs[0].responseText,
-      buildPriorContextXmlFromItems([sharedItem])
-    );
+    // read_output on a workflow step returns exactly what a later step's
+    // `$step:1` and `$previous` inject for it.
+    for (const selector of ["step:1", "previous"]) {
+      assert.strictEqual(
+        parentStepOutput.outputs[0].responseText,
+        await PriorContextPreviewBuilder.buildPreview(
+          selector,
+          1,
+          parentFile.steps ?? [],
+          new RunOutputResolver(recorder),
+          parentManifest,
+          { workspaceRoot }
+        ),
+        selector
+      );
+    }
     assert.ok(
       parentStepOutput.outputs[0].responseText.includes("child response text")
     );
@@ -1992,6 +1991,77 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       childRun: {
         workflowKey: child.workflowKey,
         runRef: child.runRef,
+        outcome: { status: "completed" },
+      },
+    });
+  });
+
+  test("workflow_status reports the latest pass's latest settlement across two finalStep passes", async () => {
+    const server = await setup();
+    const run = await createRun("final-passes", "2026-01-01T00-00-00-000Z", {
+      finalStep: { phase: FINAL_STEP_PHASES.QUEUE, loopCount: 2 },
+    });
+    const parentFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    parentFile.finalStep = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "child.ctrlyoke.yaml",
+    };
+    await writeTrustedRunFile(run.runFilePath, parentFile);
+    const childKey = "final-child-2026-01-01T00-00-00" as WorkflowKey;
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspaceRoot,
+      run.workflowKey,
+      run.runRef
+    );
+    const settle = (
+      loopIndex: number,
+      runIndex: number,
+      childRunRef: string,
+      status: "completed" | "cancelled" | "failed"
+    ) => ({
+      eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+      timestampMs: 10 + loopIndex * 10 + runIndex,
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+      runIndex,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: {
+        childWorkflowKey: childKey,
+        childRunRef: childRunRef as RunRef,
+        outcome: { status },
+      },
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const recorder = new TimelineRecorder();
+    const finalStepStatus = async () =>
+      responseJson(await server.invokeTool("workflow_status", {})).finalStep;
+
+    await recorder.appendEvents(manifestPath, [
+      settle(0, 0, "run-pass-1", "completed"),
+      settle(1, 0, "run-pass-2", "failed"),
+    ]);
+    assert.deepStrictEqual(await finalStepStatus(), {
+      pass: 2,
+      childRun: {
+        workflowKey: childKey,
+        runRef: "run-pass-2",
+        outcome: { status: "failed" },
+      },
+    });
+
+    // Pass 2's child was stopped and continued, so the same child run
+    // settles twice in one pass; the later settlement is the current one.
+    await recorder.appendEvents(manifestPath, [
+      settle(1, 1, "run-pass-2-b", "cancelled"),
+      settle(1, 2, "run-pass-2-b", "completed"),
+    ]);
+    assert.deepStrictEqual(await finalStepStatus(), {
+      pass: 2,
+      childRun: {
+        workflowKey: childKey,
+        runRef: "run-pass-2-b",
         outcome: { status: "completed" },
       },
     });
