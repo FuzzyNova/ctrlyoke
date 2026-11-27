@@ -106,6 +106,12 @@ interface WorkflowStepProps {
   modelLabel?: string;
   /** True when model is inherited (not set at prompt level) */
   modelIsDefault?: boolean;
+  /**
+   * True when the harness/model are what the step is expected to run with,
+   * not what it used: a lane whose child run exists, whose actual values are
+   * recorded only in that run.
+   */
+  harnessModelIsExpected?: boolean;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: StepOverrideChip[];
   /** Whether this prompt can be used to set the start position */
@@ -128,6 +134,12 @@ interface WorkflowStepProps {
   showFailureWarning?: boolean;
   /** Workflow steps: true when `workflow` is an inline definition (D13), not a file path. */
   workflowIsInline?: boolean;
+  /**
+   * Workflow steps: the title of an inline definition (its name, else its
+   * prompt or script; `getSubWorkflowDisplayName`). A file reference is
+   * titled by `name`, else the Workflow label, with its path below.
+   */
+  inlineWorkflowTitle?: string;
   /**
    * Workflow steps: shown when the inline definition runs in its own worktree
    * (a lane). `branchName` appears once the child has created its branch.
@@ -185,6 +197,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   harnessIsDefault,
   modelLabel,
   modelIsDefault,
+  harnessModelIsExpected,
   overrides,
   canSetStartPosition,
   onSetStartPosition,
@@ -199,6 +212,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   childExecutionState,
   showFailureWarning = false,
   workflowIsInline = false,
+  inlineWorkflowTitle,
   worktreeBadge,
   mergeWarning,
   onContextMenu,
@@ -352,16 +366,21 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               <span
                 className={`text-xs leading-relaxed truncate ${titleTextClass}`}
               >
-                {name ||
-                  (workflowIsInline ? text : undefined) ||
+                {(workflowIsInline ? inlineWorkflowTitle : name) ||
                   SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
               </span>
               <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
                 {SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
               </span>
+              {/* The worktree badge gives way first: its very high shrink
+                  factor takes the row's whole shortfall before the name
+                  loses a pixel, so on a narrow panel it collapses to its icon
+                  (`min-w-6` is the icon's `w-4` box plus `px-1`; the branch
+                  stays in its tooltip). The name only truncates once the
+                  badge is down to its icon. */}
               {worktreeBadge && (
                 <span
-                  className="inline-flex min-w-0 items-center gap-0.5 px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg"
+                  className="inline-flex min-w-6 shrink-1000 items-center gap-0.5 overflow-hidden px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg"
                   title={
                     worktreeBadge.branchName
                       ? `${SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle}\n${SUB_WORKFLOW_DASHBOARD_LABELS.branch}: ${worktreeBadge.branchName}`
@@ -369,8 +388,10 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   }
                   data-testid="workflow-step-worktree-badge"
                 >
-                  <Icon name="worktree-compact" className="shrink-0" />
-                  <span className="truncate">
+                  <span className="flex w-4 shrink-0 items-center justify-center">
+                    <Icon name="worktree-compact" />
+                  </span>
+                  <span className="min-w-0 truncate">
                     {worktreeBadge.branchName ??
                       SUB_WORKFLOW_DASHBOARD_LABELS.worktree}
                   </span>
@@ -415,6 +436,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                 harnessIsDefault={harnessIsDefault}
                 modelLabel={modelLabel}
                 modelIsDefault={modelIsDefault}
+                harnessModelIsExpected={harnessModelIsExpected}
                 isSelected={isSelected}
               />
             </div>

@@ -93,8 +93,10 @@ Secret values are redacted from the result. Check `success` rather than parsing 
 empty when the run has no recorded direct children. Nested descendants appear in their direct
 parent's result. Each member of a `parallel` group is its own entry. A settled child's `worktree`
 holds its `mode`, `branchName`, `baseCommit`, `finalBranchTip`, `changedFileCount`,
-`landingOutcome`, and, with `merge: true`, its `mergeOutcome` (`fast-forward`, `merge-commit`,
-`conflict`, `blocked`, or `abort-failed`) and any `conflictFiles`. A `conflict` or `blocked` merge
+`landingOutcome` (`landed` when the child's work was committed to its branch, `no-changes` when
+there was nothing to commit, or `blocked` when its work could not be committed), and, with `merge: true`,
+its `mergeOutcome` (`fast-forward`, `merge-commit`, `conflict`, `blocked`, or `abort-failed`) and
+any `conflictFiles`. A `conflict` or `blocked` merge
 does not fail the step; check `mergeOutcome` when a later job depends on the merge.
 
 Example: fail the job with a readable summary.

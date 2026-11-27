@@ -42,6 +42,7 @@ import { getStepAccentClass } from "@utils/status";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
 import {
   findLatestSubWorkflowSettlement,
+  getInlineWorktreeDefinedBranch,
   getSubWorkflowMergeWarning,
   hasInlineWorktree,
 } from "@utils/subWorkflowDisplay";
@@ -63,6 +64,7 @@ export type StepHarnessModel = Pick<
   | "harnessIsDefault"
   | "modelLabel"
   | "modelIsDefault"
+  | "harnessModelIsExpected"
 >;
 
 export type StepContextMenuRequest = {
@@ -194,6 +196,9 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
       (match, name: string) =>
         Object.prototype.hasOwnProperty.call(vars, name) ? vars[name] : match
     );
+    const displayedName = VAR_SUBSTITUTION_POLICY["steps[].name"]
+      ? resolvedName
+      : step.name;
     const harnessModel = getStepHarnessModel(step, status);
     const overrides = getStepOverrides(step);
     const details: StepDetails = {};
@@ -261,9 +266,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         text={getStepText(step)}
         index={index}
         displayNumber={slotNumber}
-        name={
-          VAR_SUBSTITUTION_POLICY["steps[].name"] ? resolvedName : step.name
-        }
+        name={displayedName}
         status={status}
         retryState={retryState}
         details={details}
@@ -279,6 +282,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         harnessIsDefault={harnessModel.harnessIsDefault}
         modelLabel={harnessModel.modelLabel}
         modelIsDefault={harnessModel.modelIsDefault}
+        harnessModelIsExpected={harnessModel.harnessModelIsExpected}
         overrides={overrides}
         canSetStartPosition={canSetStartPosition}
         startPositionDirection={startPositionDirection}
@@ -312,12 +316,18 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         workflowIsInline={
           isSubWorkflowStep(step) && typeof step.workflow !== "string"
         }
+        inlineWorkflowTitle={
+          isSubWorkflowStep(step) && typeof step.workflow !== "string"
+            ? getSubWorkflowDisplayName({ ...step, name: displayedName })
+            : undefined
+        }
         worktreeBadge={
           isSubWorkflowStep(step) && hasInlineWorktree(step)
             ? {
                 branchName:
                   childWorkflow?.worktree?.branchName ??
-                  childSettlement?.worktree?.branchName,
+                  childSettlement?.worktree?.branchName ??
+                  getInlineWorktreeDefinedBranch(step),
               }
             : undefined
         }

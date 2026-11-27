@@ -20,6 +20,7 @@ import {
   WORKFLOW_VALIDATION_WARNING_CODES,
   GUARDRAIL_STOP_CODES,
   PROMPT_TERMINAL_STATUS,
+  WORKTREE_LANDING_OUTCOMES,
   WORKTREE_MERGE_OUTCOMES,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
@@ -975,6 +976,32 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
         ...entry("lane-b", "child-b", "completed"),
         worktree: conflictWorktree,
       },
+    ]);
+  });
+
+  test("publishes only the contract's worktree fields, not internal ones", async () => {
+    const lane = workflowStep("lane-a");
+    await startRun([lane]);
+    const published = {
+      mode: WORKTREE_MODES.MANAGED,
+      branchName: "ctrlyoke/lane-a",
+      baseCommit: "base",
+      landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
+    };
+    await settle(queue(0), 0, "child-a", "completed", "lane-a", childKey, {
+      ...published,
+      // Internal worktree record fields a settlement could carry.
+      worktreePath: "/repo.worktrees/lane-a",
+      lifecycleState: "removed",
+    } as SubWorkflowOutput["worktree"]);
+    lane._runtime = {
+      ...lane._runtime,
+      childRunRef: "child-a" as RunRef,
+      terminalStatus: "completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([lane]), [
+      { ...entry("lane-a", "child-a", "completed"), worktree: published },
     ]);
   });
 

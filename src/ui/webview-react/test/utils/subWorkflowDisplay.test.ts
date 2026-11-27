@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   getInlinePromptStep,
+  getInlineWorktreeDefinedBranch,
   getSubWorkflowMergeWarning,
   hasInlineWorktree,
+  resolveEffectiveStepHarness,
 } from "@utils/subWorkflowDisplay";
 import {
+  HARNESS_IDS,
   STEP_TYPES,
   SUB_WORKFLOW_DASHBOARD_LABELS,
   WORKTREE_MERGE_OUTCOMES,
@@ -29,6 +32,16 @@ const inlineScript: SubWorkflowStep = {
   workflow: { type: STEP_TYPES.SCRIPT, script: "npm test", worktree: false },
 };
 
+function namedLane(branch: string): SubWorkflowStep {
+  return {
+    type: STEP_TYPES.WORKFLOW,
+    workflow: {
+      prompt: "Write the docs.",
+      worktree: { mode: WORKTREE_MODES.NAMED, branch },
+    },
+  };
+}
+
 describe("subWorkflowDisplay", () => {
   it("exposes an inline prompt child for harness and model display", () => {
     expect(getInlinePromptStep(lane)).toMatchObject({ harness: "codex-cli" });
@@ -38,8 +51,73 @@ describe("subWorkflowDisplay", () => {
 
   it("recognizes an inline child with its own worktree", () => {
     expect(hasInlineWorktree(lane)).toBe(true);
+    expect(hasInlineWorktree(namedLane("ctrlyoke/docs"))).toBe(true);
     expect(hasInlineWorktree(fileReference)).toBe(false);
     expect(hasInlineWorktree(inlineScript)).toBe(false);
+    expect(
+      hasInlineWorktree({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "Inherit the parent's checkout." },
+      })
+    ).toBe(false);
+  });
+
+  it("resolves a step's harness the same way for every step kind", () => {
+    const inherited = HARNESS_IDS.QWEN_CLI;
+    expect(resolveEffectiveStepHarness(lane, inherited)).toBe(
+      HARNESS_IDS.CODEX_CLI
+    );
+    expect(
+      resolveEffectiveStepHarness(
+        { type: STEP_TYPES.WORKFLOW, workflow: { prompt: "Inherit." } },
+        inherited
+      )
+    ).toBe(inherited);
+    expect(resolveEffectiveStepHarness(fileReference, inherited)).toBe(
+      undefined
+    );
+    expect(resolveEffectiveStepHarness(inlineScript, inherited)).toBe(
+      undefined
+    );
+    expect(
+      resolveEffectiveStepHarness(
+        { type: STEP_TYPES.SCRIPT, script: "npm test" },
+        inherited
+      )
+    ).toBe(undefined);
+    expect(resolveEffectiveStepHarness({ prompt: "Plain." }, inherited)).toBe(
+      inherited
+    );
+    // A started prompt step keeps the harness it ran on.
+    expect(
+      resolveEffectiveStepHarness(
+        {
+          prompt: "Started.",
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          _runtime: { harness: HARNESS_IDS.COPILOT_CLI },
+        },
+        inherited
+      )
+    ).toBe(HARNESS_IDS.COPILOT_CLI);
+  });
+
+  it("names a named worktree's branch from the definition", () => {
+    expect(getInlineWorktreeDefinedBranch(namedLane("ctrlyoke/docs"))).toBe(
+      "ctrlyoke/docs"
+    );
+    expect(
+      getInlineWorktreeDefinedBranch({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "Shorthand.", worktree: "ctrlyoke/short" },
+      })
+    ).toBe("ctrlyoke/short");
+    // A managed worktree's branch exists only once its child creates it.
+    expect(getInlineWorktreeDefinedBranch(lane)).toBeUndefined();
+    expect(getInlineWorktreeDefinedBranch(fileReference)).toBeUndefined();
+    // The child substitutes a placeholder, so the authored text is not its branch.
+    expect(
+      getInlineWorktreeDefinedBranch(namedLane("ctrlyoke/{{topic}}"))
+    ).toBeUndefined();
   });
 
   it("warns only for a merge that did not land cleanly", () => {

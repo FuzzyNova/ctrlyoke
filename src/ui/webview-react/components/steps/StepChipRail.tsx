@@ -45,6 +45,7 @@ import {
   isStepExecuting,
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import { resolveEffectiveStepHarness } from "@utils/subWorkflowDisplay";
 import {
   calcContextPct,
   resolveEffectiveContextWindow,
@@ -435,13 +436,11 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     step: WorkflowStep,
     status: StepStatus
   ): HarnessId | undefined => {
-    if (!isPromptStep(step)) return undefined;
     if (getStepHarnessModel) return getStepHarnessModel(step, status).harnessId;
-    return (
-      (step._runtime?.harness as HarnessId | undefined) ??
-      (step.harness as HarnessId | undefined) ??
+    return resolveEffectiveStepHarness(
+      step,
       (workflowProperties.harness as HarnessId | undefined) ??
-      globalSettings.harness
+        globalSettings.harness
     );
   };
 

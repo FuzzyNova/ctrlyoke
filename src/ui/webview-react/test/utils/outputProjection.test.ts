@@ -73,6 +73,7 @@ describe("outputProjection", () => {
 
   it.each([
     [WORKTREE_MERGE_OUTCOMES.BLOCKED, "warning"],
+    [WORKTREE_MERGE_OUTCOMES.ABORT_FAILED, "warning"],
     [WORKTREE_MERGE_OUTCOMES.FAST_FORWARD, "info"],
     [WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT, "info"],
   ])("reports a %s lane merge as %s", (mergeOutcome, severity) => {

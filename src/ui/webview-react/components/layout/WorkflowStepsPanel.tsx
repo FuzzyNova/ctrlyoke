@@ -90,7 +90,10 @@ import {
 } from "@utils/workflowStepSerialization";
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 import { buildStepOverrideChips } from "@utils/stepOverrideChips";
-import { getInlinePromptStep } from "@utils/subWorkflowDisplay";
+import {
+  getInlinePromptStep,
+  resolveEffectiveStepHarness,
+} from "@utils/subWorkflowDisplay";
 import {
   PENDING_TAIL_DRAG_ID,
   absoluteIndexFromStepDragId,
@@ -921,13 +924,29 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const getStepHarnessModel = useCallback(
     (step: (typeof steps)[0], status?: StepStatus) => {
+      // The row rail, the chip rail and the output blocks all colour a step
+      // by this harness, so it comes from the one shared resolver.
+      const harnessId = resolveEffectiveStepHarness(
+        step,
+        (workflowProperties.harness ?? globalSettings.harness) as
+          HarnessId | undefined
+      );
       // An inline prompt child (a lane) runs with the same defaults an
       // ordinary step here would (D13), so it shows what its inner prompt
-      // step would. The child's own run records what it actually used.
+      // step would. What the child actually ran with is recorded only in the
+      // child's own run, which this view does not load, so once the child
+      // exists the values are labelled as expected rather than presented as
+      // what it used.
       const inlinePrompt = isSubWorkflowStep(step)
         ? getInlinePromptStep(step)
         : undefined;
-      if (inlinePrompt) return getPendingHarnessModel(inlinePrompt);
+      if (inlinePrompt && isSubWorkflowStep(step)) {
+        return {
+          ...getPendingHarnessModel(inlinePrompt),
+          harnessId,
+          harnessModelIsExpected: Boolean(step._runtime?.childRunRef),
+        };
+      }
       if (!isPromptStep(step))
         return {
           harnessId: undefined,
@@ -948,7 +967,7 @@ const WorkflowStepsPanelInner: React.FC<{
         const h = step._runtime?.harness;
         const m = step._runtime?.model;
         return {
-          harnessId: h as HarnessId | undefined,
+          harnessId,
           harnessLabel: h ? getHarnessDisplayName(h) : undefined,
           harnessIsDefault: false,
           modelLabel: m,
@@ -957,9 +976,9 @@ const WorkflowStepsPanelInner: React.FC<{
       }
 
       // Pending / queued — reflect live settings with default indicators
-      return getPendingHarnessModel(step);
+      return { ...getPendingHarnessModel(step), harnessId };
     },
-    [getPendingHarnessModel]
+    [getPendingHarnessModel, globalSettings, workflowProperties]
   );
 
   // Step-level property overrides to surface as chips. Recomputed whenever
@@ -2063,6 +2082,7 @@ const WorkflowStepsPanelInner: React.FC<{
                           step={step}
                           index={index}
                           stepColorMode={globalSettings.stepColorMode}
+                          harnessColorSettings={globalSettings.harnessColors}
                           currentStep={currentStep}
                           executionState={executionState}
                           status={status}

@@ -183,6 +183,7 @@ describe("WorkflowStepItem workflow variant", () => {
         status={STEP_STATUS.COMPLETED}
         stepType={STEP_TYPES.WORKFLOW}
         workflowIsInline
+        inlineWorkflowTitle="Implement the palette."
         harnessId="claude-cli"
         harnessLabel="Claude Code"
         modelLabel="sonnet"

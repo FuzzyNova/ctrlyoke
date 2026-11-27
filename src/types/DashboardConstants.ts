@@ -5460,6 +5460,9 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
   conflictFiles: "Conflicts",
   worktree: "Worktree",
   worktreeTitle: "Runs in its own worktree",
+  expected: "expected",
+  expectedHarnessTitle:
+    "Expected from the current settings. Open the run to see what it used.",
   mergeConflict: "Merge conflict",
   mergeConflictReason:
     "The lane's branch conflicts with the parent's checkout. Its branch is kept for a later step to merge.",

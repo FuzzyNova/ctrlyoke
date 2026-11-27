@@ -37,7 +37,7 @@ import {
   type StepType,
   type WorkflowTokenCoverage,
 } from "@root/types/DashboardConstants";
-import { getStepType, isPromptStep } from "@root/types/CtrlYokeTypes";
+import { getStepType } from "@root/types/CtrlYokeTypes";
 import type {
   StepOutput,
   UndoRecord,
@@ -110,6 +110,7 @@ import {
 } from "./outputLineMetrics";
 import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
+import { resolveEffectiveStepHarness } from "./subWorkflowDisplay";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import {
@@ -673,17 +674,6 @@ function getActivityAttribution(
     activityName: identity.stepName,
     activityStepType: getStepKind(identity.workflowStep),
   };
-}
-
-function getEffectiveStepHarness(
-  step: WorkflowStep,
-  effectiveHarness: HarnessId | undefined
-): HarnessId | undefined {
-  // Runtime metadata is authoritative for started steps: changing workflow
-  // defaults while viewing a run must not recolor its existing output.
-  if (!isPromptStep(step)) return undefined;
-  return (step._runtime?.harness ?? step.harness ?? effectiveHarness) as
-    HarnessId | undefined;
 }
 
 export function getStepOutputArtifacts(
@@ -2436,7 +2426,7 @@ export function buildOutputRows(
             .slice(group.startIndex, group.endIndex + 1)
             .map((member, offsetInGroup) => ({
               step: member,
-              harnessId: getEffectiveStepHarness(
+              harnessId: resolveEffectiveStepHarness(
                 member,
                 input.effectiveHarness
               ),
@@ -2445,7 +2435,7 @@ export function buildOutputRows(
         : undefined;
     const color = resolveStepColor({
       step,
-      harnessId: getEffectiveStepHarness(step, input.effectiveHarness),
+      harnessId: resolveEffectiveStepHarness(step, input.effectiveHarness),
       stepIndex:
         target.kind === FINAL_STEP_PHASES.FINAL_STEP
           ? input.steps.length

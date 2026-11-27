@@ -319,6 +319,92 @@ describe("WorkflowStepRow inline lane variant", () => {
     ).toBeNull();
   });
 
+  it.each([STEP_STATUS.FAILED, STEP_STATUS.RUNNING])(
+    "shows no merge badge on a %s lane, even with a conflicting settlement",
+    (laneStatus) => {
+      settleLane(WORKTREE_MERGE_OUTCOMES.CONFLICT, ["src/shared.ts"]);
+
+      renderWorkflowRow(laneStep(), laneStatus, laneHarness);
+
+      for (const label of [
+        SUB_WORKFLOW_DASHBOARD_LABELS.mergeConflict,
+        SUB_WORKFLOW_DASHBOARD_LABELS.mergeBlocked,
+        SUB_WORKFLOW_DASHBOARD_LABELS.mergeAbortFailed,
+      ]) {
+        expect(screen.queryByText(label)).toBeNull();
+      }
+    }
+  );
+
+  function namedLaneStep(worktree: unknown, runtime: Record<string, unknown>) {
+    return {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: lanePrompt, worktree },
+      _runtime: runtime,
+    } as never;
+  }
+
+  it.each([
+    ["object", { mode: WORKTREE_MODES.NAMED, branch: "docs/refresh" }],
+    ["shorthand", "docs/refresh"],
+  ])(
+    "names a %s named worktree's branch before its child starts",
+    (_form, worktree) => {
+      renderWorkflowRow(namedLaneStep(worktree, {}), STEP_STATUS.PENDING);
+
+      const badge = screen.getByTestId("workflow-step-worktree-badge");
+      expect(badge).toHaveTextContent("docs/refresh");
+      expect(badge).toHaveAttribute(
+        "title",
+        expect.stringContaining("docs/refresh")
+      );
+    }
+  );
+
+  it("prefers the running child's branch over the definition's", () => {
+    useUiStore.setState({
+      loadedWorkflows: [
+        {
+          id: "lane-instance",
+          workflowKey: "lane-key",
+          workflowName: "Lane",
+          filePath: "",
+          executionState: EXECUTION_STATES.RUNNING,
+          worktree: { branchName: "docs/refresh-2", worktreePath: "/w" },
+        },
+      ] as never,
+    });
+
+    renderWorkflowRow(
+      namedLaneStep(
+        { mode: WORKTREE_MODES.NAMED, branch: "docs/refresh" },
+        { childWorkflowKey: "lane-key", childRunRef: "lane-run" }
+      ),
+      STEP_STATUS.RUNNING
+    );
+
+    expect(
+      screen.getByTestId("workflow-step-worktree-badge")
+    ).toHaveTextContent("docs/refresh-2");
+  });
+
+  it("collapses the worktree badge before the lane's title gives up room", () => {
+    renderWorkflowRow(laneStep(), STEP_STATUS.PENDING, laneHarness);
+
+    // jsdom does no layout, so this pins the contract the layout relies on:
+    // the badge out-shrinks the title, stops at its icon box, and keeps the
+    // branch reachable in its tooltip.
+    const badge = screen.getByTestId("workflow-step-worktree-badge");
+    expect(badge).toHaveClass("shrink-1000", "min-w-6", "overflow-hidden");
+    expect(badge.firstElementChild).toHaveClass("w-4", "shrink-0");
+    expect(badge.lastElementChild).toHaveClass("min-w-0", "truncate");
+    const title = screen.getByText(lanePrompt, {
+      selector: "span.truncate",
+    });
+    expect(title).not.toHaveClass("shrink-0");
+    expect(title.className).not.toMatch(/shrink-\d/);
+  });
+
   it("keeps a file reference without a worktree badge or harness line", () => {
     renderWorkflowRow(step, STEP_STATUS.RUNNING);
 

@@ -17,6 +17,9 @@ import {
   type CliValidateStrictPolicy,
   type CliValidateTargetKind,
   type HarnessId,
+  type WorktreeLandingOutcome,
+  type WorktreeMergeOutcome,
+  type WorktreeMode,
 } from "../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
@@ -244,6 +247,23 @@ export interface CliJsonError {
 }
 
 /**
+ * A settled child's worktree, as `run --json` publishes it. Its own interface,
+ * mapped field by field from the settlement, so a field later added to the
+ * internal worktree record never reaches the public contract by accident.
+ */
+export interface CliJsonSubWorkflowWorktree {
+  mode: WorktreeMode;
+  branchName: string;
+  baseCommit: string;
+  finalBranchTip?: string;
+  changedFileCount?: number;
+  landingOutcome?: WorktreeLandingOutcome;
+  /** Present only for a child with `merge: true` that reached its merge. */
+  mergeOutcome?: WorktreeMergeOutcome;
+  conflictFiles?: string[];
+}
+
+/**
  * Direct child runs launched by this workflow. Final-step links use pass.
  * `worktree` is the settled child's worktree metadata (branch, base, tip,
  * files changed, landing and merge result), present only once a child that
@@ -253,7 +273,7 @@ export type CliJsonSubWorkflowRun = {
   workflowKey: WorkflowKey;
   runRef: RunRef;
   status: string | null;
-  worktree?: NonNullable<SubWorkflowOutput["worktree"]>;
+  worktree?: CliJsonSubWorkflowWorktree;
 } & ({ stepId: string; pass?: never } | { pass: number; stepId?: never });
 
 export interface CliJsonResult {
@@ -391,7 +411,9 @@ function buildSubWorkflowRuns(
       workflowKey: output.childWorkflowKey,
       runRef: output.childRunRef,
       status: output.outcome.status,
-      ...(output.worktree ? { worktree: output.worktree } : {}),
+      ...(output.worktree
+        ? { worktree: toCliJsonSubWorkflowWorktree(output.worktree) }
+        : {}),
     };
     if (entry.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       settledChildren.add(child);
@@ -451,6 +473,31 @@ function buildSubWorkflowRuns(
       });
   }
   return [...children.values()];
+}
+
+function toCliJsonSubWorkflowWorktree(
+  worktree: NonNullable<SubWorkflowOutput["worktree"]>
+): CliJsonSubWorkflowWorktree {
+  return {
+    mode: worktree.mode,
+    branchName: worktree.branchName,
+    baseCommit: worktree.baseCommit,
+    ...(worktree.finalBranchTip !== undefined
+      ? { finalBranchTip: worktree.finalBranchTip }
+      : {}),
+    ...(worktree.changedFileCount !== undefined
+      ? { changedFileCount: worktree.changedFileCount }
+      : {}),
+    ...(worktree.landingOutcome !== undefined
+      ? { landingOutcome: worktree.landingOutcome }
+      : {}),
+    ...(worktree.mergeOutcome !== undefined
+      ? { mergeOutcome: worktree.mergeOutcome }
+      : {}),
+    ...(worktree.conflictFiles !== undefined
+      ? { conflictFiles: [...worktree.conflictFiles] }
+      : {}),
+  };
 }
 
 function buildStepResult(
