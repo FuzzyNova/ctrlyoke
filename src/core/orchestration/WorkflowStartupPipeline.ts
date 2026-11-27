@@ -126,8 +126,14 @@ export type WorkflowStartupHistoryPort = Pick<
 
 export type WorkflowStartupWorktreeManagerPort = Pick<
   WorktreeManager,
-  "releaseRuntimeTrust" | "completeManagedRun"
+  "releaseRuntimeTrust"
 >;
+
+/** How a managed worktree's artifacts were left, for its settlement. */
+export interface ManagedWorktreeCleanup {
+  readonly artifactsClean: boolean;
+  readonly cleanupMessage?: string;
+}
 
 export type WorkflowStartupStatusPort = Pick<
   StatusMessageReporter,
@@ -238,6 +244,15 @@ export interface WorkflowStartupWorktreePort {
   readonly getExecutionLease: () => ExecutionLeaseHandle | undefined;
   readonly clearExecutionLease: () => void;
   readonly manager: WorkflowStartupWorktreeManagerPort;
+  /**
+   * Settle the active managed worktree the way every settlement does: merge
+   * and keep come from its worktree config, and a stop ends the wait for a
+   * sibling's settlement or merge (D4d).
+   */
+  readonly settleManagedWorktree: (
+    worktree: WorktreeInfo,
+    cleanup: ManagedWorktreeCleanup
+  ) => Promise<unknown>;
   readonly ensureRunnerLock: (
     workingFilePath: string | undefined
   ) => Promise<void>;
@@ -1482,18 +1497,9 @@ export class WorkflowStartupPipeline {
     }
     const worktree = this.port.worktree.getActiveWorktree();
     if (!worktree) return;
-    const worktreeConfig = this.port.worktree.getResolution().config;
     this.port.worktree.manager.releaseRuntimeTrust(worktree);
-    await this.port.worktree.manager
-      .completeManagedRun(worktree, {
-        merge:
-          worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-          worktreeConfig.merge === true,
-        keep:
-          worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-          worktreeConfig.keep === true,
-        artifactsClean: true,
-      })
+    await this.port.worktree
+      .settleManagedWorktree(worktree, { artifactsClean: true })
       .catch((settlementError) =>
         Log.error(
           `[inst:${this.port.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
@@ -1519,19 +1525,10 @@ export class WorkflowStartupPipeline {
   private async releaseReservationsAfterSetupStop(): Promise<void> {
     const worktree = this.port.worktree.getActiveWorktree();
     if (worktree) {
-      const worktreeConfig = this.port.worktree.getResolution().config;
       this.port.worktree.manager.releaseRuntimeTrust(worktree);
       if (worktree.mode === WORKTREE_MODES.MANAGED) {
-        await this.port.worktree.manager
-          .completeManagedRun(worktree, {
-            merge:
-              worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-              worktreeConfig.merge === true,
-            keep:
-              worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-              worktreeConfig.keep === true,
-            artifactsClean: true,
-          })
+        await this.port.worktree
+          .settleManagedWorktree(worktree, { artifactsClean: true })
           .catch((error) =>
             Log.warn(
               `[inst:${this.port.id.slice(0, 8)}] Failed to settle worktree after stop during setup:`,

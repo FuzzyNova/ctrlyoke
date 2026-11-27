@@ -755,7 +755,7 @@ export async function evaluateWorkspaceEligibility(
 export async function withWorktreeMutationLock<T>(
   commonDirectory: string,
   action: () => Promise<T>,
-  options?: Pick<FileLockOptions, "timeoutMs" | "signal">
+  options?: Pick<FileLockOptions, "timeoutMs" | "signal" | "open">
 ): Promise<T> {
   const resolvedCommonDirectory =
     await resolveThroughNearestExistingAncestor(commonDirectory);

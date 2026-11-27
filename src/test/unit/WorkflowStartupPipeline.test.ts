@@ -6,6 +6,7 @@ import { WorkflowStateMachine } from "../../core/WorkflowStateMachine";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import {
   WorkflowStartupPipeline,
+  type ManagedWorktreeCleanup,
   type WorkflowStartupExecutionPort,
   type WorkflowStartupHistoryPort,
   type WorkflowStartupPipelinePort,
@@ -72,24 +73,13 @@ class TestStatus implements WorkflowStartupStatusPort {
 }
 
 class TestWorktreeManager implements WorkflowStartupWorktreeManagerPort {
-  completeCalls = 0;
-
   releaseRuntimeTrust(_worktree: WorktreeInfo): void {}
-
-  async completeManagedRun(
-    _worktree: WorktreeInfo,
-    _options?: Parameters<
-      WorkflowStartupWorktreeManagerPort["completeManagedRun"]
-    >[1]
-  ): Promise<never> {
-    this.completeCalls += 1;
-    throw new Error("managed worktree settlement is not used in this test");
-  }
 }
 
 class TestWorktree implements WorkflowStartupWorktreePort {
   resolution: WorkspaceWorktreeResolution = { origin: "default" };
   readonly manager = new TestWorktreeManager();
+  readonly settlements: ManagedWorktreeCleanup[] = [];
   activeWorktree: WorktreeInfo | undefined;
   ensureCalls = 0;
   releaseCalls = 0;
@@ -115,6 +105,13 @@ class TestWorktree implements WorkflowStartupWorktreePort {
   }
 
   clearExecutionLease(): void {}
+
+  async settleManagedWorktree(
+    _worktree: WorktreeInfo,
+    cleanup: ManagedWorktreeCleanup
+  ): Promise<void> {
+    this.settlements.push(cleanup);
+  }
 
   async ensureRunnerLock(_workingFilePath: string | undefined): Promise<void> {
     this.ensureCalls += 1;
@@ -778,8 +775,37 @@ suite("WorkflowStartupPipeline", () => {
 
     await pipeline.settleProvisionedWorktreeAfterEarlyFailure();
 
-    assert.strictEqual(port.worktree.manager.completeCalls, 1);
+    assert.deepStrictEqual(port.worktree.settlements, [
+      { artifactsClean: true },
+    ]);
     assert.strictEqual(port.worktree.activeWorktree, undefined);
+  });
+
+  // The port's settlement is the instance's stop-abortable one; calling the
+  // manager directly is what left a stopped lane waiting out its siblings.
+  test("settles a provisioned managed worktree through the port when stopped during setup", async () => {
+    const { pipeline, port } = createPipeline();
+    port.execution.duringSetup = () => {
+      port.worktree.activeWorktree = {
+        mode: WORKTREE_MODES.MANAGED,
+      } as WorktreeInfo;
+      port.execution.stopRequestCount += 1;
+    };
+    const startup = await prepareStartup(pipeline);
+
+    await pipeline.prepareWorktreeAndDispatch(
+      undefined,
+      false,
+      "workflow.prompt.md",
+      startup
+    );
+
+    assert.strictEqual(port.execution.started, false);
+    assert.deepStrictEqual(port.worktree.settlements, [
+      { artifactsClean: true },
+    ]);
+    assert.strictEqual(port.worktree.activeWorktree, undefined);
+    assert.strictEqual(port.worktree.releaseCalls, 1);
   });
 
   test("releases the lineage lock on an early failure", async () => {

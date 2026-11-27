@@ -5,7 +5,10 @@ import { execFileSync } from "child_process";
 import { suite, test } from "mocha";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
-import { buildManagedAutoCommitMessage } from "../../core/orchestration/WorktreeManager";
+import {
+  STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE,
+  buildManagedAutoCommitMessage,
+} from "../../core/orchestration/WorktreeManager";
 import {
   HeldResponseHarnessIntegration,
   MockHarnessIntegration,
@@ -17,6 +20,7 @@ import { captureLog } from "../helpers/logCapture";
 import { MERGE_INTO_SHARED_ROOT_GUIDANCE } from "../../core/ParallelGroupPreflight";
 import {
   EXECUTION_STATES,
+  WORKTREE_LIFECYCLE_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
@@ -5954,6 +5958,125 @@ suite("Sub-workflow host end to end", () => {
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(gates);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a second stop ends the settlement wait of a merging lane stopped during its worktree setup", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-d4d-setup-stop-");
+    let releaseLock: (() => Promise<void>) | undefined;
+    let stopDuringSetup: Promise<void> | undefined;
+    // When the lane's worktree is ready, its setup having just finished, a
+    // sibling's settlement takes the mutation lock and the lane is stopped:
+    // the startup then settles the worktree behind that lock instead of
+    // dispatching. Doing both inside the runtime update the worktree manager
+    // awaits pins the order without racing the settlement for the lock.
+    const onChildCreated = (child: WorkflowInstance) => {
+      const update = child.promptQueue.updateWorktreeRuntime.bind(
+        child.promptQueue
+      );
+      child.promptQueue.updateWorktreeRuntime = async (patch) => {
+        await update(patch);
+        if (
+          patch.lifecycleState !== WORKTREE_LIFECYCLE_STATES.READY ||
+          stopDuringSetup
+        )
+          return;
+        const commonDirectory = await gitCommonDir(workspace);
+        assert.ok(commonDirectory);
+        let openGate!: () => void;
+        const gate = new Promise<void>((resolve) => (openGate = resolve));
+        let signalHeld!: () => void;
+        const held = new Promise<void>((resolve) => (signalHeld = resolve));
+        const holder = withWorktreeMutationLock(commonDirectory, async () => {
+          signalHeld();
+          await gate;
+        });
+        releaseLock = async () => {
+          openGate();
+          await holder;
+        };
+        await held;
+        stopDuringSetup = child.stop();
+        await stopDuringSetup;
+      };
+    };
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      undefined,
+      undefined,
+      onChildCreated
+    );
+    const log = captureLog();
+    try {
+      initGitRepository(workspace);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Lane stopped in setup",
+        steps: [
+          inlineLane("Lane A", "node --version", {
+            worktree: { mode: "managed", merge: true, setup: "node --version" },
+          }),
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      const execution = parent.executeLoadedPromptFile();
+
+      await waitFor("the stopped lane to start settling its worktree", () =>
+        log.lines.some((line) =>
+          line.message.includes("Settling managed worktree")
+        )
+      );
+      const lane = laneChildOf(instances, parent, 0);
+      assert.ok(lane, "the lane has a child instance");
+      // The first stop arrived before settlement began, so the settlement
+      // queues behind the sibling as any stopped lane's does; a second stop
+      // ends that wait. Without it the lane waits out
+      // WORKTREE_MERGE_LEASE_WAIT_MS (120 s), well past this bound.
+      await lane.stop();
+      let bound: NodeJS.Timeout | undefined;
+      await Promise.race([
+        execution,
+        new Promise<never>((_, reject) => {
+          bound = setTimeout(
+            () => reject(new Error("the second stop did not end the wait")),
+            60_000
+          );
+        }),
+      ]).finally(() => clearTimeout(bound));
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      const laneWorktree = await worktreeRuntimeOf(lane);
+      assert.strictEqual(laneWorktree.landingOutcome, "blocked");
+      assert.strictEqual(laneWorktree.mergeOutcome, "blocked");
+      assert.strictEqual(
+        laneWorktree.message,
+        STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE
+      );
+      assert.ok(laneWorktree.worktreePath, "the lane recorded its worktree");
+      await fs.stat(laneWorktree.worktreePath);
+    } finally {
+      log.restore();
+      await releaseLock?.();
+      await stopDuringSetup?.catch(() => undefined);
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);
     }
   });

@@ -54,6 +54,8 @@ import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import {
   FileLockAbortedError,
   FileLockTimeoutError,
+  FileLockUnavailableError,
+  type FileLockOptions,
 } from "../../utils/FileLockUtils";
 import { waitForRetryDelay } from "../../utils/RetryUtils";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
@@ -410,16 +412,32 @@ export interface WorktreeManagerOptions {
    * should wake early when `signal` aborts; the loop rechecks it after.
    */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /**
+   * Lock-file open for a settlement's mutation-lock wait; tests observe when
+   * it first meets a held lock, or make it fail. Production uses `fs.open`.
+   */
+  mutationLockOpen?: FileLockOptions["open"];
 }
 
-/** The message a settlement or merge reports when its wait was stopped. */
-const STOPPED_WAITING_FOR_SIBLING_MESSAGE =
-  "Stopped while waiting for another lane's settlement or merge into the same checkout; this lane's branch and worktree are kept.";
+/**
+ * A stop ended a settlement's wait for the mutation lock: nothing landed or
+ * merged, and the worktree still holds the lane's work.
+ */
+export const STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE =
+  "Stopped while waiting for another lane's settlement or merge into the same checkout; nothing was landed or merged, and this lane's branch and worktree are kept.";
+
+/**
+ * A stop ended the merge-lease wait after landing: the lane's work is
+ * committed on its branch, and settlement then removes the worktree as for
+ * any blocked merge unless `keep` is set.
+ */
+export const STOPPED_WAITING_FOR_MERGE_MESSAGE =
+  "Stopped while waiting for another lane's merge into the same checkout; this lane's work is committed on its branch, which is kept.";
 
 /** A stop ended the D4d sibling merge-lease wait before the lease was free. */
 class MergeLeaseWaitStoppedError extends Error {
   constructor() {
-    super(STOPPED_WAITING_FOR_SIBLING_MESSAGE);
+    super(STOPPED_WAITING_FOR_MERGE_MESSAGE);
     this.name = "MergeLeaseWaitStoppedError";
   }
 }
@@ -795,6 +813,7 @@ export class WorktreeManager {
   private readonly worktreeSetupRunner: WorktreeSetupRunner;
   private readonly mergeLeaseWaitMs: number;
   private readonly mutationLockTimeoutMs: number | undefined;
+  private readonly mutationLockOpen: FileLockOptions["open"];
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   public constructor(private readonly options: WorktreeManagerOptions = {}) {
@@ -803,6 +822,7 @@ export class WorktreeManager {
     this.mergeLeaseWaitMs =
       options.mergeLeaseWaitMs ?? WORKTREE_MERGE_LEASE_WAIT_MS;
     this.mutationLockTimeoutMs = options.mutationLockTimeoutMs;
+    this.mutationLockOpen = options.mutationLockOpen;
     this.sleep = options.sleep ?? defaultSleep;
     this.mergeOperations = {
       fastForward: mergeFastForward,
@@ -1102,6 +1122,7 @@ export class WorktreeManager {
           ? this.mergeLeaseWaitMs
           : this.mutationLockTimeoutMs,
         signal: options.signal,
+        ...(this.mutationLockOpen ? { open: this.mutationLockOpen } : {}),
       };
 
       return await withWorktreeMutationLock(
@@ -1277,14 +1298,16 @@ export class WorktreeManager {
       if (
         !mutationLockHeld &&
         (error instanceof FileLockAbortedError ||
-          error instanceof FileLockTimeoutError)
+          error instanceof FileLockTimeoutError ||
+          error instanceof FileLockUnavailableError)
       ) {
-        // Stopped, or out of time, while queued behind another settlement:
-        // nothing landed, and a merging lane's merge did not happen either,
-        // which D4e records as data.
+        // Stopped, out of time, or unable to create the lock file at all
+        // while waiting for this settlement's turn: nothing landed, and a
+        // merging lane's merge did not happen either, which D4e records as
+        // data.
         return blocked(
           error instanceof FileLockAbortedError
-            ? STOPPED_WAITING_FOR_SIBLING_MESSAGE
+            ? STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE
             : getErrorMessage(error),
           WORKTREE_BRANCH_STATES.PRESENT,
           options.merge ? WORKTREE_MERGE_OUTCOMES.BLOCKED : undefined
@@ -1365,7 +1388,7 @@ export class WorktreeManager {
         mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
         message:
           error instanceof MergeLeaseWaitStoppedError
-            ? STOPPED_WAITING_FOR_SIBLING_MESSAGE
+            ? STOPPED_WAITING_FOR_MERGE_MESSAGE
             : `Merge blocked: ${getErrorMessage(error)}`,
       };
     }

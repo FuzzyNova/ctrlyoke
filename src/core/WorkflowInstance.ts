@@ -200,6 +200,7 @@ import { SessionActivityRecorder } from "./orchestration/SessionActivityRecorder
 import { RunnerLockCoordinator } from "./orchestration/RunnerLockCoordinator";
 import {
   WorkflowStartupPipeline,
+  type ManagedWorktreeCleanup,
   type WorkflowStartupContextPort,
   type WorkflowStartupLifecyclePort,
   type WorkflowStartupPipelinePort,
@@ -290,6 +291,20 @@ interface ActiveTargetResources {
   subWorkflow?: SubWorkflowControl;
 }
 
+/** A managed worktree's `merge` and `keep`, as its settlement applies them. */
+interface ManagedWorktreeSettlement {
+  readonly merge: boolean;
+  readonly keep: boolean;
+}
+
+/** The settlement a worktree config asks for; non-managed configs ask none. */
+function managedWorktreeSettlement(
+  config: WorkspaceWorktreeResolution["config"]
+): ManagedWorktreeSettlement {
+  const managed = config?.mode === WORKTREE_MODES.MANAGED ? config : undefined;
+  return { merge: managed?.merge === true, keep: managed?.keep === true };
+}
+
 export interface WorkflowInstanceExecutionOptions {
   subWorkflowHost?: SubWorkflowHost;
   ancestorPaths?: readonly string[];
@@ -357,8 +372,7 @@ export class WorkflowInstance
    * time a stale `activeWorktree` needs settling, `worktreeResolution.config`
    * no longer describes it — this does.
    */
-  private activeWorktreeSettlement:
-    { merge: boolean; keep: boolean } | undefined;
+  private activeWorktreeSettlement: ManagedWorktreeSettlement | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
@@ -2208,6 +2222,8 @@ export class WorkflowInstance
           this.executionLease = undefined;
         },
         manager: this.worktreeManager,
+        settleManagedWorktree: (worktree, cleanup) =>
+          this.settleManagedWorktree(worktree, cleanup),
         ensureRunnerLock: (workingFilePath) =>
           this.ensureRunnerLock(workingFilePath),
         releaseRunnerLock: () => this.releaseRunnerLock(),
@@ -5526,10 +5542,7 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
     }
     this.activeWorktree = info;
-    this.activeWorktreeSettlement = {
-      merge: config.mode === WORKTREE_MODES.MANAGED && config.merge === true,
-      keep: config.mode === WORKTREE_MODES.MANAGED && config.keep === true,
-    };
+    this.activeWorktreeSettlement = managedWorktreeSettlement(config);
     this.executionLease = info.lease;
     await this.configureExecutionWorkspace(info.executionWorkspace);
   }
@@ -5567,11 +5580,11 @@ export class WorkflowInstance
 
     if (worktree.mode === WORKTREE_MODES.MANAGED) {
       try {
-        await this.settleManagedWorktree(worktree, {
-          merge: settlement?.merge === true,
-          keep: settlement?.keep === true,
-          artifactsClean: true,
-        });
+        await this.settleManagedWorktree(
+          worktree,
+          { artifactsClean: true },
+          settlement
+        );
       } catch (error) {
         Log.error(
           `[inst:${this.id.slice(0, 8)}] Failed to settle abandoned managed worktree:`,
@@ -5874,14 +5887,24 @@ export class WorkflowInstance
   }
 
   /**
-   * `completeManagedRun` with a stop-abortable wait: while it runs, `stop()`
-   * aborts `activeWorktreeSettlementAbort`, which ends a wait for the
-   * repository-wide mutation lock or a sibling's merge lease (D4d).
+   * The one way this instance settles a managed worktree. Merge and keep
+   * come from `settlement`, by default the current worktree config. While
+   * it runs, `stop()` aborts `activeWorktreeSettlementAbort`, which ends a
+   * wait for the repository-wide mutation lock or a sibling's merge lease
+   * (D4d).
    */
   private async settleManagedWorktree(
     worktree: WorktreeInfo,
-    options: Omit<CompleteManagedRunOptions, "signal">
+    cleanup: ManagedWorktreeCleanup,
+    settlement: ManagedWorktreeSettlement = managedWorktreeSettlement(
+      this.worktreeResolution.config
+    )
   ): Promise<WorktreeCompletionResult> {
+    const options: Omit<CompleteManagedRunOptions, "signal"> = {
+      merge: settlement?.merge === true,
+      keep: settlement?.keep === true,
+      ...cleanup,
+    };
     const abort = new AbortController();
     this.activeWorktreeSettlementAbort = abort;
     Log.debug(
@@ -5913,12 +5936,6 @@ export class WorkflowInstance
       if (managedTerminalRun) {
         try {
           await this.settleManagedWorktree(worktree, {
-            merge:
-              this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
-              this.worktreeResolution.config.merge === true,
-            keep:
-              this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
-              this.worktreeResolution.config.keep === true,
             artifactsClean: strictArtifactCleanupSucceeded,
             cleanupMessage: strictArtifactCleanupMessage,
           });
