@@ -2907,6 +2907,36 @@ suite("WorktreeManager", function () {
     await retry.lease.release();
   });
 
+  // spec-driven-loop's `lane` preset renders `setup: ""` when its laneSetup
+  // template variable is left blank; that must mean "no setup", not a failure.
+  test("treats a blank managed setup command as no setup", async () => {
+    const { parent, repository } = await makeRepository("managed-blank-setup");
+    const runner = new RecordingWorktreeSetupRunner({
+      success: true,
+      result: "",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    const info = await ensureManaged(instance, repository, { setup: "" });
+    try {
+      assert.deepStrictEqual(runner.calls, []);
+      assert.strictEqual(info.setupOutcome, undefined);
+      assert.strictEqual(
+        (await instance.readManagedWorktreeRecord(repository, info.branchName))
+          ?.lifecycleState,
+        "ready"
+      );
+    } finally {
+      await info.lease.release();
+    }
+  });
+
   test("releases the managed lease when final runtime persistence fails", async () => {
     const { parent, repository } = await makeRepository(
       "managed-final-runtime-write-failure"

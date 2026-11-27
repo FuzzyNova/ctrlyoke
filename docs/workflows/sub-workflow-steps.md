@@ -253,6 +253,13 @@ lanes already queued. `workflow_status` lists the presets under
 then `append_step` refuses `worktree` altogether. See
 [MCP tools](/reference/mcp-tools#append-step) for the request shape.
 
+The built-in [Spec-Driven Loop](/workflows/templates) template declares a
+`lane` preset like the one above, with its `laneSetup` template variable as
+`setup`, and its orchestrator agent queues parallel work as lanes whenever the
+workflow declares a preset. It follows each group of lanes with a sequential
+step that merges any lane that did not merge cleanly and runs the tests on the
+combined result.
+
 A lane should carry an end condition that checks its work was committed, such
 as the `committed` preset above. When the workflow declares condition presets,
 `append_step` warns about each lane queued without one, flat or in a parallel

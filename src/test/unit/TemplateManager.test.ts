@@ -1611,6 +1611,7 @@ suite("TemplateManager variable metadata", () => {
           ["orchestratorModel", "orchestratorHarness", "opus"],
           ["implementerHarness", undefined, "claude-cli"],
           ["implementerModel", "implementerHarness", "sonnet"],
+          ["laneSetup", undefined, "npm ci"],
         ]
       );
 
@@ -1639,6 +1640,32 @@ suite("TemplateManager variable metadata", () => {
       assert.ok(
         workflow.conditions?.committed?.retryPrompt?.includes("`make check`")
       );
+    });
+
+    // The orchestrator queues parallel work as lanes from this preset; the
+    // setup command comes from the laneSetup template variable, and a blank
+    // field falls back to its default like every other template variable.
+    test("declares spec-driven-loop's lane worktree preset from laneSetup", async () => {
+      const tm = makeManager();
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: makeTempDir() } });
+      tm.getBuiltInTemplatesPath = () =>
+        path.resolve(__dirname, "../../templates/workflows");
+      const lane = { mode: "managed", merge: true };
+
+      for (const [laneSetup, setup] of [
+        [undefined, "npm ci"],
+        ["", "npm ci"],
+        ["pnpm install --frozen-lockfile", "pnpm install --frozen-lockfile"],
+      ] as const) {
+        const workflow = await tm.createWorkflow("spec-driven-loop", {
+          specFile: "docs/spec.md",
+          ...(laneSetup === undefined ? {} : { laneSetup }),
+        });
+        assert.deepStrictEqual(workflow.worktreePresets, {
+          lane: { ...lane, setup },
+        });
+        assert.strictEqual(workflow.worktree, undefined);
+      }
     });
 
     // Large Spec Loop keeps no session between passes: every pass is a fresh
