@@ -21,7 +21,19 @@ import { useSettingsStore } from "@store/settingsStore";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import { resolveDisplayedAttemptTokens } from "@root/utils/TokenUsage";
 import { getStepKindIconClass } from "@utils/status";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  STEP_TYPES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
+} from "@root/types/DashboardConstants";
+import {
+  assertNever,
+  type RunRef,
+  type WorkflowKey,
+} from "@root/types/CtrlYokeTypes";
+import type { StepType } from "@root/types/DashboardConstants";
+import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { navigateToWorkflowAddress } from "@utils/runNavigation";
 import { Icon } from "../shared/Icon";
 import { detectPlatform } from "@utils/platform";
 import { UI_PLATFORMS } from "@root/types/DashboardConstants";
@@ -41,6 +53,12 @@ export interface StepDetails {
   duration?: number;
   endConditionResult?: EndConditionResult;
   message?: string;
+}
+
+interface WorkflowRunLink {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  workflowName?: string;
 }
 
 export type StepClickModifiers = { range: boolean; toggle: boolean };
@@ -102,8 +120,10 @@ interface WorkflowStepProps {
   displayNumber?: number;
   /** When true, suppresses the bottom border*/
   hideBorderBottom?: boolean;
-  /** When true, renders the script step variant (terminal icon, Script badge, command text) */
-  isScript?: boolean;
+  stepType?: StepType;
+  workflowRun?: WorkflowRunLink;
+  childExecutionState?: string;
+  showFailureWarning?: boolean;
   /**
    * When true, applies completed-section styling with slight dimming. The
    * parent panel renders the 2px left rail, whose color identifies the step.
@@ -163,7 +183,10 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   dimmed = false,
   liveContextWindow,
   runtimeMeta,
-  isScript = false,
+  stepType = STEP_TYPES.PROMPT,
+  workflowRun,
+  childExecutionState,
+  showFailureWarning = false,
   onContextMenu,
   dragHandleProps,
 }) => {
@@ -221,6 +244,157 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       ? "text-description-fg"
       : "text-foreground";
   const detailsClass = isDisabled && !isSelected ? "opacity-80" : "";
+  const renderKind = () => {
+    switch (stepType) {
+      case STEP_TYPES.PROMPT:
+        return (
+          <>
+            <div className="flex items-center gap-1 min-w-0">
+              <Icon
+                name={getStepKindIconClass(STEP_TYPES.PROMPT)}
+                className="text-xs opacity-60 shrink-0"
+              />
+              <span
+                className={`text-xs leading-relaxed truncate ${titleTextClass}`}
+              >
+                {name ? name : text}
+              </span>
+              {isDisabled && (
+                <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
+                  Disabled
+                </span>
+              )}
+            </div>
+            <div className={detailsClass}>
+              <StepDetailRows
+                status={status}
+                harnessId={harnessId}
+                harnessLabel={harnessLabel}
+                harnessIsDefault={harnessIsDefault}
+                modelLabel={modelLabel}
+                modelIsDefault={modelIsDefault}
+                retryState={retryState}
+                latestOutput={latestOutput}
+                details={details}
+                runtimeMeta={runtimeMeta}
+                isSelected={isSelected}
+                overrides={overrides}
+                attemptTotalLabel={attemptTotalLabel}
+              />
+            </div>
+          </>
+        );
+      case STEP_TYPES.SCRIPT:
+        return (
+          <>
+            <div className="flex items-center gap-1 min-w-0">
+              <Icon
+                name={getStepKindIconClass(STEP_TYPES.SCRIPT)}
+                className="text-xs opacity-60 shrink-0"
+              />
+              <span
+                className={`text-xs leading-relaxed truncate ${titleTextClass}`}
+              >
+                {name ? name : text}
+              </span>
+              <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
+                Script
+              </span>
+              {isDisabled && (
+                <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
+                  Disabled
+                </span>
+              )}
+            </div>
+            {name && text && (
+              <div
+                className={`mt-0.5 text-xxs opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+                title={text}
+              >
+                {truncateNormalized(text, 60)}
+              </div>
+            )}
+            <div className={detailsClass}>
+              <StepDetailRows
+                status={status}
+                retryState={retryState}
+                latestOutput={latestOutput}
+                details={details}
+                runtimeMeta={runtimeMeta}
+                isSelected={isSelected}
+                attemptTotalLabel={attemptTotalLabel}
+              />
+            </div>
+          </>
+        );
+      case STEP_TYPES.WORKFLOW:
+        return (
+          <>
+            <div className="flex items-center gap-1 min-w-0">
+              <Icon
+                name={getStepKindIconClass(STEP_TYPES.WORKFLOW)}
+                className="text-xs opacity-60 shrink-0"
+              />
+              <span
+                className={`text-xs leading-relaxed truncate ${titleTextClass}`}
+              >
+                {name || SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+              </span>
+              <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
+                {SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+              </span>
+              {isDisabled && (
+                <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
+                  Disabled
+                </span>
+              )}
+              {showFailureWarning && (
+                <span
+                  className="px-1 py-px rounded-sm text-xxs bg-warning-bg text-warning-fg shrink-0"
+                  title={SUB_WORKFLOW_DASHBOARD_LABELS.warning}
+                >
+                  {SUB_WORKFLOW_DASHBOARD_LABELS.warning}
+                </span>
+              )}
+            </div>
+            <div
+              className="mt-0.5 text-xxs opacity-60 font-mono truncate text-description-fg"
+              title={text}
+            >
+              {truncateNormalized(text, 60)}
+            </div>
+            {childExecutionState && (
+              <ExecutionStateBadge
+                state={childExecutionState}
+                className="mt-1"
+              />
+            )}
+            {workflowRun && (
+              <button
+                type="button"
+                className="mt-1 text-xxs text-link-fg hover:underline"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigateToWorkflowAddress(
+                    getVsCodeApi(),
+                    {
+                      workflowKey: workflowRun.workflowKey,
+                      kind: "run",
+                      runRef: workflowRun.runRef,
+                    },
+                    workflowRun.workflowName
+                  );
+                }}
+              >
+                {SUB_WORKFLOW_DASHBOARD_LABELS.openRun}
+              </button>
+            )}
+          </>
+        );
+      default:
+        return assertNever(stepType);
+    }
+  };
 
   // Add hover and selection states
   if (isSelected) {
@@ -298,92 +472,14 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
           )}
         </span>
         {/* Content column: title + details */}
-        <div className="flex-1 min-w-0 overflow-hidden">
-          {isScript ? (
-            // Script step variant
-            <>
-              <div className="flex items-center gap-1 min-w-0">
-                <Icon
-                  name={getStepKindIconClass(STEP_TYPES.SCRIPT)}
-                  className="text-xs opacity-60 shrink-0"
-                />
-                <span
-                  className={`text-xs leading-relaxed truncate ${titleTextClass}`}
-                >
-                  {name ? name : text}
-                </span>
-                {isDisabled && (
-                  <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
-                    Disabled
-                  </span>
-                )}
-              </div>
-              {/* Script command subtitle — only shown when a name is displayed in the title row */}
-              {name && text && (
-                <div
-                  className={`mt-0.5 text-xxs opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
-                  title={text}
-                >
-                  {truncateNormalized(text, 60)}
-                </div>
-              )}
-              {/* Status details (duration, end condition) but no harness/model */}
-              <div className={detailsClass}>
-                <StepDetailRows
-                  status={status}
-                  retryState={retryState}
-                  latestOutput={latestOutput}
-                  details={details}
-                  runtimeMeta={runtimeMeta}
-                  isSelected={isSelected}
-                  attemptTotalLabel={attemptTotalLabel}
-                />
-              </div>
-            </>
-          ) : (
-            // Prompt step variant (default)
-            <>
-              <div className="flex items-center gap-1 min-w-0">
-                <Icon
-                  name={getStepKindIconClass(STEP_TYPES.PROMPT)}
-                  className="text-xs opacity-60 shrink-0"
-                />
-                <span
-                  className={`text-xs leading-relaxed truncate ${titleTextClass}`}
-                >
-                  {name ? name : text}
-                </span>
-                {isDisabled && (
-                  <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
-                    Disabled
-                  </span>
-                )}
-              </div>
-              <div className={detailsClass}>
-                <StepDetailRows
-                  status={status}
-                  harnessId={harnessId}
-                  harnessLabel={harnessLabel}
-                  harnessIsDefault={harnessIsDefault}
-                  modelLabel={modelLabel}
-                  modelIsDefault={modelIsDefault}
-                  retryState={retryState}
-                  latestOutput={latestOutput}
-                  details={details}
-                  runtimeMeta={runtimeMeta}
-                  isSelected={isSelected}
-                  overrides={overrides}
-                  attemptTotalLabel={attemptTotalLabel}
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <ContextWindowBar
-          contextWindow={ctx}
-          attemptTokens={attemptTokens}
-          harnessId={harnessId}
-        />
+        <div className="flex-1 min-w-0 overflow-hidden">{renderKind()}</div>
+        {stepType === STEP_TYPES.WORKFLOW ? null : (
+          <ContextWindowBar
+            contextWindow={ctx}
+            attemptTokens={attemptTokens}
+            harnessId={harnessId}
+          />
+        )}
         {dragHandleProps && (
           <button
             type="button"

@@ -16,6 +16,8 @@ import {
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_MESSAGE_TYPES,
   STATUS_MESSAGE_SEVERITY,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
+  PROMPT_TERMINAL_STATUS,
   type OutputMessageType,
   type ExecutionPhase,
 } from "@root/types/DashboardConstants";
@@ -245,7 +247,35 @@ export function mapOrderedHistoryEntriesToMessages(
         }
         break;
       }
-      case "runtime":
+      case OUTPUT_HISTORY_KINDS.SUB_WORKFLOW: {
+        const output = entry.subWorkflowOutput;
+        const details = [
+          `${SUB_WORKFLOW_DASHBOARD_LABELS.outcome}: ${output.outcome.status}`,
+          output.worktree?.branchName
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.branch}: ${output.worktree.branchName}`
+            : undefined,
+          output.worktree?.mergeOutcome
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.merge}: ${output.worktree.mergeOutcome}`
+            : undefined,
+        ].filter((value): value is string => value !== undefined);
+        aggregateMessages.push({
+          type: OUTPUT_MESSAGE_TYPES.STATUS,
+          target: toOutputMessageTarget(entry.target),
+          timestamp: entry.timestampMs,
+          sequence: entry.sequence,
+          data: {
+            message: details.join(" · "),
+            severity:
+              output.outcome.status === PROMPT_TERMINAL_STATUS.FAILED
+                ? STATUS_MESSAGE_SEVERITY.WARNING
+                : STATUS_MESSAGE_SEVERITY.INFO,
+            timestamp: formatTime(entry.timestampMs),
+            timestampMs: entry.timestampMs,
+          },
+        });
+        break;
+      }
+      case OUTPUT_HISTORY_KINDS.RUNTIME:
         break;
     }
   }

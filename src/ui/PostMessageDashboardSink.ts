@@ -23,6 +23,8 @@ import type {
   WorkflowStopReason,
 } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
+import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import type { SubWorkflowOutput } from "../types/CtrlYokeTypes";
 import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import { secretRedactionService } from "../utils/SecretRedactionService";
@@ -249,6 +251,18 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(prompt ? { prompt } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
+  }
+
+  updateSubWorkflowSettled(data: {
+    target: OutputExecutionTarget;
+    runIndex: number;
+    attemptIndex: number;
+    timestampMs: number;
+    sequence: number;
+    output: SubWorkflowOutput;
+    workflowId?: string;
+  }): void {
+    this.send({ type: MESSAGE_TYPES.SUB_WORKFLOW_SETTLED, ...data });
   }
 
   updateCliStreamingChunk(

@@ -29,6 +29,9 @@ import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 import { RUN_IMPORT_SOURCE_KINDS } from "@root/types/RunBundleTypes";
 import { Icon } from "../shared/Icon";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { navigateToWorkflowAddress } from "@utils/runNavigation";
+import { SUB_WORKFLOW_DASHBOARD_LABELS } from "@root/types/DashboardConstants";
 import { LiveDot } from "../shared/LiveDot";
 import {
   ImportedOriginBadge,
@@ -37,7 +40,8 @@ import {
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
-  { kind: "draft" } | { kind: "run"; summary: RunSummary };
+  | { kind: "draft" }
+  | { kind: "run"; summary: RunSummary; parentWorkflowName?: string };
 
 interface RunSummaryRowProps {
   row: RunPanelRow;
@@ -117,6 +121,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     : harnessLabel;
 
   const label = isDraft ? "Draft" : `Run ${summary!.runId}`;
+  const parentRun = summary?.parentRun;
   // The live run's clock is still running, and its persisted summary only
   // knows a stale value; the Running row and the output banner tick it live.
   const activeExecutionMs = isLive ? undefined : summary?.activeExecutionMs;
@@ -243,6 +248,35 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
         }
         time={timeAgo}
       />
+
+      {parentRun && (
+        <div className="px-3 pb-1 text-xxs text-description-fg">
+          {SUB_WORKFLOW_DASHBOARD_LABELS.startedBy}{" "}
+          {row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          row.parentWorkflowName ? (
+            <button
+              type="button"
+              className="text-link-fg hover:underline"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigateToWorkflowAddress(
+                  getVsCodeApi(),
+                  {
+                    workflowKey: parentRun.workflowKey,
+                    kind: "run",
+                    runRef: parentRun.runRef,
+                  },
+                  row.parentWorkflowName
+                );
+              }}
+            >
+              {row.parentWorkflowName}
+            </button>
+          ) : (
+            SUB_WORKFLOW_DASHBOARD_LABELS.unavailable
+          )}
+        </div>
+      )}
 
       {/* Delete track is reserved on every row (draft and executing runs can't
           be deleted) so the time column stays aligned down the list. */}

@@ -715,9 +715,9 @@ export class OutputHistoryManager {
     output: import("../../types/CtrlYokeTypes").SubWorkflowOutput,
     definitionContext?: DefinitionRevisionContext,
     phase?: ExecutionPhase
-  ): Promise<void> {
-    if (!historyFilePath) return;
-    await this.timelineRecorder.appendEvents(historyFilePath, [
+  ): Promise<{ timestampMs: number; sequence: number } | undefined> {
+    if (!historyFilePath) return undefined;
+    const [event] = await this.timelineRecorder.appendEvents(historyFilePath, [
       {
         eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
         timestampMs: Date.now(),
@@ -729,6 +729,9 @@ export class OutputHistoryManager {
         payload: output,
       },
     ]);
+    return event
+      ? { timestampMs: event.timestampMs, sequence: event.sequence }
+      : undefined;
   }
 
   /** Persist the exact retry input before the retry attempt is sent. */
@@ -1500,6 +1503,7 @@ export class OutputHistoryManager {
         summary: {
           workflowKey,
           runRef,
+          ...(manifest.parentRun ? { parentRun: manifest.parentRun } : {}),
           runDirectory: runDirectoryPath,
           runId: manifest.runId,
           startedAt: manifest.startedAt,

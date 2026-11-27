@@ -142,6 +142,7 @@ export interface WorkflowRunManifest {
 export interface RunSummary {
   workflowKey: WorkflowKey;
   runRef: RunRef;
+  parentRun?: SubWorkflowParentLink;
   runDirectory: string;
   runId: number;
   startedAt: number;

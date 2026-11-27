@@ -72,7 +72,8 @@ import {
   type SandboxRequest,
   type HeadlessSteerDelivery,
 } from "./DashboardConstants";
-import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
+import type { ScriptRuntimeOutput, SubWorkflowOutput } from "./CtrlYokeTypes";
+import type { OutputExecutionTarget } from "./OutputHistoryTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type { GitWorkingTreeCounts } from "../utils/GitUtils";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
@@ -128,7 +129,6 @@ import type {
 import type {
   WorkspaceSnapshot,
   UndoExecutionTarget,
-  OutputExecutionTarget,
   PromptChangeType,
   UndoRecord,
 } from "./OutputHistoryTypes";
@@ -861,6 +861,18 @@ export interface CliOutputMessage {
   output: CliOutput;
   /** The attempt's prompt; sent when known and kept by updates that omit it. */
   prompt?: string;
+}
+
+/** Settled child metadata for one parent workflow step. */
+export interface SubWorkflowSettledMessage {
+  type: typeof MESSAGE_TYPES.SUB_WORKFLOW_SETTLED;
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  timestampMs: number;
+  sequence: number;
+  output: SubWorkflowOutput;
+  workflowId?: string;
 }
 
 /**
@@ -3836,6 +3848,7 @@ export type IncomingMessage =
   | StepStatusChangedMessage
   | RetryAttemptChangedMessage
   | CliOutputMessage
+  | SubWorkflowSettledMessage
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
   | HeadlessControlTargetMessage

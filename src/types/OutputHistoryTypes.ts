@@ -9,6 +9,7 @@ import {
   type SnapshotBaseSource,
 } from "./DashboardConstants";
 import type { SubWorkflowOutput } from "./CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "./SubWorkflowTypes";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
@@ -122,6 +123,7 @@ export interface WorkflowOutputHistory {
   importedSequenceBoundary?: number;
   /** Bundle provenance for imported runs. */
   importedFrom?: import("./CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
+  parentRun?: SubWorkflowParentLink;
 
   // Per-step outputs (keyed by stepIndex)
   promptOutputs: {
@@ -148,6 +150,7 @@ export type WorkflowRunMetadata = Pick<
   | "stopReason"
   | "worktree"
   | "worktreeNotice"
+  | "parentRun"
 > &
   Pick<WorkflowOutputHistory, "importedSequenceBoundary" | "importedFrom">;
 

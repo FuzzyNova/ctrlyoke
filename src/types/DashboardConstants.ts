@@ -653,6 +653,7 @@ export const MESSAGE_TYPES = {
   STEP_STATUS_CHANGED: "stepStatusChanged",
   RETRY_ATTEMPT_CHANGED: "retryAttemptChanged",
   CLI_OUTPUT: "cliOutput",
+  SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
   CLI_STREAMING_EVENTS: "cliStreamingEvents", // Structured events for Claude/Codex CLI
   CONTEXT_WINDOW_UPDATE: "contextWindowUpdate", // Live context window usage update (extension -> webview)
@@ -5410,6 +5411,17 @@ export const OUTPUT_HISTORY_KINDS = {
   STATUS: "status",
   RUNTIME: "runtime",
   SUB_WORKFLOW: "subWorkflow",
+} as const;
+
+export const SUB_WORKFLOW_DASHBOARD_LABELS = {
+  workflow: "Workflow",
+  openRun: "Open run →",
+  warning: "Completed with a warning",
+  startedBy: "Started by",
+  unavailable: "unavailable",
+  outcome: "Outcome",
+  branch: "Branch",
+  merge: "Merge",
 } as const;
 
 export const OUTPUT_ACTIVITY_KINDS = {

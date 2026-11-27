@@ -53,6 +53,7 @@ import {
 } from "@root/types/DashboardConstants";
 import type {
   OrderedCliHistoryEntry,
+  OrderedSubWorkflowHistoryEntry,
   OrderedStatusHistoryEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
@@ -1653,6 +1654,18 @@ export function createMessageHandlers(
     if (message.output.tokens?.contextWindowSize) {
       store.clearLiveContextWindow(message.stepIndex);
     }
+  };
+
+  handlers[MESSAGE_TYPES.SUB_WORKFLOW_SETTLED] = (message) => {
+    if (isForInactiveWorkflow(message)) return;
+    const entry: OrderedSubWorkflowHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+      target: message.target,
+      timestampMs: message.timestampMs,
+      sequence: message.sequence,
+      subWorkflowOutput: message.output,
+    };
+    useWorkflowStore.getState().appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------

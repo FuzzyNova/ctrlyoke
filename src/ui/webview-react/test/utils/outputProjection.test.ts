@@ -10,6 +10,34 @@ import {
 } from "@/types/messages";
 
 describe("outputProjection", () => {
+  it("renders sub-workflow settlement metadata as the parent step output", () => {
+    const messages = mapOrderedHistoryEntriesToMessages([
+      {
+        kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        timestampMs: 1200,
+        sequence: 4,
+        subWorkflowOutput: {
+          childWorkflowKey: "child" as never,
+          childRunRef: "run-child" as never,
+          outcome: { status: "completed" },
+          worktree: {
+            mode: "managed",
+            branchName: "feature/child",
+            mergeOutcome: "merged",
+          },
+        } as never,
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.target.index).toBe(2);
+    expect(messages[0]?.data).toMatchObject({
+      message: "Outcome: completed · Branch: feature/child · Merge: merged",
+      severity: "info",
+    });
+  });
+
   it("maps canonical ordered entries with sequence-preserved chronology", () => {
     const messages = mapOrderedHistoryEntriesToMessages([
       {

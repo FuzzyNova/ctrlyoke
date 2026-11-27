@@ -32,6 +32,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_DELETE_SCOPES,
   RUN_SUMMARY_CACHE_STATUSES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
@@ -1666,6 +1667,13 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
         ...runPanelSummaries.map((summary) => ({
           kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary,
+          parentWorkflowName: summary.parentRun
+            ? recentWorkflows.find(
+                (workflow) =>
+                  workflow.address.workflowKey ===
+                  summary.parentRun?.workflowKey
+              )?.workflowName
+            : undefined,
         })),
       ]
     : [];
@@ -1701,6 +1709,18 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       recentWorkflows,
       runSummaries
     );
+  const displayedParentRun =
+    displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+      ? runSummaries.find(
+          (summary) => summary.runRef === displayedViewAddress.runRef
+        )?.parentRun
+      : undefined;
+  const displayedParentWorkflowName = displayedParentRun
+    ? recentWorkflows.find(
+        (workflow) =>
+          workflow.address.workflowKey === displayedParentRun.workflowKey
+      )?.workflowName
+    : undefined;
 
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">
@@ -1874,6 +1894,32 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               )}
             </div>
           </button>
+
+          {displayedParentRun && (
+            <button
+              type="button"
+              className="shrink-0 px-2 text-xxs text-link-fg bg-cmd-bg hover:bg-cmd-active-bg"
+              aria-label={`${SUB_WORKFLOW_DASHBOARD_LABELS.startedBy} ${displayedParentWorkflowName ?? SUB_WORKFLOW_DASHBOARD_LABELS.unavailable}`}
+              title={`${SUB_WORKFLOW_DASHBOARD_LABELS.startedBy} ${displayedParentWorkflowName ?? SUB_WORKFLOW_DASHBOARD_LABELS.unavailable}`}
+              onClick={() => {
+                if (!displayedParentWorkflowName) return;
+                navigateToWorkflowAddress(
+                  vscode,
+                  {
+                    workflowKey: displayedParentRun.workflowKey,
+                    kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+                    runRef: displayedParentRun.runRef,
+                  },
+                  displayedParentWorkflowName
+                );
+              }}
+              disabled={!displayedParentWorkflowName}
+            >
+              {SUB_WORKFLOW_DASHBOARD_LABELS.startedBy}{" "}
+              {displayedParentWorkflowName ??
+                SUB_WORKFLOW_DASHBOARD_LABELS.unavailable}
+            </button>
+          )}
 
           {/* Run identity badge — third segment, only when the displayed
               lineage has more than one addressable target. A single-run

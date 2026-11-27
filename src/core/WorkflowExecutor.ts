@@ -3303,32 +3303,42 @@ export class WorkflowExecutor {
         context.historyFilePath &&
         context.outputHistoryManager
       ) {
-        await context.outputHistoryManager.recordSubWorkflowSettled(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          this.getRunIndexForTarget(context, target),
-          attemptIndex,
-          {
-            resolvedWorkflowPath: resolvedPath,
-            childWorkflowKey: handle.workflowKey,
-            childRunRef: handle.runRef,
-            outcome: {
-              status: result.status,
-              ...(result.failedToStart !== undefined
-                ? { failedToStart: result.failedToStart }
-                : {}),
-              ...(result.cancelledBy
-                ? { cancelledBy: result.cancelledBy }
-                : {}),
-              ...(result.failureMessage
-                ? { failureMessage: result.failureMessage }
-                : {}),
-            },
-            ...(result.worktree ? { worktree: result.worktree } : {}),
+        const settledOutput = {
+          resolvedWorkflowPath: resolvedPath,
+          childWorkflowKey: handle.workflowKey,
+          childRunRef: handle.runRef,
+          outcome: {
+            status: result.status,
+            ...(result.failedToStart !== undefined
+              ? { failedToStart: result.failedToStart }
+              : {}),
+            ...(result.cancelledBy ? { cancelledBy: result.cancelledBy } : {}),
+            ...(result.failureMessage
+              ? { failureMessage: result.failureMessage }
+              : {}),
           },
-          context.getDefinitionRevisionContext?.(),
-          undefined
-        );
+          ...(result.worktree ? { worktree: result.worktree } : {}),
+        };
+        const eventAddress =
+          await context.outputHistoryManager.recordSubWorkflowSettled(
+            context.historyFilePath,
+            this.toOutputExecutionTarget(target),
+            this.getRunIndexForTarget(context, target),
+            attemptIndex,
+            settledOutput,
+            context.getDefinitionRevisionContext?.(),
+            undefined
+          );
+        if (eventAddress) {
+          context.dashboardProvider?.updateSubWorkflowSettled?.({
+            target: this.toOutputExecutionTarget(target),
+            runIndex: this.getRunIndexForTarget(context, target),
+            attemptIndex,
+            ...eventAddress,
+            output: settledOutput,
+            workflowId: context.instanceId,
+          });
+        }
       }
       if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
         return this.settleNonHarnessStep({

@@ -204,6 +204,7 @@ export class OutputHistoryTimelineAdapter {
       startedAt: manifest.startedAt,
       completedAt: manifest.completedAt,
       executionState: manifest.executionState,
+      parentRun: manifest.parentRun,
       promptOutputs: {},
       orderedEntries: [],
       activityEntries: [],

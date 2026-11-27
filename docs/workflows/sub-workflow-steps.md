@@ -81,6 +81,15 @@ remains in its pausing state until the child reaches its next step boundary and
 finishes. Pausing or resuming a child directly does not pause or resume the
 parent.
 
+## In the dashboard
+
+Workflow steps appear with a Workflow badge, the referenced workflow file, and a
+live child state when that child is tracked. Once the child run is created, use
+**Open run →** to view its own output and history. The parent's output shows the
+child outcome and any worktree branch and merge result. The child's run row and
+header identify the parent run; the link is unavailable when that parent is not
+present in the current project.
+
 If a child tries to launch a workflow already active earlier in the same chain,
 the step fails with a cycle path. Reusing a workflow after an earlier child has
 finished is allowed.
