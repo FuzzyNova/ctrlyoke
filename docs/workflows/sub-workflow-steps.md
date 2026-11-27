@@ -157,9 +157,18 @@ when it starts instead, because an earlier member may have changed the checkout.
 
 `queue.maxParallelSteps` caps how many children run at once, and each child's
 own parallel groups apply their own limit on top. With `failFast: true` (the
-default), a failing member stops its running siblings. Stopping the parent stops
-every member's child. In the CLI, children that run beside each other run their
-steps headless, because only one of them could use the terminal.
+default), a failing member stops its running siblings' children. Those siblings
+are cancelled, not stopped by you, so the group fails for the failing member's
+reason, and that member's `onFail` decides what the parent does, as with prompt
+members. Stopping the parent stops every member's child. In the CLI, children
+that run beside each other run their steps headless, because only one of them
+could use the terminal.
+
+Stopping one member's child directly, from its own run, cancels only that
+member. Its siblings keep running, and once they finish the parent stops rather
+than moving on without that member's work. Continuing the parent keeps the
+members that finished and reconnects the stopped member to its child run, which
+re-runs the step its stop interrupted, then continues after the group.
 
 Two members with `merge: true` that finish at the same moment can leave the
 later merge reported as blocked. Leave the merge to a step after the group, as
@@ -173,7 +182,9 @@ records the failure and moves on. A stopped child always stops the parent,
 regardless of `onFail`.
 
 Stopping the parent stops its active child, and stopping the child directly
-stops the parent. Pausing the parent forwards the pause to the child, which
+stops the parent; for a member of a `parallel` group, the parent stops once
+the group's other members finish (see
+[Parallel sub-workflow steps](#parallel-sub-workflow-steps)). Pausing the parent forwards the pause to the child, which
 pauses at its next step boundary. The parent stays in its pausing state for as
 long as the child is paused, because its current step is the child run.
 Resuming the parent resumes the child, which continues its own run. A stop or

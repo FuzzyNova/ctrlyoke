@@ -967,6 +967,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * D6 continues it: its interrupted step is the work the parent step is
    * waiting on, so it re-runs whatever its kind. A finalStep pass needs no
    * rewind; a stopped pass is re-entered at the same `loopIndex`.
+   *
+   * A stopped parallel group joins before the run stops, so the step before
+   * `currentIndex` is the group's last member. Its cancelled workflow members
+   * with a recorded child are rewound for the same reason, and the run
+   * re-enters the group, whose settled members are recovered as they are.
    */
   public async rewindCancelledStepForContinuation(
     options: { anyStepKind?: boolean } = {}
@@ -975,15 +980,38 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return false;
     }
     const index = this.state.currentIndex - 1;
+    const isCancelledChildStep = (candidate: number): boolean => {
+      const candidateStep = this.state.steps[candidate];
+      return (
+        candidateStep !== undefined &&
+        isSubWorkflowStep(candidateStep) &&
+        !!candidateStep._runtime?.childRunRef &&
+        this.state.results[candidate]?.status === STEP_STATUS.CANCELLED
+      );
+    };
+    const group = this.state.parallelGroups.find(
+      (candidate) =>
+        index >= candidate.startIndex && index <= candidate.endIndex
+    );
+    if (group) {
+      if (group.endIndex !== index) return false;
+      const members: number[] = [];
+      for (let member = group.startIndex; member <= group.endIndex; member++) {
+        if (isCancelledChildStep(member)) members.push(member);
+      }
+      if (members.length === 0) return false;
+      this.state.currentIndex = group.startIndex;
+      for (const member of members) this.resetStepForRetry(member, false);
+      this.emitStateChange();
+      await this.updateWorkingFile();
+      return true;
+    }
     const step = this.state.steps[index];
     if (
       !step ||
-      (!options.anyStepKind &&
-        (!isSubWorkflowStep(step) || !step._runtime?.childRunRef)) ||
-      this.state.results[index]?.status !== STEP_STATUS.CANCELLED ||
-      this.state.parallelGroups.some(
-        (group) => index >= group.startIndex && index <= group.endIndex
-      )
+      (options.anyStepKind
+        ? this.state.results[index]?.status !== STEP_STATUS.CANCELLED
+        : !isCancelledChildStep(index))
     ) {
       return false;
     }

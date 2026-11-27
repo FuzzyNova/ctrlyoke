@@ -989,6 +989,12 @@ export interface StepExecutionOutcome {
   failureReason?: string;
   /** False when a per-step continue policy resolved a failed attempt. */
   terminalFailure?: boolean;
+  /**
+   * A parallel member cancelled from outside the group (a lane whose child
+   * run was stopped directly): its siblings keep running, and the group
+   * stops the workflow once it joins instead of advancing without it.
+   */
+  stopsWorkflowAtJoin?: boolean;
 }
 
 export interface ParallelGroupOutcome {

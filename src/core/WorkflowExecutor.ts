@@ -79,6 +79,7 @@ import {
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
   type ExecutionMode,
+  type SubWorkflowCancellationSource,
 } from "../types/DashboardConstants";
 import { outputTargetKey } from "../utils/OutputTargetKeys";
 import { PromptQueue } from "./PromptQueue";
@@ -663,6 +664,8 @@ export class WorkflowExecutor {
   private fallbackRunStartView: RunStartView | undefined;
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
+  /** Run keys of parallel members whose child was stopped directly (D9). */
+  private readonly membersStoppingWorkflowAtJoin = new Set<string>();
   private readonly noTurnStartedTargets = new Set<string>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
@@ -1484,8 +1487,9 @@ export class WorkflowExecutor {
         memberSnapshotStrategy,
         member
       ) => {
+        const runKey = getExecutionTargetRunKey(target);
         try {
-          return await this.executeWithSnapshot(
+          const outcome = await this.executeWithSnapshot(
             target,
             step,
             groupContext,
@@ -1495,8 +1499,13 @@ export class WorkflowExecutor {
               groupEffectiveWidth: options.effectiveWidth,
             }
           );
+          return this.membersStoppingWorkflowAtJoin.has(runKey) &&
+            outcome.status === PROMPT_TERMINAL_STATUS.CANCELLED
+            ? { ...outcome, stopsWorkflowAtJoin: true }
+            : outcome;
         } finally {
-          this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
+          this.targetExecutionErrors.delete(runKey);
+          this.membersStoppingWorkflowAtJoin.delete(runKey);
         }
       },
       persistSettlement: (outcome, settlementContext) =>
@@ -1586,12 +1595,22 @@ export class WorkflowExecutor {
           );
         }
         this.broadcastProgress(context);
-        if (
-          groupOutcome.stopped &&
-          this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
-          this.getRuntime().confirmStopped()
-        ) {
-          await this.promptQueue.commitRuntimeTransition();
+        if (groupOutcome.stopped) {
+          // A lane stopped directly asked for no stop while its siblings
+          // ran; the joined group requests it now, and a stop already
+          // requested is confirmed here exactly once either way.
+          if (
+            this.getRuntime().status !== EXECUTION_STATES.CANCELLING &&
+            this.getRuntime().status !== EXECUTION_STATES.STOPPED
+          ) {
+            this.getRuntime().requestStop();
+          }
+          if (
+            this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
+            this.getRuntime().confirmStopped()
+          ) {
+            await this.promptQueue.commitRuntimeTransition();
+          }
         }
         // Drain every member's reason so a non-terminal failure leaves none behind.
         const stopReason = groupOutcome.outcomes
@@ -3247,15 +3266,32 @@ export class WorkflowExecutor {
     if (!host) {
       return settleFailure("Sub-workflow steps are not supported in this host");
     }
-    const settleCancelled = () =>
-      this.settleNonHarnessStep({
+    // A sequential step's cancelled child always stops the parent (D9). A
+    // parallel member's never requests it itself: a cancel from the group or
+    // the parent (fail-fast, a parent stop) is a sibling cancellation the
+    // group already handles, and a lane whose child was stopped directly
+    // stops the parent only once its siblings settle and the group joins.
+    const groupMember = preflightMember !== undefined;
+    const settleCancelled = (
+      cancelledBy: SubWorkflowCancellationSource = SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
+    ) => {
+      if (
+        groupMember &&
+        cancelledBy === SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
+      ) {
+        this.membersStoppingWorkflowAtJoin.add(
+          getExecutionTargetRunKey(target)
+        );
+      }
+      return this.settleNonHarnessStep({
         context,
         target,
         stepIndex,
         attemptIndex,
         cancelled: true,
-        stopWorkflowOnCancel: true,
+        stopWorkflowOnCancel: !groupMember,
       });
+    };
     // Registered before anything awaits, so a stop or pause that arrives
     // while the child is still being resolved or loaded reaches it once its
     // handle exists, and a stop before the launch skips it.
@@ -3287,7 +3323,9 @@ export class WorkflowExecutor {
       readonly host: SubWorkflowHost;
       readonly control: SubWorkflowControlRelay;
       readonly settleFailure: (message: string) => Promise<boolean>;
-      readonly settleCancelled: () => Promise<boolean>;
+      readonly settleCancelled: (
+        cancelledBy?: SubWorkflowCancellationSource
+      ) => Promise<boolean>;
       readonly preflightMember: ParallelGroupPreflightMember | undefined;
     }
   ): Promise<boolean> {
@@ -3467,7 +3505,9 @@ export class WorkflowExecutor {
         }
       }
       if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
-        return settleCancelled();
+        return settleCancelled(
+          result.cancelledBy ?? SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
+        );
       }
       if (result.status === PROMPT_TERMINAL_STATUS.FAILED) {
         const prefix = result.failedToStart

@@ -272,8 +272,11 @@ export class ParallelGroupRun<TContext extends object> {
           throw this.workerError;
         }
 
-        const stopped = this.isStopped();
-        const paused = this.isPaused();
+        // A member stopped from outside the group (its own child run) stops
+        // the workflow at the join, once its siblings settle, and outranks a
+        // pause: resuming would otherwise advance without that member.
+        const stopped = this.isStopped() || this.hasMemberStoppingWorkflow();
+        const paused = !stopped && this.isPaused();
         if (stopped || this.failFastTriggered) {
           await this.closeAdmission();
           await this.cancelRunning();
@@ -701,6 +704,12 @@ export class ParallelGroupRun<TContext extends object> {
   private shouldStopDispatching(): boolean {
     return (
       this.abortController.signal.aborted || this.isPaused() || this.isStopped()
+    );
+  }
+
+  private hasMemberStoppingWorkflow(): boolean {
+    return [...this.outcomes.values()].some(
+      (outcome) => outcome.stopsWorkflowAtJoin === true
     );
   }
 

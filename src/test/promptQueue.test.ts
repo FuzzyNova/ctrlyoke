@@ -1869,6 +1869,71 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("a stopped run re-enters its joined group to rewind the group's cancelled workflow members only", async () => {
+      const lane = (childRunRef: string) =>
+        ({
+          type: STEP_TYPES.WORKFLOW,
+          workflow: "child.ctrlyoke.yaml",
+          _runtime: { childWorkflowKey: "child-key", childRunRef },
+        }) as unknown as NonNullable<PromptFile["steps"]>[number];
+      const stopped = new PromptQueue();
+      stopped.loadPrompts({
+        steps: [
+          { prompt: "before" },
+          lane("run-2026-11-27T10-00-00-000Z"),
+          lane("run-2026-11-27T10-00-01-000Z"),
+          { prompt: "cancelled prompt member" },
+          { prompt: "after" },
+        ],
+        parallelGroups: [
+          { id: "lanes", startIndex: 1, endIndex: 3, failFast: false },
+        ],
+      });
+      await startQueueExecution(stopped);
+      await stopped.commitStepOutcomeAndAdvance({
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        status: PROMPT_TERMINAL_STATUS.COMPLETED,
+      });
+      stopped.getRuntimeStateMachine().requestStop();
+      const group = stopped.getState().parallelGroups[0];
+      const queueTarget = (stepIndex: number) =>
+        ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex }) as const;
+      await stopped.commitParallelGroupJoin(group, [
+        { target: queueTarget(1), status: PROMPT_TERMINAL_STATUS.COMPLETED },
+        { target: queueTarget(2), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+        { target: queueTarget(3), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+      ]);
+      stopped.getRuntimeStateMachine().confirmStopped();
+      await stopped.commitRuntimeTransition({ persist: false });
+      assert.strictEqual(stopped.getState().currentIndex, 4);
+
+      assert.strictEqual(
+        await stopped.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = stopped.getState();
+      assert.strictEqual(rewound.currentIndex, 1, "re-enters the group");
+      assert.deepStrictEqual(
+        rewound.results.slice(0, 5).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.CANCELLED,
+          STEP_STATUS.PENDING,
+        ]
+      );
+      assert.strictEqual(
+        (rewound.steps[2]._runtime as { childRunRef?: string })?.childRunRef,
+        "run-2026-11-27T10-00-01-000Z"
+      );
+      assert.strictEqual(rewound.steps[2]._runtime?.terminalStatus, undefined);
+      assert.strictEqual(
+        rewound.steps[1]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+    });
+
     test("reordering only the steps after a terminal failure keeps the failure in place", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);
