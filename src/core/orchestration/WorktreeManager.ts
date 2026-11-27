@@ -776,17 +776,32 @@ export class WorktreeManager {
   ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
     const { repositoryRoot, commonDirectory } =
       await this.resolveRepositoryContext(sourceCheckoutRoot);
-    const [records, entries] = await Promise.all([
-      this.readRecords(commonDirectory),
-      listGitWorktrees(repositoryRoot),
-    ]);
+    let records: ManagedWorktreeOwnershipRecord[];
+    let entries: GitWorktreeEntry[];
+    try {
+      [records, entries] = await Promise.all([
+        this.readRecords(commonDirectory),
+        listGitWorktrees(repositoryRoot),
+      ]);
+    } catch (error) {
+      Log.error("[WorktreeManager] Unable to classify managed checkout", error);
+      return undefined;
+    }
+    let realCheckoutRoot: string;
+    try {
+      realCheckoutRoot = await fs.realpath(checkoutRoot);
+    } catch (error) {
+      Log.error("[WorktreeManager] Unable to resolve checkout path", error);
+      return undefined;
+    }
     return records.find((record) => {
       const entry = findGitWorktreeEntryForRecord(entries, record);
       return (
         entry !== undefined &&
         !entry.bare &&
         !entry.prunable &&
-        pathsEqual(record.worktreePath, checkoutRoot)
+        entry.branchName === record.branchName &&
+        pathsEqual(entry.worktreePath, realCheckoutRoot)
       );
     });
   }

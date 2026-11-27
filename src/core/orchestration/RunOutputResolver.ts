@@ -220,6 +220,7 @@ export interface RunOutputProjection {
   subWorkflowRuns?: Array<{
     target: OutputExecutionTarget;
     output: SubWorkflowOutput;
+    step?: WorkflowStep;
   }>;
 }
 
@@ -890,6 +891,9 @@ export class RunOutputResolver {
           subWorkflowRuns.push({
             target: event.attempt.target,
             output: event.subWorkflowOutput,
+            ...(event.attempt.definition?.step
+              ? { step: event.attempt.definition.step }
+              : {}),
           });
         }
         if (

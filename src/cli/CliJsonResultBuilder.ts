@@ -328,32 +328,64 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     input
   );
   const settledChildren = input.outputProjection?.subWorkflowRuns ?? [];
-  const subWorkflowRuns: CliJsonSubWorkflowRun[] =
-    settledChildren.flatMap<CliJsonSubWorkflowRun>(({ target, output }) => {
-      if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        return [
-          {
-            pass: target.loopIndex + 1,
-            workflowKey: output.childWorkflowKey,
-            runRef: output.childRunRef,
-            status: output.outcome.status,
-          },
-        ];
-      }
-      const step = state.steps[target.stepIndex];
-      if (!step || !isSubWorkflowStep(step)) return [];
-      const stepId = step._runtime?.stepId;
-      return stepId
-        ? [
-            {
-              stepId,
-              workflowKey: output.childWorkflowKey,
-              runRef: output.childRunRef,
-              status: output.outcome.status,
-            },
-          ]
-        : [];
-    });
+  const childrenByIdentity = new Map<string, CliJsonSubWorkflowRun>();
+  for (const { target, output, step } of settledChildren) {
+    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      childrenByIdentity.set(
+        `final:${target.loopIndex}:${output.childRunRef}`,
+        {
+          pass: target.loopIndex + 1,
+          workflowKey: output.childWorkflowKey,
+          runRef: output.childRunRef,
+          status: output.outcome.status,
+        }
+      );
+      continue;
+    }
+    if (!step || !isSubWorkflowStep(step)) continue;
+    const stepId = step._runtime?.stepId;
+    if (stepId)
+      childrenByIdentity.set(`queue:${stepId}:${output.childRunRef}`, {
+        stepId,
+        workflowKey: output.childWorkflowKey,
+        runRef: output.childRunRef,
+        status: output.outcome.status,
+      });
+  }
+  for (const step of state.steps) {
+    if (!isSubWorkflowStep(step)) continue;
+    const runtime = step._runtime;
+    if (!runtime?.childWorkflowKey || !runtime.childRunRef || !runtime.stepId)
+      continue;
+    const key = `queue:${runtime.stepId}:${runtime.childRunRef}`;
+    const existing = childrenByIdentity.get(key);
+    if (existing) {
+      existing.status = runtime.terminalStatus ?? existing.status;
+    } else {
+      childrenByIdentity.set(key, {
+        stepId: runtime.stepId,
+        workflowKey: runtime.childWorkflowKey,
+        runRef: runtime.childRunRef,
+        status: runtime.terminalStatus ?? null,
+      });
+    }
+  }
+  const finalRuntime = promptFile?.finalStep;
+  if (finalRuntime && isSubWorkflowStep(finalRuntime)) {
+    const runtime = finalRuntime._runtime;
+    if (runtime?.childWorkflowKey && runtime.childRunRef) {
+      const pass = Math.max(1, getFinalStepPassCount(input.finalStepRuntime));
+      const key = `final:${pass - 1}:${runtime.childRunRef}`;
+      if (!childrenByIdentity.has(key))
+        childrenByIdentity.set(key, {
+          pass,
+          workflowKey: runtime.childWorkflowKey,
+          runRef: runtime.childRunRef,
+          status: null,
+        });
+    }
+  }
+  const subWorkflowRuns = [...childrenByIdentity.values()];
   const startedAt = toIso(state.startTime);
   const completedAt = toIso(state.executionEndTime);
 

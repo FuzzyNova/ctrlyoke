@@ -934,7 +934,9 @@ function subscribeCliChildProgress(
   const reporterId = nextCliChildReporterId++;
   const prefixStepName = (stepName: string): string => {
     const childName =
-      child.promptQueue.getWorkflowFile().name?.trim() || "child workflow";
+      child.workflowName?.trim() ||
+      child.promptQueue.getState().workflowName?.trim() ||
+      "child workflow";
     return `[${childName}] ${stepName}`;
   };
   const outputTarget = (target: OutputExecutionTarget, stepName?: string) => {

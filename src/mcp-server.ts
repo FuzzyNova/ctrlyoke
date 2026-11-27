@@ -42,10 +42,7 @@ import type {
   CoordinationParticipant,
   SubWorkflowOutput,
 } from "./types/CtrlYokeTypes";
-import {
-  TIMELINE_EVENT_TYPES,
-  type WorkflowRunManifest,
-} from "./types/WorkflowTimelineTypes";
+import type { WorkflowRunManifest } from "./types/WorkflowTimelineTypes";
 import {
   assertNever,
   getStepType,
@@ -186,7 +183,6 @@ import {
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import { buildPriorContextXmlFromItems } from "./core/HarnessIntegration";
 import type { PriorContextItem } from "./core/HarnessIntegration";
-import { TimelineRecorder } from "./core/orchestration/TimelineRecorder";
 import { getStepOutputText } from "./utils/StepOutputText";
 import {
   pageOutputText,
@@ -1413,9 +1409,38 @@ export class CtrlYokeMCPServer {
     const workflowExecutionMode =
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
-    const subWorkflowOutputs = await this.readQueueSubWorkflowOutputs(selected);
-    const finalStepSubWorkflow =
-      await this.readLatestFinalStepSubWorkflowOutput(selected);
+    const subWorkflowProjection =
+      await new RunOutputResolver().resolveAttemptProjection(
+        WorkflowPaths.manifestPath(
+          this.workspaceRoot,
+          selected.workflowKey,
+          selected.runRef
+        ),
+        allSteps.map((_step, stepIndex) => ({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex,
+        })),
+        queueData.finalStep
+          ? [{ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 }]
+          : [],
+        { workspaceRoot: this.workspaceRoot }
+      );
+    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
+    let finalStepSubWorkflow:
+      { passNumber: number; output: SubWorkflowOutput } | undefined;
+    for (const child of subWorkflowProjection.subWorkflowRuns ?? []) {
+      if (child.target.kind === FINAL_STEP_PHASES.QUEUE)
+        subWorkflowOutputs.set(child.target.stepIndex, child.output);
+      else if (
+        !finalStepSubWorkflow ||
+        child.target.loopIndex + 1 > finalStepSubWorkflow.passNumber
+      ) {
+        finalStepSubWorkflow = {
+          passNumber: child.target.loopIndex + 1,
+          output: child.output,
+        };
+      }
+    }
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -2143,73 +2168,6 @@ export class CtrlYokeMCPServer {
    * Settled child metadata per queue step index for one run, from its timeline.
    * Missing or unreadable history yields an empty map, so callers just omit it.
    */
-  private async readQueueSubWorkflowOutputs(selected: {
-    workflowKey: WorkflowKey;
-    runRef: RunRef;
-  }): Promise<Map<number, SubWorkflowOutput>> {
-    const outputs = new Map<number, SubWorkflowOutput>();
-    try {
-      for (const event of await new TimelineRecorder().readEvents(
-        WorkflowPaths.manifestPath(
-          this.workspaceRoot,
-          selected.workflowKey,
-          selected.runRef
-        )
-      )) {
-        if (
-          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
-          event.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          outputs.set(event.target.stepIndex, event.payload);
-        }
-      }
-    } catch {
-      // The timeline is the durable source; absent history omits the metadata.
-    }
-    return outputs;
-  }
-
-  private async readLatestFinalStepSubWorkflowOutput(selected: {
-    workflowKey: WorkflowKey;
-    runRef: RunRef;
-  }): Promise<{ passNumber: number; output: SubWorkflowOutput } | undefined> {
-    try {
-      const events = await new TimelineRecorder().readEvents(
-        WorkflowPaths.manifestPath(
-          this.workspaceRoot,
-          selected.workflowKey,
-          selected.runRef
-        )
-      );
-      const latest = events.reduce<
-        | Extract<
-            (typeof events)[number],
-            { eventType: typeof TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED }
-          >
-        | undefined
-      >((current, event) => {
-        if (
-          event.eventType !== TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED ||
-          !("target" in event) ||
-          event.target.kind !== FINAL_STEP_PHASES.FINAL_STEP
-        )
-          return current;
-        return !current ||
-          (event.target as { loopIndex: number }).loopIndex >
-            (current.target as { loopIndex: number }).loopIndex
-          ? event
-          : current;
-      }, undefined);
-      if (!latest) return undefined;
-      return {
-        passNumber: (latest.target as { loopIndex: number }).loopIndex + 1,
-        output: latest.payload,
-      };
-    } catch {
-      return undefined;
-    }
-  }
-
   /**
    * Handle read_output tool invocation.
    * Returns AI response text from completed prompts.
@@ -2293,7 +2251,26 @@ export class CtrlYokeMCPServer {
             .map((stepIndex) => ({ kind: "queue" as const, stepIndex }))
         )
       : new Map();
-    const subWorkflowOutputs = await this.readQueueSubWorkflowOutputs(selected);
+    const workflowProjection = selected.runRef
+      ? await resolver.resolveAttemptProjection(
+          WorkflowPaths.manifestPath(
+            this.workspaceRoot,
+            selected.workflowKey,
+            selected.runRef
+          ),
+          allSteps.map((_step, stepIndex) => ({
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex,
+          })),
+          [],
+          { workspaceRoot: this.workspaceRoot }
+        )
+      : undefined;
+    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
+    for (const child of workflowProjection?.subWorkflowRuns ?? []) {
+      if (child.target.kind === FINAL_STEP_PHASES.QUEUE)
+        subWorkflowOutputs.set(child.target.stepIndex, child.output);
+    }
     const outputs = await Promise.all(
       requestedIndices
         .filter((i) => i >= 0 && i < allSteps.length)
