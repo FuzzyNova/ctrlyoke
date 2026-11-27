@@ -10,7 +10,8 @@
  * Environment Variables:
  *   CTRLYOKE_WORKSPACE - ctrlyoke state root (defaults to cwd; not the checkout)
  *   CTRLYOKE_WORKSPACE_ROOT - ctrlyoke state root used by hook processes
- *   CTRLYOKE_EXECUTION_ROOT - checkout root used by coordination tools
+ *   CTRLYOKE_EXECUTION_ROOT - the run's checkout root, used by coordination
+ *     tools and the merge-lane checks (`--execution-root` in `--tool` mode)
  *   CTRLYOKE_WORKING_FILE - attached run file for run-scoped tools
  *   CTRLYOKE_PARTICIPANT_LABEL - self-chosen label for external participants
  */
@@ -961,10 +962,13 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * The attached run's execution root, as ctrlyoke set it when it launched
-   * the harness, or undefined when it did not. Unlike
-   * `resolveExecutionRoot`, never guessed from the cwd: the merge-lane checks
-   * fall back to the run file instead.
+   * The attached run's execution root as ctrlyoke set it, or undefined when
+   * it did not. ctrlyoke sets `CTRLYOKE_EXECUTION_ROOT` in the stdio server
+   * entry it launches the harness with, and in skill mode from
+   * `--execution-root` only (`runMcpToolCli` drops any other value). Never
+   * guessed from the cwd: without it the merge-lane checks read the run's
+   * root from the run file, and `resolveExecutionRoot` (coordination) falls
+   * back to the run file and then the cwd.
    */
   private launchedExecutionRoot(): string | undefined {
     const configuredRoot = process.env.CTRLYOKE_EXECUTION_ROOT?.trim();
@@ -3068,7 +3072,17 @@ async function runMcpToolCli(argv: readonly string[]): Promise<void> {
     process.env.CTRLYOKE_COMMIT_OUTPUT = options.commitOutput;
   }
   process.env[MCP_CLI_MODE_ENV] = MCP_CLI_MODE_VALUE;
-  process.env.CTRLYOKE_EXECUTION_ROOT = options.executionRoot ?? process.cwd();
+  // Only a root ctrlyoke wrote into this command line is the run's root.
+  // ctrlyoke never puts CTRLYOKE_EXECUTION_ROOT in a harness's environment
+  // (only in the stdio MCP server entry), so a value inherited here was not
+  // set for this run, and the agent's shell directory is not the run's root
+  // either: without the flag, the coordination tools resolve it from the run
+  // file and then the cwd, and the merge-lane checks from the run file.
+  if (options.executionRoot !== undefined) {
+    process.env.CTRLYOKE_EXECUTION_ROOT = options.executionRoot;
+  } else {
+    delete process.env.CTRLYOKE_EXECUTION_ROOT;
+  }
   if (options.stepIndex !== undefined) {
     process.env.CTRLYOKE_PROMPT_INDEX = String(options.stepIndex);
   } else {

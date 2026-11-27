@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Stopping a long-running script now waits for its process runner to shut down instead of waiting for the detector's 10-second fallback.
 - Stopping a run that is paused inside a parallel group now stops it. Before, it stayed in Cancelling, waiting for a group that had already paused. Continue still resumes the group at its unstarted steps.
+- Stopping a paused run no longer cancels anything. Before, the step after the pause was marked cancelled and Continue skipped it, and inside a parallel group the dashboard showed an already completed member as cancelled. Continue now runs the step the pause stopped before. A stop pressed just as a run reached its pause no longer waits 10 seconds.
 - A managed worktree run continued from a different checkout than the one it started in keeps the base, target branch and source checkout it was created with, instead of overwriting its ownership record or failing with a branch collision. If that source checkout has been removed, the continue fails and names it. A failed-setup managed worktree whose source checkout was removed is now cleaned up on the next managed run.
 
 ### Added

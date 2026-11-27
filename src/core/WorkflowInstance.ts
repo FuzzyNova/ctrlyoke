@@ -440,6 +440,14 @@ export class WorkflowInstance
    */
   private static readonly SHUTDOWN_SETTLE_TIMEOUT_MS = 1_500;
 
+  /**
+   * How long `stop()` waits for an execution that has already confirmed
+   * PAUSED to finish unwinding. It ends in milliseconds; the bound only keeps
+   * a stop from hanging if it never does (the stop then takes the
+   * cancellation path, as it did before).
+   */
+  private static readonly PAUSED_UNWIND_TIMEOUT_MS = 5_000;
+
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
   private readonly headlessApprovalPolicyService: HeadlessApprovalPolicyService;
@@ -3108,12 +3116,41 @@ export class WorkflowInstance
       return;
     }
 
-    // A pause is confirmed only at a step boundary, so a PAUSED run whose
-    // execution has ended has no step in flight and no response to wait for.
-    const stoppingIdlePause =
+    // A pause is confirmed only at a step boundary, so a PAUSED run has no
+    // step in flight. Its execution may still be unwinding from that
+    // boundary (a group run that just returned `paused`, the queue loop
+    // breaking): wait for it, bounded, rather than drive it through the
+    // cancellation path below, which only the detector's timer would end.
+    if (
       this.workflowRuntime.status === EXECUTION_STATES.PAUSED &&
       this.activeTargetResources.size === 0 &&
-      !this.workflowExecutor.hasLiveExecution();
+      this.workflowExecutor.hasLiveExecution()
+    ) {
+      await this.waitForPausedExecutionToUnwind();
+    }
+
+    // Stopped while paused with nothing in flight: as in setup above,
+    // nothing is cancelled and nothing is skipped. The head (the next
+    // pending step, or a group a Continue re-enters at its unstarted
+    // members) stays as the pause left it.
+    if (
+      this.workflowRuntime.status === EXECUTION_STATES.PAUSED &&
+      this.activeTargetResources.size === 0 &&
+      !this.workflowExecutor.hasLiveExecution()
+    ) {
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] stop() while paused - no step in flight, leaving the current step pending`
+      );
+      if (this.workflowRuntime.requestStop()) {
+        await this.promptQueue.commitRuntimeTransition({ persist: false });
+      }
+      if (this.workflowRuntime.confirmStopped()) {
+        await this.promptQueue.commitRuntimeTransition();
+      }
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
+    }
 
     this.promptQueue.markInFlightPromptCancelled();
     const activeAttempts = this.workflowRuntime.getActiveAttempts();
@@ -3144,8 +3181,8 @@ export class WorkflowInstance
 
       confirmedStoppedCalled = true;
       // Only a live execution has a group coordinator to commit member
-      // cancellations. A run paused inside a group has none: its group
-      // returned `paused` and the queue loop ended, so confirm here.
+      // cancellations. Once it has ended (a paused group returned and the
+      // queue loop broke while this stop waited), confirm here.
       if (
         this.promptQueue.getCurrentParallelGroup() &&
         this.workflowExecutor.hasLiveExecution()
@@ -3172,13 +3209,6 @@ export class WorkflowInstance
         Log.info("[WorkflowInstance] Queue execution fully stopped");
       }
     };
-
-    if (stoppingIdlePause) {
-      await confirmStopped();
-      this.workflowExecutor.clearResponseWaitState();
-      this.startPending = false;
-      return;
-    }
 
     const integrations = new Set<HarnessIntegration>();
     let hasSubWorkflow = false;
@@ -3294,6 +3324,27 @@ export class WorkflowInstance
 
     this.workflowExecutor.clearResponseWaitState();
     this.startPending = false;
+  }
+
+  /**
+   * Wait, bounded, for an execution that confirmed PAUSED at a step boundary
+   * to finish unwinding, so `stop()` can treat it as an idle pause.
+   */
+  private async waitForPausedExecutionToUnwind(): Promise<void> {
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] stop() while paused - waiting for the paused execution to unwind`
+    );
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      this.executionSettledPromise,
+      new Promise<void>((resolve) => {
+        timeoutHandle = setTimeout(
+          resolve,
+          WorkflowInstance.PAUSED_UNWIND_TIMEOUT_MS
+        );
+      }),
+    ]);
+    clearTimeout(timeoutHandle);
   }
 
   /**

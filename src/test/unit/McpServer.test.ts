@@ -3908,6 +3908,158 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  /**
+   * An active run whose in-flight head (index 1) is a workflow step whose
+   * child sets `worktree: false`: it edits this run's checkout only when the
+   * run executes in the main checkout. A non-merging lane has joined beside
+   * it at index 2.
+   */
+  async function prepareMainCheckoutMemberGroup(
+    server: CtrlYokeMCPServer,
+    suffix: string
+  ): Promise<{ run: RunFixture; ownerToken: string }> {
+    const active = await prepareActiveRun(suffix);
+    const workingFile = JSON.parse(
+      await fs.readFile(active.run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps![1] = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "in the main checkout", worktree: false },
+      _runtime: { startedAt: 3 },
+    } as WorkflowStep;
+    await writeTrustedRunFile(active.run.runFilePath, workingFile);
+    await addLanePresets(active.run);
+    // With the main checkout as the run's root, so the join is admitted only
+    // because this lane does not merge.
+    responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "parallelWithCurrent",
+        steps: [{ prompt: "own lane", worktree: { use: "solo" } }],
+      })
+    );
+    return active;
+  }
+
+  const mainCheckoutMergeRefusal = (operation: string) =>
+    `${operation} was rejected: Step 3 merges into the parent's checkout, which Step 2 edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`;
+
+  test("edit_step and parallelWithCurrent judge the main checkout from CTRLYOKE_EXECUTION_ROOT", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareMainCheckoutMemberGroup(
+      server,
+      "lane-execution-root"
+    );
+    const inheritedRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-mcp-inherited-root-")
+    );
+    try {
+      // The run executes in the main checkout: the `worktree: false` member
+      // edits it, so a merging lane is refused beside it either way.
+      process.env.CTRLYOKE_EXECUTION_ROOT = workspaceRoot;
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { worktree: { use: "lane" } },
+        }),
+        (error: Error) =>
+          error.message.includes(mainCheckoutMergeRefusal("edit"))
+      );
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "merging", worktree: { use: "lane" } }],
+        }),
+        (error: Error) =>
+          error.message.includes(
+            mainCheckoutMergeRefusal("parallelWithCurrent").replace(
+              "Step 3",
+              "Step 4"
+            )
+          )
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+      // An inherited child (D4a) runs in its parent's worktree, which is not
+      // the main checkout, so the same member no longer edits this run's
+      // checkout and both are admitted.
+      process.env.CTRLYOKE_EXECUTION_ROOT = inheritedRoot;
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { worktree: { use: "lane" } },
+      });
+      assert.strictEqual(
+        (
+          (await readStep(run, 2)) as {
+            workflow: { worktree: { merge?: boolean } };
+          }
+        ).workflow.worktree.merge,
+        true
+      );
+      const joined = responseJson(
+        await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "merging", worktree: { use: "lane" } }],
+        })
+      );
+      assert.strictEqual(joined.destination, "activeParallelGroup");
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+      await fs.rm(inheritedRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("skill-mode edit_step from a subdirectory takes the run's root from the run file, not the shell", async () => {
+    const server = await setup();
+    await new ProjectStateRegistry().initialize(workspaceRoot);
+    const { run, ownerToken } = await prepareMainCheckoutMemberGroup(
+      server,
+      "skill-lane-execution-root"
+    );
+    const shellDirectory = path.join(workspaceRoot, "src");
+    await fs.mkdir(shellDirectory, { recursive: true });
+    try {
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      const { CTRLYOKE_EXECUTION_ROOT: _omitted, ...withoutRoot } = process.env;
+      // No root at all, and a stale one inherited from the harness's
+      // environment: neither is a root ctrlyoke passed for this run.
+      for (const env of [
+        withoutRoot,
+        { ...withoutRoot, CTRLYOKE_EXECUTION_ROOT: shellDirectory },
+      ]) {
+        const result = runMcpToolCli(
+          [
+            "--tool",
+            MCP_EDIT_STEP_TOOL_NAME,
+            "--args",
+            JSON.stringify({
+              index: 2,
+              updates: { worktree: { use: "lane" } },
+            }),
+            "--workspace",
+            workspaceRoot,
+            "--working-file",
+            run.runFilePath,
+          ],
+          env,
+          shellDirectory
+        );
+        assert.strictEqual(
+          result.status,
+          1,
+          `expected a refusal: stdout=${result.stdout} stderr=${result.stderr}`
+        );
+        assert.ok(
+          result.stderr.includes(mainCheckoutMergeRefusal("edit")),
+          result.stderr
+        );
+        assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+      }
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("workflow_status reports a running lane's child with its live state and branch", async () => {
     const server = await setup();
     const run = await createLaneRun("live-lane");

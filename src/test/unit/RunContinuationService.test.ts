@@ -1112,7 +1112,11 @@ suite("RunContinuationService topology append transaction", () => {
       );
     }
 
-    function edit(index: number, replace: WorkflowStep) {
+    function edit(
+      index: number,
+      replace: WorkflowStep,
+      executionRoot?: string
+    ) {
       return RunContinuationService.editStepAtRun(
         workspace,
         workflowKey,
@@ -1121,7 +1125,8 @@ suite("RunContinuationService topology append transaction", () => {
         { replace },
         1,
         new WorkflowLineageRepository(),
-        true
+        true,
+        executionRoot
       );
     }
 
@@ -1211,6 +1216,41 @@ suite("RunContinuationService topology append transaction", () => {
       );
       try {
         await assert.doesNotReject(join([mergeLane("merging")], inheritedRoot));
+      } finally {
+        await fs.rm(inheritedRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("an edit decides the main checkout from the execution root it is given", async () => {
+      const mainCheckoutMember = {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "in the main checkout", worktree: false },
+      } as WorkflowStep;
+      const runPath = await seedActiveGroup(
+        ownLane("lane"),
+        mainCheckoutMember,
+        [ownLane("pending lane")]
+      );
+      const before = await fs.readFile(runPath, "utf8");
+      // Without a root the run file decides: no worktree record, so the run
+      // is in the main checkout, where the `worktree: false` member edits.
+      await assert.rejects(
+        edit(3, mergeLane("pending lane")),
+        (error: Error) => error.message === mergeMessage(4, 3)
+      );
+      await assert.rejects(
+        edit(3, mergeLane("pending lane"), workspace),
+        (error: Error) => error.message === mergeMessage(4, 3)
+      );
+      assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
+      // An inherited child (D4a) runs in its parent's worktree instead.
+      const inheritedRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-inherited-edit-root-")
+      );
+      try {
+        await assert.doesNotReject(
+          edit(3, mergeLane("pending lane"), inheritedRoot)
+        );
       } finally {
         await fs.rm(inheritedRoot, { recursive: true, force: true });
       }
