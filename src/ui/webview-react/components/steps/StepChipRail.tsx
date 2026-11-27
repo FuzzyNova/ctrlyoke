@@ -443,7 +443,8 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
       step,
       (workflowProperties.harness as HarnessId | undefined) ??
         globalSettings.harness,
-      recordedRanWith
+      recordedRanWith,
+      status
     );
   };
 

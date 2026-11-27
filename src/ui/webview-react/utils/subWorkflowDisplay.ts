@@ -2,7 +2,9 @@ import {
   OUTPUT_HISTORY_KINDS,
   SUB_WORKFLOW_DASHBOARD_LABELS,
   WORKTREE_MERGE_OUTCOMES,
+  isTerminalStepStatus,
   type HarnessId,
+  type StepStatus,
 } from "@root/types/DashboardConstants";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
@@ -90,12 +92,25 @@ export function indexSubWorkflowRanWith(
  * current child run has settled; `undefined` while it runs, for a file
  * child or an inline script, and for a settlement written before the field
  * existed.
+ *
+ * Only a step in a terminal status counts as settled. A child continued in
+ * place (D6) keeps its `childRunRef`, so its earlier settlement stays in the
+ * index while the continuation runs; that run may use other settings, so its
+ * values are expected again until it settles once more. `status` is the
+ * displayed status where the caller derives one (the steps list and the chip
+ * rail), else the step's recorded status.
  */
 export function getRecordedLaneRanWith(
   step: WorkflowStep,
-  recorded: SubWorkflowRanWithIndex | undefined
+  recorded: SubWorkflowRanWithIndex | undefined,
+  status: StepStatus | undefined = step.status
 ): SubWorkflowRanWith | undefined {
-  if (!recorded || !isSubWorkflowStep(step) || !getInlinePromptStep(step)) {
+  if (
+    !recorded ||
+    !isTerminalStepStatus(status) ||
+    !isSubWorkflowStep(step) ||
+    !getInlinePromptStep(step)
+  ) {
     return undefined;
   }
   const childRunRef = step._runtime?.childRunRef;
@@ -108,14 +123,16 @@ export function getRecordedLaneRanWith(
  * is painted the same on all three. A prompt step that has started reports the
  * harness its `_runtime` recorded; otherwise its own `harness` beats the
  * inherited one. An inline prompt child (a lane) reports the harness its
- * settled child recorded (`recorded`), else what its inner prompt step would
+ * settled child recorded (`recorded`, read only once `status` is terminal;
+ * see `getRecordedLaneRanWith`), else what its inner prompt step would
  * run with (D13). A script, a file-referenced child or an inline script has no
  * harness of its own.
  */
 export function resolveEffectiveStepHarness(
   step: WorkflowStep,
   inheritedHarness: HarnessId | undefined,
-  recorded?: SubWorkflowRanWithIndex
+  recorded?: SubWorkflowRanWithIndex,
+  status?: StepStatus
 ): HarnessId | undefined {
   if (isPromptStep(step)) {
     return (step._runtime?.harness ?? step.harness ?? inheritedHarness) as
@@ -125,7 +142,8 @@ export function resolveEffectiveStepHarness(
     ? getInlinePromptStep(step)
     : undefined;
   if (!inlinePrompt) return undefined;
-  return (getRecordedLaneRanWith(step, recorded)?.harness ??
+  return (getRecordedLaneRanWith(step, recorded, status ?? step.status)
+    ?.harness ??
     inlinePrompt.harness ??
     inheritedHarness) as HarnessId | undefined;
 }

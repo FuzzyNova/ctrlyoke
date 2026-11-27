@@ -6,9 +6,7 @@ import {
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
-  FINAL_STEP_PHASES,
   MESSAGE_TYPES,
-  PARALLEL_DISPATCH_REFUSALS,
   QUEUE_POSITION,
   SUB_WORKFLOW_QUEUE_LABELS,
   USER_FEEDBACK_SEVERITY,
@@ -22,6 +20,7 @@ import { notifyUser } from "@utils/notifyUser";
 import { openWorkflowDryRun } from "@utils/executionPreview";
 import { generateId } from "@utils/string";
 import { isWorkflowActive } from "@utils/status";
+import { getParallelDispatchRefusal } from "@utils/parallelDispatch";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { sendMessage } from "@messaging/sendMessage";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
@@ -126,6 +125,9 @@ export function useWorkflowContextMenu({
     (state) => state.executionState
   );
   const finalStepPhase = useWorkflowStore((state) => state.finalStepPhase);
+  const activeStepIndices = useWorkflowStore(
+    (state) => state.activeStepIndices
+  );
   const effectiveParallelGroupWidth = useSettingsStore(
     (state) => state.globalSettings.effectiveParallelGroupWidth
   );
@@ -173,7 +175,9 @@ export function useWorkflowContextMenu({
         displayedViewAddress !== null &&
         workflowViewAddressKey(displayedViewAddress) ===
           workflowViewAddressKey(target.address);
-      const dryRunDisabledTitle = isViewingDeletedWorkflow
+      // Dry Run and the sub-workflow queue items all act on the displayed
+      // workflow's definition, so they share one refusal.
+      const definitionActionDisabledTitle = isViewingDeletedWorkflow
         ? "This workflow has been deleted"
         : isSystemGeneratedWorkflow
           ? "Managed automatically by commit message generation"
@@ -192,18 +196,13 @@ export function useWorkflowContextMenu({
           workflow.workflowKey === target.address.workflowKey &&
           workflow.runRef === runAddress?.runRef
       );
-      const queueDefinitionDisabledTitle = isViewingDeletedWorkflow
-        ? "This workflow has been deleted"
-        : isSystemGeneratedWorkflow
-          ? "Managed automatically by commit message generation"
-          : undefined;
       const showQueueNext =
         subWorkflowRunAddress !== null &&
         QUEUE_NEXT_STATES.includes(displayedExecutionState);
       // An externally executing run has no in-memory queue here, and
       // append-and-continue refuses an executing run.
       const queueNextDisabledTitle =
-        queueDefinitionDisabledTitle ??
+        definitionActionDisabledTitle ??
         (isExternallyOwned && isWorkflowActive(displayedExecutionState)
           ? SUB_WORKFLOW_QUEUE_LABELS.externalRun
           : undefined);
@@ -211,12 +210,13 @@ export function useWorkflowContextMenu({
         subWorkflowRunAddress !== null &&
         displayedExecutionState === EXECUTION_STATES.RUNNING;
       const runAlongsideDisabledTitle =
-        queueDefinitionDisabledTitle ??
-        (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP
-          ? PARALLEL_DISPATCH_REFUSALS.finalStep
-          : effectiveParallelGroupWidth <= 1
-            ? PARALLEL_DISPATCH_REFUSALS.widthOne
-            : undefined);
+        definitionActionDisabledTitle ??
+        getParallelDispatchRefusal({
+          executionState: displayedExecutionState,
+          finalStepPhase,
+          activeStepIndices,
+          effectiveParallelGroupWidth,
+        });
       const exportDisabledTitle =
         target.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
           ? "Export is available for a saved run"
@@ -288,10 +288,10 @@ export function useWorkflowContextMenu({
                 {
                   label: "Dry Run",
                   icon: "codicon-telescope",
-                  disabled: dryRunDisabledTitle !== undefined,
+                  disabled: definitionActionDisabledTitle !== undefined,
                   title:
                     "Preview what each step would send to its harness, without running anything",
-                  disabledTitle: dryRunDisabledTitle,
+                  disabledTitle: definitionActionDisabledTitle,
                   onClick: () => {
                     onCloseDropdown();
                     openWorkflowDryRun();
@@ -414,6 +414,7 @@ export function useWorkflowContextMenu({
       });
     },
     [
+      activeStepIndices,
       activeTerminalWorkflows,
       displayedExecutionState,
       displayedViewAddress,

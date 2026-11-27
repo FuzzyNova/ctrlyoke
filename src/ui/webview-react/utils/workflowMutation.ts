@@ -50,12 +50,18 @@ export function clearedWorkflowPropertyKeys(
     .map(([key]) => key);
 }
 
-/** Attach the shared mutation context for controls that post directly to VS Code. */
+/**
+ * Attach the shared mutation context for controls that post directly to VS
+ * Code. `mutation` defaults to the displayed view's; pass one captured earlier
+ * when the user chose the action before a modal step, so a workflow switch in
+ * between cannot redirect it.
+ */
 export function postWorkflowDefinitionMutation(
   target: MessageTarget,
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  mutation:
+    WorkflowDefinitionMutation | undefined = getWorkflowDefinitionMutation()
 ): void {
-  const mutation = getWorkflowDefinitionMutation();
   target.postMessage({ ...message, ...(mutation ? { mutation } : {}) });
 }
 
@@ -108,6 +114,17 @@ export function postRunLifecycleMutation(
   return true;
 }
 
+export interface SubWorkflowAppendOptions {
+  filePath?: string;
+  position?: QueuePosition;
+  /**
+   * The mutation context captured when the user chose the action; omit to use
+   * the displayed view's at post time. An explicit `undefined` (nothing was
+   * displayed then) posts none rather than reading the view again.
+   */
+  mutation?: WorkflowDefinitionMutation;
+}
+
 /**
  * Queue a workflow file as one sub-workflow step on the displayed workflow
  * (`APPEND_FILE` with `appendMode: subWorkflow`). Without a `filePath` the
@@ -116,12 +133,16 @@ export function postRunLifecycleMutation(
  */
 export function postSubWorkflowAppend(
   target: MessageTarget,
-  options: { filePath?: string; position?: QueuePosition } = {}
+  options: SubWorkflowAppendOptions = {}
 ): void {
-  postWorkflowDefinitionMutation(target, {
-    type: MESSAGE_TYPES.APPEND_FILE,
-    ...(options.filePath ? { filePath: options.filePath } : {}),
-    appendMode: APPEND_MODES.SUB_WORKFLOW,
-    position: options.position ?? QUEUE_POSITION.END,
-  });
+  postWorkflowDefinitionMutation(
+    target,
+    {
+      type: MESSAGE_TYPES.APPEND_FILE,
+      ...(options.filePath ? { filePath: options.filePath } : {}),
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: options.position ?? QUEUE_POSITION.END,
+    },
+    "mutation" in options ? options.mutation : getWorkflowDefinitionMutation()
+  );
 }

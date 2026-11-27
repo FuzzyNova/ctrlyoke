@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { WorkflowStep } from "@store/workflowStore";
 import {
   getInlinePromptStep,
   getInlineWorktreeDefinedBranch,
@@ -11,6 +12,7 @@ import {
 import {
   HARNESS_IDS,
   PROMPT_TERMINAL_STATUS,
+  STEP_STATUS,
   STEP_TYPES,
   SUB_WORKFLOW_DASHBOARD_LABELS,
   WORKTREE_MERGE_OUTCOMES,
@@ -194,8 +196,9 @@ describe("subWorkflowDisplay", () => {
     const started = (step: SubWorkflowStep, childRunRef: string) =>
       ({
         ...step,
+        status: STEP_STATUS.COMPLETED,
         _runtime: { childWorkflowKey: "child", childRunRef },
-      }) as SubWorkflowStep;
+      }) as WorkflowStep;
 
     expect(getRecordedLaneRanWith(started(lane, "run-1"), index)).toEqual({
       harness: HARNESS_IDS.CLAUDE_CLI,
@@ -226,5 +229,35 @@ describe("subWorkflowDisplay", () => {
         index
       )
     ).toBeUndefined();
+  });
+
+  it("applies a recorded harness only once the step is in a terminal status", () => {
+    // A child continued in place (D6) keeps its childRunRef, so its earlier
+    // settlement is still indexed while the continuation runs.
+    const index = indexSubWorkflowRanWith([
+      settled("run-1", { harness: HARNESS_IDS.CLAUDE_CLI }),
+    ]);
+    const continued = {
+      ...lane,
+      status: STEP_STATUS.RUNNING,
+      _runtime: { childWorkflowKey: "child", childRunRef: "run-1" },
+    } as WorkflowStep;
+
+    expect(getRecordedLaneRanWith(continued, index)).toBeUndefined();
+    expect(
+      resolveEffectiveStepHarness(continued, HARNESS_IDS.COPILOT_CLI, index)
+    ).toBe(HARNESS_IDS.CODEX_CLI);
+    // A displayed status passed by the caller wins over the recorded one.
+    expect(
+      getRecordedLaneRanWith(continued, index, STEP_STATUS.FAILED)
+    ).toEqual({ harness: HARNESS_IDS.CLAUDE_CLI });
+    expect(
+      resolveEffectiveStepHarness(
+        { ...continued, status: STEP_STATUS.COMPLETED } as WorkflowStep,
+        HARNESS_IDS.COPILOT_CLI,
+        index,
+        STEP_STATUS.RUNNING
+      )
+    ).toBe(HARNESS_IDS.CODEX_CLI);
   });
 });

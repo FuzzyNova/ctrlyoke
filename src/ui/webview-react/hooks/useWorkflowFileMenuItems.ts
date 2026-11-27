@@ -61,7 +61,10 @@ export function useWorkflowFileMenuItems(): (
             }),
         },
         {
-          label: SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflow,
+          // A run continues with the step, as it does with the inline sibling's.
+          label: isRunView
+            ? SUB_WORKFLOW_QUEUE_LABELS.appendAndContinueFileAsSubWorkflow
+            : SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflow,
           icon: "codicon-list-tree",
           disabled: false,
           title: SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflowTitle,

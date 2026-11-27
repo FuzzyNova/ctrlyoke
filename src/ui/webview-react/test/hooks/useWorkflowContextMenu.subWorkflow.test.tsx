@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -100,7 +101,12 @@ function displayRun(executionState: ExecutionState): void {
     displayedDefinitionRevision: 3,
     displayedDescriptorRevision: 5,
   });
-  useWorkflowStore.setState({ executionState });
+  // A running run has a step in flight; the switcher reads it as the
+  // prompt editor's Run in Parallel does.
+  useWorkflowStore.setState({
+    executionState,
+    activeStepIndices: executionState === EXECUTION_STATES.RUNNING ? [0] : [],
+  });
 }
 
 function openMenu(menuTarget?: WorkflowContextMenuTarget): void {
@@ -130,6 +136,7 @@ describe("useWorkflowContextMenu sub-workflow queue items", () => {
     useWorkflowStore.setState({
       executionState: EXECUTION_STATES.IDLE,
       finalStepPhase: null,
+      activeStepIndices: [],
     });
     setParallelWidth(4);
     useTerminalStore.getState().setActiveTerminalWorkflows([]);
@@ -210,6 +217,20 @@ describe("useWorkflowContextMenu sub-workflow queue items", () => {
       "title",
       PARALLEL_DISPATCH_REFUSALS.widthOne
     );
+  });
+
+  it("disables Run Alongside while no step is running, as Run in Parallel does", () => {
+    // Between steps the run is RUNNING with nothing in flight.
+    displayRun(EXECUTION_STATES.RUNNING);
+    useWorkflowStore.setState({ activeStepIndices: [] });
+    openMenu();
+    const alongside = menuItem(SUB_WORKFLOW_QUEUE_LABELS.runAlongside)!;
+    expect(alongside).toBeDisabled();
+    expect(alongside).toHaveAttribute(
+      "title",
+      PARALLEL_DISPATCH_REFUSALS.noStepRunning
+    );
+    expect(menuItem(SUB_WORKFLOW_QUEUE_LABELS.queueNext)).toBeEnabled();
   });
 
   it("disables Queue Next, not Run Alongside, on an externally executing run", () => {
@@ -294,5 +315,45 @@ describe("useWorkflowContextMenu sub-workflow queue items", () => {
         screen.queryByText(SUB_WORKFLOW_QUEUE_LABELS.pickerAlongsideTitle)
       ).toBeNull()
     );
+  });
+
+  it("posts the run the item was chosen on, even after a switch while the picker is open", async () => {
+    host.standalone = true;
+    displayRun(EXECUTION_STATES.COMPLETED);
+    openMenu();
+    fireEvent.click(menuItem(SUB_WORKFLOW_QUEUE_LABELS.queueNext)!);
+    await waitFor(() =>
+      expect(
+        screen.getByText(SUB_WORKFLOW_QUEUE_LABELS.pickerTitle)
+      ).toBeInTheDocument()
+    );
+
+    // Another client's action, or the user, moves this view on meanwhile.
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: {
+          workflowKey: "workflow-2" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-9" as never,
+        },
+        displayedDefinitionRevision: 11,
+        displayedDescriptorRevision: 12,
+      });
+    });
+    fireEvent.change(screen.getByLabelText("Or enter a path"), {
+      target: { value: "flows/next.ctrlyoke.yaml" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.pickerAction,
+      })
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: "flows/next.ctrlyoke.yaml",
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.END,
+      mutation,
+    });
   });
 });

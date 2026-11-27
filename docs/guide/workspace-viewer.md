@@ -65,8 +65,9 @@ Right-click a file or folder (long-press on a phone) for:
   reference to the prompt editor
 - **View File History**, which opens the file's commits in Source Control
 - for workflow files: **Run Workflow**, **Load Workflow**, **Queue Workflow**
-  (**Append and Continue Workflow** while you view a run) and **Queue as
-  Sub-workflow**, which adds one step that runs the file as a child run
+  and **Queue as Sub-workflow**, which adds one step that runs the file as a
+  child run. While you view a run they read **Append and Continue Workflow**
+  and **Append and Continue as Sub-workflow**
 - **Delete**
 
 ::: danger

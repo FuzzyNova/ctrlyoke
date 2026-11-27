@@ -1,10 +1,5 @@
 import { useMemo } from "react";
-import {
-  EDITOR_TARGET_KINDS,
-  EXECUTION_STATES,
-  FINAL_STEP_PHASES,
-  PARALLEL_DISPATCH_REFUSALS,
-} from "@root/types/DashboardConstants";
+import { EDITOR_TARGET_KINDS } from "@root/types/DashboardConstants";
 import { useSteerTargets } from "@hooks/useSteerTargets";
 import {
   NO_LIVE_HARNESS,
@@ -20,9 +15,8 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { getStepDraftContent } from "@utils/stepDraftContent";
+import { getParallelDispatchRefusal } from "@utils/parallelDispatch";
 
-const NO_STEP_RUNNING = "No step is running";
-const WORKFLOW_PAUSING = "Workflow is pausing";
 const NEW_WORKFLOW_TITLE =
   "Starts a separate workflow with default settings and this prompt";
 const SEND_STEER_LABEL = "Send Steer Message";
@@ -130,33 +124,14 @@ export function useRunDispatchTargets(
     const runningStepNumber = runningStepIndex + 1;
     const enabledTitle = `Runs beside step ${runningStepNumber}; prior context resolves from before step ${runningStepNumber}`;
 
-    let parallelDisabledReason = parallelBaseReason;
-    if (
-      parallelDisabledReason === undefined &&
-      executionState === EXECUTION_STATES.PAUSING
-    ) {
-      parallelDisabledReason = WORKFLOW_PAUSING;
-    } else if (
-      parallelDisabledReason === undefined &&
-      executionState !== EXECUTION_STATES.RUNNING
-    ) {
-      parallelDisabledReason = NO_STEP_RUNNING;
-    } else if (
-      parallelDisabledReason === undefined &&
-      finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      parallelDisabledReason = PARALLEL_DISPATCH_REFUSALS.finalStep;
-    } else if (
-      parallelDisabledReason === undefined &&
-      activeStepIndices.length === 0
-    ) {
-      parallelDisabledReason = NO_STEP_RUNNING;
-    } else if (
-      parallelDisabledReason === undefined &&
-      effectiveParallelGroupWidth <= 1
-    ) {
-      parallelDisabledReason = PARALLEL_DISPATCH_REFUSALS.widthOne;
-    }
+    const parallelDisabledReason =
+      parallelBaseReason ??
+      getParallelDispatchRefusal({
+        executionState,
+        finalStepPhase,
+        activeStepIndices,
+        effectiveParallelGroupWidth,
+      });
 
     return {
       parallel: {

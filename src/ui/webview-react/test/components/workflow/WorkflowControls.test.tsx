@@ -166,9 +166,15 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(
       screen.getByRole("button", { name: /Open workflow menu/i })
     );
+    // Like the inline sibling, it says the run continues with the step.
+    expect(
+      screen.queryByRole("option", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflow,
+      })
+    ).toBeNull();
     await user.click(
       screen.getByRole("option", {
-        name: SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflow,
+        name: SUB_WORKFLOW_QUEUE_LABELS.appendAndContinueAsSubWorkflow,
       })
     );
     expect(postMessageSpy).toHaveBeenCalledWith({

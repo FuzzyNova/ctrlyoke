@@ -16,7 +16,9 @@ import {
   APPEND_MODES,
   QUEUE_POSITION,
   SUB_WORKFLOW_QUEUE_LABELS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { useUiStore } from "@store/uiStore";
 
 const apiMocks = vi.hoisted(() => ({
   workspaceCopyEntry: vi.fn(),
@@ -154,6 +156,41 @@ describe("useWorkspaceExplorerContextMenu workflow actions", () => {
       appendMode: APPEND_MODES.SUB_WORKFLOW,
       position: QUEUE_POSITION.END,
     });
+  });
+
+  it("says the displayed run continues with the sub-workflow, as its inline sibling does", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1" as never,
+      },
+    });
+    render(
+      <TestHarness
+        entry={{
+          name: "verify.ctrlyoke.yaml",
+          path: "flows/verify.ctrlyoke.yaml",
+          kind: "file",
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Append and Continue Workflow" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.appendAndContinueFileAsSubWorkflow,
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.queueFileAsSubWorkflow,
+      })
+    ).toBeNull();
+    useUiStore.setState({ displayedViewAddress: null });
   });
 
   it.each([

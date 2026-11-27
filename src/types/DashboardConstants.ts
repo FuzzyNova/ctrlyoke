@@ -5519,7 +5519,11 @@ export const SUB_WORKFLOW_QUEUE_LABELS = {
   queueAsSubWorkflow: "Queue as Sub-workflow…",
   queueAsSubWorkflowTitle:
     "Add one step that runs a workflow file as a child run, instead of copying its steps",
+  /** The New menu's item while the view is a run: the run continues with it. */
+  appendAndContinueAsSubWorkflow: "Append and Continue as Sub-workflow…",
   queueFileAsSubWorkflow: "Queue as Sub-workflow",
+  /** The workspace viewer's item while the view is a run. */
+  appendAndContinueFileAsSubWorkflow: "Append and Continue as Sub-workflow",
   queueFileAsSubWorkflowTitle:
     "Add one step that runs this file as a child run, instead of copying its steps",
   pickerTitle: "Queue Workflow File as Sub-workflow",
@@ -5536,6 +5540,8 @@ export const SUB_WORKFLOW_QUEUE_LABELS = {
  * backend refuses for the same reasons.
  */
 export const PARALLEL_DISPATCH_REFUSALS = {
+  pausing: "Workflow is pausing",
+  noStepRunning: "No step is running",
   finalStep: "The final step can't run in parallel",
   widthOne: "Parallel width is 1 — raise `queue.maxParallelSteps`",
 } as const;
@@ -5880,7 +5886,6 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
   QUEUE: "queue",
-  QUEUE_SUB_WORKFLOW: "queue-sub-workflow",
   IMPORT_RUN: "import-run",
 } as const;
 

@@ -379,9 +379,11 @@ the workflow you are viewing. The workspace viewer uses the file you
 right-clicked; the other two ask for the file, through VS Code's file picker in
 the panel or a workspace file list in the browser dashboard:
 
-- **New → Queue as Sub-workflow…**, while a workflow is open.
+- **New → Queue as Sub-workflow…**, while a workflow is open. While you view
+  a run it reads **Append and Continue as Sub-workflow…**.
 - In the workspace viewer, right-click a workflow file and choose **Queue as
-  Sub-workflow**.
+  Sub-workflow** (**Append and Continue as Sub-workflow** while you view a
+  run).
 - In the workflow dropdown, right-click the run you are viewing and choose
   **Queue Workflow to Run Next…** while it runs, pauses or once it has
   finished. The item is offered only on that run's row, so open a run before
@@ -390,7 +392,7 @@ the panel or a workspace file list in the browser dashboard:
 
 To run a file beside the step that is running now instead of after it, choose
 **Run Workflow Alongside Current Step…** from the same right-click menu while
-the run is running. The step joins the parallel group that is running, or
+the run is running a step. The step joins the parallel group that is running, or
 turns the running step into a new group with `failFast: false`, and follows
 the [parallel sub-workflow rules](#parallel-sub-workflow-steps): a child that
 sets `merge: true` is refused beside a member that edits the run's checkout,
@@ -441,7 +443,8 @@ harness in the steps list, the chip rail and the output. While its child runs,
 the harness and model are marked **(expected)**, because they come from the
 current settings. Once the child settles, the row shows the harness and model
 the child actually ran with, unmarked, and is coloured by that harness. A
-child that never started a prompt step keeps the expected values.
+child that never started a prompt step keeps the expected values. A child
+that is continued shows the expected values again until it settles once more.
 A lane, an inline step with its own `worktree`, also has a worktree badge,
 which names the branch: a named worktree's from the definition, a managed
 one's once the child creates it. On a narrow row, such as a lane inside a

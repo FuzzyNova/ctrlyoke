@@ -1,4 +1,4 @@
-import { cleanup, render, within } from "@testing-library/react";
+import { act, cleanup, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
 import { StepChipRail } from "@components/steps/StepChipRail";
@@ -13,6 +13,7 @@ import {
   OUTPUT_HISTORY_KINDS,
   PROMPT_TERMINAL_STATUS,
   STEP_COLOR_MODES,
+  STEP_STATUS,
   STEP_TYPES,
   SUB_WORKFLOW_DASHBOARD_LABELS,
   WORKTREE_MODES,
@@ -24,6 +25,8 @@ import type { OrderedSubWorkflowHistoryEntry } from "@root/types/OutputHistoryTy
 import type { SubWorkflowRanWith } from "@root/types/SubWorkflowTypes";
 import { mapOrderedHistoryEntriesToMessages } from "@utils/outputProjection";
 import { buildOutputRows } from "@utils/outputRows";
+import { useSubWorkflowRanWithIndex } from "@hooks/useSubWorkflowRanWithIndex";
+import type { SubWorkflowRanWithIndex } from "@utils/subWorkflowDisplay";
 
 const WORKFLOW_HARNESS = HARNESS_IDS.CLAUDE_CLI;
 const GLOBAL_HARNESS = HARNESS_IDS.COPILOT_CLI;
@@ -45,6 +48,14 @@ function lane(
   } as WorkflowStep;
 }
 
+/** A lane whose step has settled: the parent recorded a terminal status. */
+function settledLane(prompt: string, childRunRef: string): WorkflowStep {
+  return {
+    ...lane(prompt, {}, { childWorkflowKey: "child", childRunRef }),
+    status: STEP_STATUS.COMPLETED,
+  } as WorkflowStep;
+}
+
 const scriptLane = {
   type: STEP_TYPES.WORKFLOW,
   workflow: {
@@ -58,6 +69,8 @@ function loadSteps(steps: WorkflowStep[]) {
   useWorkflowStore.getState().loadWorkflow({
     fileName: "lanes.ctrlyoke.yaml",
     steps,
+    // A snapshot carries each step's status beside it, not on it.
+    results: steps.map((step) => ({ status: step.status })),
   });
 }
 
@@ -272,7 +285,7 @@ describe("WorkflowStepsPanel lane rows", () => {
 
   it("shows what a settled lane's child recorded it ran with, unmarked", () => {
     loadSteps([
-      lane("Settled", {}, { childWorkflowKey: "child", childRunRef: "run-1" }),
+      settledLane("Settled", "run-1"),
       lane("Running", {}, { childWorkflowKey: "child", childRunRef: "run-2" }),
     ]);
     setSettings(WORKFLOW_HARNESS, "workflow-model");
@@ -304,9 +317,7 @@ describe("WorkflowStepsPanel lane rows", () => {
   it("keeps the expected marker for a settlement that recorded nothing", () => {
     // A settlement written before ranWith existed, or by a child whose
     // prompt step never started.
-    loadSteps([
-      lane("Old", {}, { childWorkflowKey: "child", childRunRef: "run-1" }),
-    ]);
+    loadSteps([settledLane("Old", "run-1")]);
     setSettings(WORKFLOW_HARNESS, "workflow-model");
     useWorkflowStore.getState().appendLiveEntry(settlement(0, "run-1"));
 
@@ -318,9 +329,7 @@ describe("WorkflowStepsPanel lane rows", () => {
   });
 
   it("ignores a settlement recorded for an earlier child run", () => {
-    loadSteps([
-      lane("Rerun", {}, { childWorkflowKey: "child", childRunRef: "run-2" }),
-    ]);
+    loadSteps([settledLane("Rerun", "run-2")]);
     setSettings(WORKFLOW_HARNESS, "workflow-model");
     useWorkflowStore
       .getState()
@@ -337,10 +346,37 @@ describe("WorkflowStepsPanel lane rows", () => {
     ).toBeVisible();
   });
 
+  it("marks a lane continued in place as expected again while it runs", () => {
+    // D6: continuing the child keeps its childRunRef, so the earlier
+    // settlement is still in the output while the continuation runs.
+    loadSteps([
+      {
+        ...settledLane("Continued", "run-1"),
+        status: STEP_STATUS.RUNNING,
+      } as WorkflowStep,
+    ]);
+    setSettings(WORKFLOW_HARNESS, "workflow-model");
+    useWorkflowStore
+      .getState()
+      .appendLiveEntry(
+        settlement(0, "run-1", { harness: LANE_HARNESS, model: "ran-model" })
+      );
+
+    render(<WorkflowStepsPanel />);
+
+    const continued = within(row(0));
+    expect(continued.queryByText("ran-model")).toBeNull();
+    expect(continued.getByText("workflow-model")).toBeVisible();
+    expect(
+      continued.getByText(`(${SUB_WORKFLOW_DASHBOARD_LABELS.expected})`)
+    ).toBeVisible();
+    expect(railColor(0)).toBe(
+      asStyleColor(HARNESS_CHART_COLORS[WORKFLOW_HARNESS])
+    );
+  });
+
   it("colours a settled lane by its recorded harness in the steps list, chip rail and output", () => {
-    const steps = [
-      lane("Settled", {}, { childWorkflowKey: "child", childRunRef: "run-1" }),
-    ];
+    const steps = [settledLane("Settled", "run-1")];
     loadSteps(steps);
     setSettings(WORKFLOW_HARNESS);
     const entry = settlement(0, "run-1", { harness: LANE_HARNESS });
@@ -418,5 +454,84 @@ describe("WorkflowStepsPanel lane rows", () => {
     expect(outputs).toEqual(rails);
     // An inline script has no harness, so it is not painted as one.
     expect(rails[2]).not.toBe(rails[1]);
+  });
+});
+
+describe("useSubWorkflowRanWithIndex", () => {
+  beforeEach(() => {
+    useWorkflowStore.getState().resetWorkflow();
+    useUiStore.setState({ isViewingHistory: false });
+  });
+
+  afterEach(cleanup);
+
+  /** Streamed output that is not a settlement: a status line and a CLI chunk. */
+  function appendOrdinaryOutput(sequence: number) {
+    const store = useWorkflowStore.getState();
+    store.appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.STATUS,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+      timestampMs: 5000 + sequence,
+      sequence,
+      statusMessage: { message: `status ${sequence}`, severity: "info" },
+    } as never);
+    store.appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+      timestampMs: 5000 + sequence,
+      sequence: sequence + 1000,
+      runIndex: 0,
+      attemptIndex: sequence,
+      cliOutput: { output: `chunk ${sequence}` },
+    } as never);
+  }
+
+  it("re-renders its subscriber only when a settlement's ran-with data changes", () => {
+    let renders = 0;
+    const seen: SubWorkflowRanWithIndex[] = [];
+    function Probe() {
+      renders++;
+      seen.push(useSubWorkflowRanWithIndex());
+      return null;
+    }
+    useWorkflowStore
+      .getState()
+      .appendLiveEntry(settlement(0, "run-1", { harness: LANE_HARNESS }));
+    render(<Probe />);
+    expect(renders).toBe(1);
+
+    act(() => {
+      for (let sequence = 1; sequence <= 5; sequence++) {
+        appendOrdinaryOutput(sequence);
+      }
+    });
+    act(() => appendOrdinaryOutput(6));
+    expect(useWorkflowStore.getState().liveOrderedEntries.length).toBe(13);
+    // Ordinary output replaced the entry array seven times over, and the
+    // probe never rendered again.
+    expect(renders).toBe(1);
+
+    // A settlement that records nothing new (the same child again) does not
+    // change the index either.
+    act(() =>
+      useWorkflowStore
+        .getState()
+        .appendLiveEntry(settlement(0, "run-1", { harness: LANE_HARNESS }))
+    );
+    expect(renders).toBe(1);
+
+    act(() =>
+      useWorkflowStore
+        .getState()
+        .appendLiveEntry(
+          settlement(1, "run-2", { harness: WORKFLOW_HARNESS, model: "m" })
+        )
+    );
+    expect(renders).toBe(2);
+    expect(seen[1]).not.toBe(seen[0]);
+    expect([...seen[1]]).toEqual([
+      ["run-1", { harness: LANE_HARNESS }],
+      ["run-2", { harness: WORKFLOW_HARNESS, model: "m" }],
+    ]);
   });
 });

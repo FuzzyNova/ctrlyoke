@@ -109,6 +109,26 @@ import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { remapIndicesThroughPermutation } from "@utils/stepMultiSelection";
 
+/**
+ * The harness/model line for values a run recorded (a started prompt step's
+ * `_runtime`, a settled lane's `ranWith`): shown as they are, never marked
+ * default or expected.
+ */
+function recordedHarnessModel(
+  harnessId: HarnessId | undefined,
+  recorded: { harness?: string; model?: string }
+) {
+  return {
+    harnessId,
+    harnessLabel: recorded.harness
+      ? getHarnessDisplayName(recorded.harness)
+      : undefined,
+    harnessIsDefault: false,
+    modelLabel: recorded.model,
+    modelIsDefault: false,
+  };
+}
+
 type PendingDragContainer = {
   id: string;
   items: string[];
@@ -933,28 +953,22 @@ const WorkflowStepsPanelInner: React.FC<{
         step,
         (workflowProperties.harness ?? globalSettings.harness) as
           HarnessId | undefined,
-        recordedRanWith
+        recordedRanWith,
+        status
       );
       // An inline prompt child (a lane) runs with the same defaults an
       // ordinary step here would (D13), so it shows what its inner prompt
       // step would. Once its child settles, the settlement records what it
       // actually ran with, shown as a started prompt step's runtime values
-      // are. Until then, a child that exists marks the values as expected.
+      // are. Until then, including while a child continued in place runs
+      // again, a child that exists marks the values as expected.
       const inlinePrompt = isSubWorkflowStep(step)
         ? getInlinePromptStep(step)
         : undefined;
       if (inlinePrompt && isSubWorkflowStep(step)) {
-        const ranWith = getRecordedLaneRanWith(step, recordedRanWith);
+        const ranWith = getRecordedLaneRanWith(step, recordedRanWith, status);
         if (ranWith) {
-          return {
-            harnessId,
-            harnessLabel: ranWith.harness
-              ? getHarnessDisplayName(ranWith.harness)
-              : undefined,
-            harnessIsDefault: false,
-            modelLabel: ranWith.model,
-            modelIsDefault: false,
-          };
+          return recordedHarnessModel(harnessId, ranWith);
         }
         return {
           ...getPendingHarnessModel(inlinePrompt),
@@ -979,15 +993,10 @@ const WorkflowStepsPanelInner: React.FC<{
         (step._runtime?.harness ?? step._runtime?.model) ||
         (isTerminalStatus && step._runtime != null)
       ) {
-        const h = step._runtime?.harness;
-        const m = step._runtime?.model;
-        return {
-          harnessId,
-          harnessLabel: h ? getHarnessDisplayName(h) : undefined,
-          harnessIsDefault: false,
-          modelLabel: m,
-          modelIsDefault: false,
-        };
+        return recordedHarnessModel(harnessId, {
+          harness: step._runtime?.harness,
+          model: step._runtime?.model,
+        });
       }
 
       // Pending / queued — reflect live settings with default indicators

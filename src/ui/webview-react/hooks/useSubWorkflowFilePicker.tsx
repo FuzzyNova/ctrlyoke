@@ -6,27 +6,41 @@ import {
   SUB_WORKFLOW_QUEUE_LABELS,
   type QueuePosition,
 } from "@root/types/DashboardConstants";
-import { postSubWorkflowAppend } from "@utils/workflowMutation";
+import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
+import {
+  getWorkflowDefinitionMutation,
+  postSubWorkflowAppend,
+} from "@utils/workflowMutation";
+
+interface PendingPick {
+  position: QueuePosition;
+  /** The view the user chose the action on, captured before the modal opens. */
+  mutation: WorkflowDefinitionMutation | undefined;
+}
 
 /**
  * Pick a workflow file and queue it as a sub-workflow step on the displayed
- * workflow. The VS Code panel lets the extension open its native picker (the
- * router's `selectWorkspacePath` branch); the hosted browser has no access to
- * one, so it picks through `WorkflowFilePickerModal`, rendered by the caller.
+ * workflow. This is the one place that chooses between the two pickers: the
+ * VS Code panel lets the extension open its native picker (the router's
+ * `selectWorkspacePath` branch); the hosted browser has no access to one, so
+ * it picks through `WorkflowFilePickerModal`, which the caller renders.
+ *
+ * The hosted modal posts the address and revisions captured when the item was
+ * chosen, not when the file is picked, so switching workflows while it is
+ * open cannot move the step onto another workflow (the stale revisions are
+ * then refused instead).
  */
 export function useSubWorkflowFilePicker(): {
   requestSubWorkflowFile: (position: QueuePosition) => void;
   subWorkflowPickerModal: React.ReactNode;
 } {
   const vscode = useVsCodeApi();
-  const [pickerPosition, setPickerPosition] = useState<QueuePosition | null>(
-    null
-  );
+  const [pendingPick, setPendingPick] = useState<PendingPick | null>(null);
 
   const requestSubWorkflowFile = useCallback(
     (position: QueuePosition) => {
       if (isStandalone) {
-        setPickerPosition(position);
+        setPendingPick({ position, mutation: getWorkflowDefinitionMutation() });
         return;
       }
       postSubWorkflowAppend(vscode, { position });
@@ -34,9 +48,10 @@ export function useSubWorkflowFilePicker(): {
     [vscode]
   );
 
-  const isAlongside = pickerPosition === QUEUE_POSITION.PARALLEL_WITH_CURRENT;
+  const isAlongside =
+    pendingPick?.position === QUEUE_POSITION.PARALLEL_WITH_CURRENT;
   const subWorkflowPickerModal =
-    pickerPosition === null ? null : (
+    pendingPick === null ? null : (
       <WorkflowFilePickerModal
         isOpen
         title={
@@ -49,11 +64,12 @@ export function useSubWorkflowFilePicker(): {
             ? SUB_WORKFLOW_QUEUE_LABELS.pickerAlongsideAction
             : SUB_WORKFLOW_QUEUE_LABELS.pickerAction
         }
-        onClose={() => setPickerPosition(null)}
+        onClose={() => setPendingPick(null)}
         onSelect={(filePath) =>
           postSubWorkflowAppend(vscode, {
             filePath,
-            position: pickerPosition,
+            position: pendingPick.position,
+            mutation: pendingPick.mutation,
           })
         }
       />
