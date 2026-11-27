@@ -14,9 +14,15 @@ import type {
   ParallelGroupDefinition,
   PromptFile,
   PromptStep,
+  SubWorkflowStep,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import { isPromptStep, isScriptStep } from "../types/CtrlYokeTypes";
+import {
+  isPromptStep,
+  isScriptStep,
+  isSubWorkflowStep,
+} from "../types/CtrlYokeTypes";
+import type { PreparedSubWorkflowLaunch } from "../types/SubWorkflowTypes";
 import type {
   ExecutionPropertyDefaults,
   ResolvedExecutionTarget,
@@ -69,6 +75,12 @@ export interface ParallelGroupPreflightMember {
    * `errorBehavior` before any side effect, as it would a sequential step.
    */
   readonly varSubstitutionError?: VarSubstitutionValidationError;
+  /**
+   * A sub-workflow member's child, resolved and parsed (or materialized) once
+   * here and reused by its launch. A failed preparation is not a group
+   * issue: the member fails alone, under its own `onFail`.
+   */
+  readonly subWorkflowLaunch?: PreparedSubWorkflowLaunch;
 }
 
 export interface ParallelGroupMemberPreflightResult {
@@ -117,6 +129,15 @@ export interface ParallelGroupPreflightOptions {
   ) => Promise<unknown> | unknown;
   readonly finalStepSessionId?: string;
   readonly workflowSessionIdFromOverride?: boolean;
+  /**
+   * Resolve, cycle-check and parse (file) or materialize (inline) a
+   * sub-workflow member's child. Omitted outside a run, where a sub-workflow
+   * member is reported without a prepared launch.
+   */
+  readonly prepareSubWorkflowMember?: (
+    step: SubWorkflowStep,
+    stepIndex: number
+  ) => Promise<PreparedSubWorkflowLaunch>;
 }
 
 export interface ParallelGroupMemberPreflightOptions extends ParallelGroupPreflightOptions {
@@ -231,6 +252,27 @@ export async function preflightParallelGroupMember(
       failureMessage: "",
     };
   }
+  if (isSubWorkflowStep(step)) {
+    // A child run is its own instance: its steps go through their own
+    // preflight, so the harness, session, integration and interactive checks
+    // of this group do not apply to it (P3).
+    const subWorkflowLaunch = await options.prepareSubWorkflowMember?.(
+      authoredStep as SubWorkflowStep,
+      options.stepIndex
+    );
+    return {
+      member: {
+        stepIndex: options.stepIndex,
+        step,
+        resolvedTarget,
+        resolvedProperties,
+        variables,
+        ...(subWorkflowLaunch ? { subWorkflowLaunch } : {}),
+      },
+      issues: [],
+      failureMessage: "",
+    };
+  }
   const prompt = promptProjection(step);
   const effectivePromptText = isPromptStep(step)
     ? await resolvePromptTextWithVariables(
@@ -339,6 +381,8 @@ export async function preflightParallelGroupMember(
   const interactiveOwners = reservedMembers.filter(
     (reserved) =>
       reserved.varSubstitutionError === undefined &&
+      // A sub-workflow member's terminal belongs to its child instance.
+      !isSubWorkflowStep(reserved.step) &&
       reserved.resolvedProperties.executionMode === EXECUTION_MODES.INTERACTIVE
   );
   if (

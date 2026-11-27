@@ -11,8 +11,12 @@ import type {
   SubWorkflowInstance,
   SubWorkflowLaunchRequest,
 } from "../../types/SubWorkflowTypes";
-import { isSameSubWorkflowParentLink } from "../../types/SubWorkflowTypes";
+import {
+  isSameSubWorkflowParentLink,
+  SUB_WORKFLOW_SOURCE_KINDS,
+} from "../../types/SubWorkflowTypes";
 import type {
+  ParsedPromptFile,
   PromptFile,
   QueueState,
   RunRef,
@@ -111,7 +115,11 @@ class FakeChild implements SubWorkflowInstance {
     getWorkflowFile: () => this.worktree ?? ({ steps: [] } as PromptFile),
   };
 
-  async loadPromptFile(): Promise<boolean> {
+  fileLoadArgs?: Parameters<SubWorkflowInstance["loadPromptFile"]>;
+  async loadPromptFile(
+    ...args: Parameters<SubWorkflowInstance["loadPromptFile"]>
+  ): Promise<boolean> {
+    this.fileLoadArgs = args;
     if (this.loadError) throw this.loadError;
     return this.loadResult;
   }
@@ -234,10 +242,42 @@ function request(): SubWorkflowLaunchRequest {
     parentExecution: { executionRoot: "/tmp", executionCheckoutRoot: "/tmp" },
     delegationChain: [],
     stateRoot: "/tmp/state",
+    concurrent: false,
   };
 }
 
 suite("SubWorkflowLauncher", () => {
+  test("loads a group preflight's parse and forwards concurrent to the factory", async () => {
+    const factory = new FakeFactory();
+    const parsed = { steps: [{ prompt: "child" }] } as ParsedPromptFile;
+    const launcher = new SubWorkflowLauncher(factory.create);
+    const handle = await launcher.launch({
+      ...request(),
+      source: {
+        kind: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+        resolvedPath: "/tmp/child.ctrlyoke.yaml",
+        parsed,
+      },
+      concurrent: true,
+    });
+    await handle.done;
+    assert.equal(factory.options?.concurrent, true);
+    assert.strictEqual(
+      factory.child.fileLoadArgs?.[0],
+      "/tmp/child.ctrlyoke.yaml"
+    );
+    assert.strictEqual(factory.child.fileLoadArgs?.[1], parsed);
+  });
+
+  test("parses the file itself when no preflight parse is supplied", async () => {
+    const factory = new FakeFactory();
+    const launcher = new SubWorkflowLauncher(factory.create);
+    await (
+      await launcher.launch(request())
+    ).done;
+    assert.strictEqual(factory.child.fileLoadArgs?.[1], undefined);
+  });
+
   test("runs parent dirty-check only for a fresh child with worktree enabled", async () => {
     const factory = new FakeFactory();
     let checks = 0;

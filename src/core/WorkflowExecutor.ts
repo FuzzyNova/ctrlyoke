@@ -143,13 +143,14 @@ import {
 } from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
 import type {
+  PreparedSubWorkflowLaunch,
   SubWorkflowControl,
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowParentLink,
-  SubWorkflowLaunchRequest,
   SubWorkflowResult,
 } from "../types/SubWorkflowTypes";
+import { PromptFileParser } from "./PromptFileParser";
 import {
   isSameSubWorkflowParentLink,
   SUB_WORKFLOW_SOURCE_KINDS,
@@ -212,6 +213,7 @@ import {
   type ParallelGroupMemberPreflightResult,
   type ParallelGroupPreflightMember,
   type ParallelGroupPreflightOptions,
+  type ParallelGroupPreflightResult,
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
@@ -646,6 +648,19 @@ export class WorkflowExecutor {
   private activeParallelGroupPreflightMembers:
     Map<number, ParallelGroupPreflightMember> | undefined;
   private parallelGroupJoinQueue: Promise<void> = Promise.resolve();
+  /**
+   * Sub-workflow members prepared by the active group's preflight, by
+   * `stepId`. Group preflight and each member's dispatch preflight share one
+   * entry, so a child file is parsed once and the D4c result recorded for the
+   * group reaches that member's launch. Keyed with the authored `workflow`
+   * value, so an edit between the two preflights prepares again.
+   */
+  private readonly preparedSubWorkflowMembers = new Map<
+    string,
+    { readonly fingerprint: string; launch: PreparedSubWorkflowLaunch }
+  >();
+  /** Parses sub-workflow members' child files for group preflight. */
+  private subWorkflowParser: PromptFileParser | undefined;
   /**
    * The context and snapshot strategy of the execution currently draining the
    * queue. An ad-hoc promotion arrives from outside the loop and needs both to
@@ -1182,6 +1197,8 @@ export class WorkflowExecutor {
       finalStepSessionId: getExecutionRuntime(workflow.finalStep)?.sessionId as
         string | undefined,
       workflowSessionIdFromOverride: context.workflowSessionIdFromOverride,
+      prepareSubWorkflowMember: (memberStep, stepIndex) =>
+        this.prepareParallelSubWorkflowMember(memberStep, stepIndex, context),
     };
   }
 
@@ -1238,6 +1255,7 @@ export class WorkflowExecutor {
       );
     }
     const preflight = await this.preflightGroup(group, context);
+    await this.prepareParentCheckoutForGroup(preflight, context);
     let groupBeforeState: RawWorkspaceState | undefined;
     const state = this.promptQueue.getState();
     if (preflight.effectiveWidth > 1 && snapshotStrategy) {
@@ -1543,6 +1561,8 @@ export class WorkflowExecutor {
       if (this.activeParallelGroupRun === groupRun) {
         this.activeParallelGroupRun = undefined;
         this.activeParallelGroupPreflightMembers = undefined;
+        // A group re-entered after a pause prepares (and checks) again.
+        this.preparedSubWorkflowMembers.clear();
       }
       if (this.promotedParallelGroupRun?.run === groupRun) {
         this.promotedParallelGroupRun = undefined;
@@ -2439,7 +2459,8 @@ export class WorkflowExecutor {
           authoredStep as SubWorkflowStep,
           viewIndex,
           context,
-          target
+          target,
+          preflightMember
         );
       default:
         return assertNever(authoredStepType);
@@ -3129,7 +3150,8 @@ export class WorkflowExecutor {
     authoredStep: SubWorkflowStep,
     stepIndex: number,
     context: WorkflowExecutionContext,
-    target: ExecutionTarget
+    target: ExecutionTarget,
+    preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
     if (context.dashboardProvider && stepIndex >= 0) {
       context.dashboardProvider.updateStepStatus(stepIndex, {
@@ -3175,69 +3197,22 @@ export class WorkflowExecutor {
     if (!host) {
       return settleFailure("Sub-workflow steps are not supported in this host");
     }
-    const inline = typeof resolvedStep.workflow !== "string";
-    // An inline child has no file, so it records no resolved path.
-    let resolvedPath: string | undefined;
-    let source: SubWorkflowLaunchRequest["source"];
-    if (inline) {
-      // Materialize from the authored definition: the child substitutes its
-      // own fields with the copied effective vars, exactly once.
-      const materialized = materializeInlineSubWorkflow(
-        this.promptQueue.getWorkflowFile(),
-        this.getRunStartView(context).vars,
+    // A parallel member arrives prepared by its group's preflight, which
+    // already parsed (or materialized) the child once.
+    const prepared =
+      this.takePreparedSubWorkflowMember(authoredStep, preflightMember) ??
+      (await this.prepareSubWorkflowLaunch(
         authoredStep,
-        {
-          label:
-            target.kind === FINAL_STEP_PHASES.FINAL_STEP
-              ? formatFinalPassPhrase(target.loopIndex + 1)
-              : `step ${stepIndex + 1}`,
-        },
-        this.promptQueue.getState().workflowName
-      );
-      source = {
-        kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
-        ...materialized,
-        // The inline step was authored in, and validated against, the
-        // parent's file: the child resolves references and trust from it.
-        parentDefinition: {
-          sourceDefinitionPath: context.sourceDefinitionPath,
-          sourceCheckoutRoot: context.executionWorkspace.sourceCheckoutRoot,
-        },
-      };
-    } else {
-      const workflowPath = resolvedStep.workflow as string;
-      const { promptFileResolver, sourceDefinitionPath } =
-        this.getPromptFileResolutionOptions(context);
-      const resolution = await promptFileResolver.resolvePath(
-        workflowPath,
-        sourceDefinitionPath
-      );
-      if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
-        return settleFailure(
-          `Sub-workflow could not resolve '${workflowPath}'`
-        );
-      }
-      resolvedPath = path.resolve(resolution.path);
-      source = { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath };
-    }
+        stepIndex,
+        target,
+        context,
+        false
+      ));
+    if (!prepared.ok) return settleFailure(prepared.failureMessage);
+    const { source } = prepared;
+    // An inline child has no file, so it records no resolved path.
+    const filePath = prepared.resolvedPath;
     const ancestors = context.ancestorPaths ?? [];
-    const comparisonPath = (candidate: string) =>
-      process.platform === "win32" ? candidate.toLowerCase() : candidate;
-    const filePath = resolvedPath;
-    const cycleIndex =
-      filePath === undefined
-        ? -1
-        : ancestors.findIndex(
-            (ancestor) =>
-              comparisonPath(path.resolve(ancestor)) ===
-              comparisonPath(filePath)
-          );
-    if (filePath !== undefined && cycleIndex >= 0) {
-      const chain = [...ancestors, filePath]
-        .map((candidate) => path.basename(candidate))
-        .join(" → ");
-      return settleFailure(`Sub-workflow cycle detected: ${chain}`);
-    }
 
     const queueState = this.promptQueue.getState();
     const stepId = authoredStep._runtime?.stepId;
@@ -3306,7 +3281,14 @@ export class WorkflowExecutor {
               executionCheckoutRoot:
                 context.executionWorkspace.executionCheckoutRoot ??
                 context.executionWorkspace.executionRoot,
-              prepareWorktreeChild: context.prepareSubWorkflowWorktreeChild,
+              // A group that checked the parent's checkout once before
+              // fan-out (D4c) does not check it again per member.
+              ...(prepared.parentCheckoutPrepared
+                ? {}
+                : {
+                    prepareWorktreeChild:
+                      context.prepareSubWorkflowWorktreeChild,
+                  }),
             },
             delegationChain: [
               ...(context.delegationChain ?? []),
@@ -3316,6 +3298,13 @@ export class WorkflowExecutor {
             ],
             ancestorPaths:
               filePath === undefined ? ancestors : [...ancestors, filePath],
+            // Siblings run beside each other only when the group fans out.
+            concurrent:
+              preflightMember !== undefined &&
+              getEffectiveParallelGroupWidth(
+                context.dynamicQueueConfig.maxParallelSteps,
+                context.parallelGroupFanOutEnabled
+              ) > 1,
           });
       } catch (error) {
         if (control.wasStopRequested) return settleCancelled();
@@ -3417,6 +3406,200 @@ export class WorkflowExecutor {
       );
     } finally {
       context.registerActiveTarget?.(target, attemptIndex, null);
+    }
+  }
+
+  /**
+   * Resolve a sub-workflow step's child before launch: materialize an inline
+   * definition (D13), or resolve a file reference (D5) and check it against
+   * the active chain (D10). With `parse`, a file child is also parsed and
+   * validated, so a parallel member fails alone in preflight and its launch
+   * reuses the parse. Never throws: a failure is the step's start failure.
+   */
+  private async prepareSubWorkflowLaunch(
+    authoredStep: SubWorkflowStep,
+    stepIndex: number,
+    target: ExecutionTarget,
+    context: WorkflowExecutionContext,
+    parse: boolean
+  ): Promise<PreparedSubWorkflowLaunch> {
+    try {
+      if (typeof authoredStep.workflow !== "string") {
+        // Materialize from the authored definition: the child substitutes its
+        // own fields with the copied effective vars, exactly once.
+        const materialized = materializeInlineSubWorkflow(
+          this.promptQueue.getWorkflowFile(),
+          this.getRunStartView(context).vars,
+          authoredStep,
+          {
+            label:
+              target.kind === FINAL_STEP_PHASES.FINAL_STEP
+                ? formatFinalPassPhrase(target.loopIndex + 1)
+                : `step ${stepIndex + 1}`,
+          },
+          this.promptQueue.getState().workflowName
+        );
+        return {
+          ok: true,
+          source: {
+            kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+            ...materialized,
+            // The inline step was authored in, and validated against, the
+            // parent's file: the child resolves references and trust from it.
+            parentDefinition: {
+              sourceDefinitionPath: context.sourceDefinitionPath,
+              sourceCheckoutRoot: context.executionWorkspace.sourceCheckoutRoot,
+            },
+          },
+          createsWorktree: Boolean(materialized.definition.worktree),
+        };
+      }
+      // A workflow path is never variable-substituted (D11).
+      const workflowPath = authoredStep.workflow;
+      const { promptFileResolver, sourceDefinitionPath } =
+        this.getPromptFileResolutionOptions(context);
+      const resolution = await promptFileResolver.resolvePath(
+        workflowPath,
+        sourceDefinitionPath
+      );
+      if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+        return {
+          ok: false,
+          failureMessage: `Sub-workflow could not resolve '${workflowPath}'`,
+        };
+      }
+      const resolvedPath = path.resolve(resolution.path);
+      const ancestors = context.ancestorPaths ?? [];
+      if (
+        ancestors.some((ancestor) =>
+          pathsEqual(path.resolve(ancestor), resolvedPath)
+        )
+      ) {
+        const chain = [...ancestors, resolvedPath]
+          .map((candidate) => path.basename(candidate))
+          .join(" → ");
+        return {
+          ok: false,
+          failureMessage: `Sub-workflow cycle detected: ${chain}`,
+        };
+      }
+      if (!parse) {
+        // The launcher parses the file and runs the D4c check itself.
+        return {
+          ok: true,
+          source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath },
+          resolvedPath,
+          createsWorktree: false,
+        };
+      }
+      this.subWorkflowParser ??= new PromptFileParser(this.platform);
+      const parser = this.subWorkflowParser;
+      const parsed = await parser.parsePromptFile(resolvedPath);
+      const invalid = (detail: string): PreparedSubWorkflowLaunch => ({
+        ok: false,
+        failureMessage: `Sub-workflow could not start: ${path.basename(resolvedPath)} is invalid: ${detail}`,
+      });
+      if (!parsed?.steps) {
+        return invalid(
+          parser.lastNewerSchemaError?.message ??
+            parser.lastParseError?.message ??
+            "it could not be parsed"
+        );
+      }
+      const validation = parser.validateWorkflowSteps(parsed.steps, {
+        finalStep: parsed.finalStep,
+        parallelGroups: parsed.parallelGroups,
+        workflowProperties: parsed,
+      });
+      if (!validation.valid) return invalid(validation.errors.join("; "));
+      return {
+        ok: true,
+        source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath, parsed },
+        resolvedPath,
+        createsWorktree: Boolean(parsed.worktree),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        failureMessage: `Sub-workflow could not start: ${getErrorMessage(error)}`,
+      };
+    }
+  }
+
+  /**
+   * The preparation a group shares between its preflight and each member's
+   * dispatch preflight (`preparedSubWorkflowMembers`).
+   */
+  private async prepareParallelSubWorkflowMember(
+    step: SubWorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext
+  ): Promise<PreparedSubWorkflowLaunch> {
+    const stepId = step._runtime?.stepId;
+    const fingerprint = JSON.stringify(step.workflow);
+    const cached = stepId
+      ? this.preparedSubWorkflowMembers.get(stepId)
+      : undefined;
+    if (cached && cached.fingerprint === fingerprint) return cached.launch;
+    const launch = await this.prepareSubWorkflowLaunch(
+      step,
+      stepIndex,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+      context,
+      true
+    );
+    if (stepId) {
+      this.preparedSubWorkflowMembers.set(stepId, { fingerprint, launch });
+    }
+    return launch;
+  }
+
+  /**
+   * A member's prepared launch, consumed: a parsed child definition is loaded
+   * by exactly one launch.
+   */
+  private takePreparedSubWorkflowMember(
+    step: SubWorkflowStep,
+    preflightMember: ParallelGroupPreflightMember | undefined
+  ): PreparedSubWorkflowLaunch | undefined {
+    const launch = preflightMember?.subWorkflowLaunch;
+    const stepId = step._runtime?.stepId;
+    if (launch && stepId) this.preparedSubWorkflowMembers.delete(stepId);
+    return launch;
+  }
+
+  /**
+   * D4c once for a group (P6): when the parent's checkout is dirty and any
+   * member's child creates a worktree, apply the rule before any member
+   * starts, so every lane branches from one commit. Those members then skip
+   * the launcher's own check. A refusal fails each of them under its own
+   * `onFail`; members without a worktree are unaffected.
+   */
+  private async prepareParentCheckoutForGroup(
+    preflight: ParallelGroupPreflightResult,
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    const entries = preflight.members.flatMap((member) => {
+      const stepId = member.step._runtime?.stepId;
+      const entry = stepId
+        ? this.preparedSubWorkflowMembers.get(stepId)
+        : undefined;
+      return entry?.launch.ok && entry.launch.createsWorktree ? [entry] : [];
+    });
+    if (entries.length === 0) return;
+    let refusal: string | undefined;
+    try {
+      await context.prepareSubWorkflowWorktreeChild?.();
+    } catch (error) {
+      refusal = `Sub-workflow could not start: ${getErrorMessage(error)}`;
+    }
+    for (const entry of entries) {
+      const launch = entry.launch;
+      if (!launch.ok) continue;
+      entry.launch =
+        refusal !== undefined
+          ? { ok: false, failureMessage: refusal }
+          : { ...launch, parentCheckoutPrepared: true };
     }
   }
 

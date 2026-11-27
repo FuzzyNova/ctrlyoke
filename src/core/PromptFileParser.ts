@@ -604,13 +604,25 @@ export class PromptFileParser {
         label: string;
       }> = [];
       if (Array.isArray(parsed.steps)) {
+        // Flattened numbering, as the loaded queue and its messages use.
+        let stepNumber = 0;
         parsed.steps.forEach((step, index) => {
-          if (isObject(step) && step.type === STEP_TYPES.WORKFLOW) {
-            inlineCandidates.push({
-              step,
-              pointer: `/steps/${index}/workflow`,
-              label: `Step ${index + 1}`,
-            });
+          const members =
+            isObject(step) && Array.isArray(step.parallel)
+              ? step.parallel.map((member, memberIndex) => ({
+                  member,
+                  pointer: `/steps/${index}/parallel/${memberIndex}/workflow`,
+                }))
+              : [{ member: step, pointer: `/steps/${index}/workflow` }];
+          for (const { member, pointer } of members) {
+            stepNumber += 1;
+            if (isObject(member) && member.type === STEP_TYPES.WORKFLOW) {
+              inlineCandidates.push({
+                step: member,
+                pointer,
+                label: `Step ${stepNumber}`,
+              });
+            }
           }
         });
       }
@@ -1322,7 +1334,7 @@ export class PromptFileParser {
       }
       if (item.parallel.length < 2) {
         throw new WorkflowStructureValidationError(
-          `Step ${stepIndex + 1}: parallel must contain at least two prompt or script steps`,
+          `Step ${stepIndex + 1}: parallel must contain at least two steps`,
           `/steps/${stepIndex}/parallel`
         );
       }
@@ -1333,9 +1345,9 @@ export class PromptFileParser {
             `/steps/${stepIndex}/parallel/${memberIndex}/parallel`
           );
         }
-        if (!this.isPromptOrScriptSource(member)) {
+        if (!this.isParallelMemberSource(member)) {
           throw new WorkflowStructureValidationError(
-            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step; workflow steps are not supported in parallel groups`,
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt, script or workflow step`,
             `/steps/${stepIndex}/parallel/${memberIndex}`
           );
         }
@@ -1343,7 +1355,8 @@ export class PromptFileParser {
     });
   }
 
-  private isPromptOrScriptSource(source: unknown): boolean {
+  /** Prompt, script and sub-workflow steps can be parallel members (P1). */
+  private isParallelMemberSource(source: unknown): boolean {
     if (!isObject(source)) {
       return false;
     }
@@ -1362,7 +1375,7 @@ export class PromptFileParser {
       case STEP_TYPES.PROMPT:
         return typeof source.prompt === "string";
       case STEP_TYPES.WORKFLOW:
-        return false;
+        return true;
       default:
         return assertNever(sourceType);
     }

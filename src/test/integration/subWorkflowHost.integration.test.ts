@@ -21,7 +21,10 @@ import {
 } from "../../types/DashboardConstants";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
-import { isSubWorkflowStep } from "../../types/CtrlYokeTypes";
+import {
+  isSubWorkflowStep,
+  type WorkflowStep,
+} from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { setGitTimeoutOverridesForTests } from "../../utils/GitUtils";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -109,6 +112,8 @@ suite("Sub-workflow host end to end", () => {
     );
     const detector = new MockHarnessIntegration(undefined, false);
     const instances: WorkflowInstance[] = [];
+    /** The `concurrent` flag of every child the launcher asked for, in order. */
+    const concurrentLaunches: boolean[] = [];
     /** Child instances in launch order, keyed by depth (1 = child, 2 = grandchild). */
     const childrenAtDepth = new Map<number, WorkflowInstance[]>();
     let launcher: SubWorkflowLauncher;
@@ -124,30 +129,38 @@ suite("Sub-workflow host end to end", () => {
         launcher,
         childOptions
       );
-    launcher = new SubWorkflowLauncher(({ ancestorPaths, delegationChain }) => {
-      const child = createInstance({ ancestorPaths, delegationChain });
-      instances.push(child);
-      if (beforeChildLoad) {
-        const load = child.loadPromptFile.bind(child);
-        child.loadPromptFile = async (...args) => {
-          await beforeChildLoad();
-          return load(...args);
-        };
+    launcher = new SubWorkflowLauncher(
+      ({ ancestorPaths, delegationChain, concurrent }) => {
+        concurrentLaunches.push(concurrent);
+        const child = createInstance({ ancestorPaths, delegationChain });
+        instances.push(child);
+        if (beforeChildLoad) {
+          const load = child.loadPromptFile.bind(child);
+          child.loadPromptFile = async (...args) => {
+            await beforeChildLoad();
+            return load(...args);
+          };
+          const loadInline = child.loadFromMemoryOrThrow.bind(child);
+          child.loadFromMemoryOrThrow = async (...args) => {
+            await beforeChildLoad();
+            return loadInline(...args);
+          };
+        }
+        // ancestorPaths lists the root and every workflow above the child.
+        const depth = ancestorPaths.length - 1;
+        childrenAtDepth.set(depth, [
+          ...(childrenAtDepth.get(depth) ?? []),
+          child,
+        ]);
+        return child;
       }
-      // ancestorPaths lists the root and every workflow above the child.
-      const depth = ancestorPaths.length - 1;
-      childrenAtDepth.set(depth, [
-        ...(childrenAtDepth.get(depth) ?? []),
-        child,
-      ]);
-      return child;
-    });
+    );
     const childAt = (depth: number, launch = 0): WorkflowInstance => {
       const child = childrenAtDepth.get(depth)?.[launch];
       assert.ok(child, `no child launched at depth ${depth}`);
       return child;
     };
-    return { createInstance, instances, childAt };
+    return { createInstance, instances, childAt, concurrentLaunches };
   }
 
   test("stops a plain script promptly without waiting for the detector fallback", async () => {
@@ -1731,6 +1744,370 @@ suite("Sub-workflow host end to end", () => {
       }
     } finally {
       await disposeAll(instances, workspace);
+    }
+  });
+
+  /**
+   * A lane script: marks itself started, then waits for every named sibling
+   * to start too, so it can only succeed when the lanes run side by side.
+   * With no siblings it holds until stopped.
+   */
+  async function writeLaneScript(workspace: string): Promise<void> {
+    await fs.writeFile(
+      path.join(workspace, "lane.js"),
+      [
+        "const fs = require('fs');",
+        "const [self, ...others] = process.argv.slice(2);",
+        "fs.writeFileSync(self + '-started', '');",
+        "if (others.length === 0) {",
+        "  setInterval(() => {}, 60000);",
+        "} else {",
+        "  const deadline = Date.now() + 15000;",
+        "  const timer = setInterval(() => {",
+        "    if (others.every((other) => fs.existsSync(other + '-started'))) {",
+        "      clearInterval(timer);",
+        "      process.exit(0);",
+        "    }",
+        "    if (Date.now() > deadline) process.exit(1);",
+        "  }, 25);",
+        "}",
+      ].join("\n")
+    );
+  }
+
+  function childRunRefOf(step: WorkflowStep | undefined): string | undefined {
+    return step && isSubWorkflowStep(step)
+      ? step._runtime?.childRunRef
+      : undefined;
+  }
+
+  const inlineLane = (
+    name: string,
+    script: string,
+    extra: Record<string, unknown> = {}
+  ) => ({
+    type: "workflow",
+    name,
+    workflow: { type: "script", script, ...extra },
+  });
+
+  test("runs inline script lanes side by side and records each on its own member target", async () => {
+    const workspace = makeTempDir("ctrlyoke-parallel-lanes-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      await writeLaneScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Lanes",
+        steps: [
+          {
+            parallel: [
+              inlineLane("Lane A", "node lane.js a b"),
+              inlineLane("Lane B", "node lane.js b a"),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      assert.deepStrictEqual(concurrentLaunches, [true, true]);
+      for (const stepIndex of [0, 1]) {
+        assert.strictEqual(
+          launchedChild(instances, parent, stepIndex).promptQueue.getState()
+            .status,
+          "completed"
+        );
+      }
+      const events = await new TimelineRecorder().readEvents(
+        parent.outputHistoryManager.getHistoryFilePath(
+          state.workflowKey!,
+          state.runRef!
+        )
+      );
+      const settled = events.filter(
+        (event) => event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+      );
+      assert.deepStrictEqual(
+        settled
+          .map((event) => ({
+            target: event.target,
+            childRunRef: (event.payload as { childRunRef?: string })
+              .childRunRef,
+          }))
+          .sort(
+            (left, right) =>
+              (left.target as { stepIndex: number }).stepIndex -
+              (right.target as { stepIndex: number }).stepIndex
+          ),
+        [0, 1].map((stepIndex) => ({
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+          childRunRef: childRunRefOf(state.steps[stepIndex]),
+        }))
+      );
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("stopping the parent stops every running lane", async () => {
+    const workspace = makeTempDir("ctrlyoke-parallel-lanes-stop-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeLaneScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            parallel: [
+              inlineLane("Lane A", "node lane.js a"),
+              inlineLane("Lane B", "node lane.js b"),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "a-started"));
+      await waitForFile(path.join(workspace, "b-started"));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        await execution;
+      });
+
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      for (const stepIndex of [0, 1]) {
+        assert.strictEqual(
+          launchedChild(instances, parent, stepIndex).promptQueue.getState()
+            .status,
+          "stopped"
+        );
+      }
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("a failing lane stops its running sibling under failFast", async () => {
+    const workspace = makeTempDir("ctrlyoke-parallel-lanes-failfast-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeLaneScript(workspace);
+      await fs.writeFile(
+        path.join(workspace, "fail.js"),
+        "const fs = require('fs');" +
+          "const t = setInterval(() => {" +
+          "if (fs.existsSync('b-started')) { clearInterval(t); process.exit(1); }" +
+          "}, 25);"
+      );
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          {
+            parallel: [
+              inlineLane("Failing lane", "node fail.js"),
+              inlineLane("Held lane", "node lane.js b"),
+            ],
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await withoutStopFallback(() => parent.executeLoadedPromptFile());
+
+      const state = parent.promptQueue.getState();
+      // Whether a sibling cancelled by fail-fast fails or stops the parent is
+      // the cancellation-classification rule, which is not settled here; the
+      // run must simply not complete.
+      assert.notStrictEqual(state.status, EXECUTION_STATES.COMPLETED);
+      assert.strictEqual(
+        launchedChild(instances, parent, 1).promptQueue.getState().status,
+        "stopped"
+      );
+      assert.deepStrictEqual(
+        state.steps.map((step) => step._runtime?.terminalStatus),
+        [PROMPT_TERMINAL_STATUS.FAILED, PROMPT_TERMINAL_STATUS.CANCELLED]
+      );
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("checkpoints a dirty managed parent once, before any worktree lane loads", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-lanes-checkpoint-");
+    const recordDir = makeTempDir("ctrlyoke-lanes-checkpoint-record-");
+    const recordPath = path.join(recordDir, "parent-checkout.txt");
+    /** The parent checkout's `git status` each time a lane starts loading. */
+    const statusAtLaneLoad: string[] = [];
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      undefined,
+      async () => {
+        const checkout = await fs.readFile(recordPath, "utf8");
+        statusAtLaneLoad.push(
+          execFileSync("git", ["-C", checkout, "status", "--porcelain"], {
+            encoding: "utf8",
+          })
+        );
+      }
+    );
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(
+        path.join(workspace, "dirty.js"),
+        "require('fs').writeFileSync('dirty.txt', 'unsaved');" +
+          "require('fs').writeFileSync(process.argv[2], process.cwd());"
+      );
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Checkpointed lanes",
+        worktree: { mode: "managed", keep: true },
+        steps: [
+          { type: "script", script: `node dirty.js "${recordPath}"` },
+          {
+            parallel: [
+              inlineLane("Lane A", "node --version", {
+                worktree: { mode: "managed" },
+              }),
+              inlineLane("Lane B", "node --version", {
+                worktree: { mode: "managed" },
+              }),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      commitAll(workspace, "add parent");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      // The group checked once before fan-out: no lane ever saw it dirty.
+      assert.deepStrictEqual(statusAtLaneLoad, ["", ""]);
+      const checkout = await fs.readFile(recordPath, "utf8");
+      const commitsWithDirtyFile = execFileSync(
+        "git",
+        ["-C", checkout, "log", "--format=%s", "--", "dirty.txt"],
+        { encoding: "utf8" }
+      )
+        .split(/\r?\n/)
+        .filter(Boolean);
+      assert.strictEqual(commitsWithDirtyFile.length, 1);
+      for (const stepIndex of [1, 2]) {
+        assert.strictEqual(
+          launchedChild(instances, parent, stepIndex).promptQueue.getState()
+            .status,
+          "completed"
+        );
+      }
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+      removeTempDir(recordDir);
+    }
+  });
+
+  test("a dirty user checkout refuses only the worktree lanes, under their onFail", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(120_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-lanes-refuse-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        steps: [
+          {
+            parallel: [
+              {
+                ...inlineLane("Worktree lane", "node --version", {
+                  worktree: { mode: "managed" },
+                }),
+                onFail: "continue",
+              },
+              inlineLane(
+                "Shared lane",
+                "node -e \"require('fs').writeFileSync('shared.txt','ran')\""
+              ),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      commitAll(workspace, "add parent");
+      await fs.writeFile(path.join(workspace, "dirty.txt"), "unsaved");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      assert.match(
+        state.steps[0]?._runtime?.failureMessage ?? "",
+        /Commit or stash the parent's changes before starting worktree sub-workflows/
+      );
+      assert.strictEqual(childRunRefOf(state.steps[0]), undefined);
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "shared.txt"), "utf8"),
+        "ran"
+      );
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "log", "--format=%s"], {
+          encoding: "utf8",
+        }).trim(),
+        "add parent",
+        "ctrlyoke never commits to a checkout the user owns"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
     }
   });
 });

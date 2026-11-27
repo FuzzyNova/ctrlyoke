@@ -5,6 +5,7 @@ import {
   CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
+  STEP_TYPES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type {
@@ -70,6 +71,99 @@ async function run(
 }
 
 suite("ParallelGroupPreflight", () => {
+  test("prepares a sub-workflow member once and skips harness, session and interactive checks", async () => {
+    const prepared: Array<{ stepIndex: number; workflow: unknown }> = [];
+    const harnessChecks: HarnessId[] = [];
+    const integrations: number[] = [];
+    const result = await preflightParallelGroup({
+      workflow: {
+        // An interactive, explicitly shared session would collide for two
+        // prompt members; a child run owns its own terminal and sessions.
+        executionMode: "interactive",
+        sessionId: "shared-session",
+        steps: [
+          { prompt: "interactive sibling" },
+          {
+            type: STEP_TYPES.WORKFLOW,
+            workflow: { type: STEP_TYPES.SCRIPT, script: "echo lane" },
+            _runtime: { stepId: "lane" },
+          },
+        ],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: false,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      checkHarnessReady: (harness) => {
+        harnessChecks.push(harness);
+        return undefined;
+      },
+      ensureIsolatedIntegration: (member) => {
+        integrations.push(member.stepIndex);
+        return { member: member.stepIndex };
+      },
+      prepareSubWorkflowMember: async (step, stepIndex) => {
+        prepared.push({ stepIndex, workflow: step.workflow });
+        return {
+          ok: false,
+          failureMessage: "Sub-workflow could not resolve 'x'",
+        };
+      },
+    });
+
+    assert.deepStrictEqual(result.issues, []);
+    assert.deepStrictEqual(prepared, [
+      {
+        stepIndex: 1,
+        workflow: { type: STEP_TYPES.SCRIPT, script: "echo lane" },
+      },
+    ]);
+    assert.deepStrictEqual(harnessChecks, [HARNESS_IDS.COPILOT_CLI]);
+    assert.deepStrictEqual(integrations, [0]);
+    const lane = result.members.find((member) => member.stepIndex === 1);
+    // A failed preparation is the member's own start failure, not a group issue.
+    assert.deepStrictEqual(lane?.subWorkflowLaunch, {
+      ok: false,
+      failureMessage: "Sub-workflow could not resolve 'x'",
+    });
+    assert.strictEqual(lane?.resolvedSessionId, undefined);
+  });
+
+  test("an interactive prompt member joining beside a sub-workflow member is not multiplexed", async () => {
+    const workflow: PromptFile = {
+      executionMode: "interactive",
+      steps: [
+        { type: STEP_TYPES.WORKFLOW, workflow: "lane.ctrlyoke.yaml" },
+        { prompt: "joiner" },
+      ],
+      parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+    };
+    const options = {
+      workflow,
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: false,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+    };
+    const lane = await preflightParallelGroupMember({
+      ...options,
+      step: workflow.steps![0]!,
+      stepIndex: 0,
+    });
+    const joiner = await preflightParallelGroupMember({
+      ...options,
+      step: workflow.steps![1]!,
+      stepIndex: 1,
+      reservedMembers: [lane.member],
+    });
+    assert.deepStrictEqual(joiner.issues, []);
+  });
+
   test("finds inherited/default explicit session collisions", async () => {
     const result = await run(
       {

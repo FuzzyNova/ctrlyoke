@@ -26,7 +26,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
 
   async launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle> {
     const instance = this.createInstance({
-      concurrent: request.concurrent ?? false,
+      concurrent: request.concurrent,
       ancestorPaths: request.ancestorPaths ?? [],
       delegationChain: request.delegationChain,
     });
@@ -85,7 +85,8 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       if (request.source.kind === SUB_WORKFLOW_SOURCE_KINDS.FILE) {
         loaded = await instance.loadPromptFile(
           request.source.resolvedPath,
-          undefined,
+          // A group preflight's parse; undefined parses the file here.
+          request.source.parsed,
           {
             parentRun: request.parent,
             parentExecution: request.parentExecution,

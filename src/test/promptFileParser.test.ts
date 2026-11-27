@@ -833,6 +833,81 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
+    test("accepts file and inline workflow members (P1)", async () => {
+      const { tempDir, filePath } = await writeWorkflow(
+        ".ctrlyoke.yaml",
+        [
+          "steps:",
+          "  - parallel:",
+          "      - type: workflow",
+          "        workflow: child.ctrlyoke.yaml",
+          "        onFail: continue",
+          "      - type: workflow",
+          "        name: lane",
+          "        workflow:",
+          "          type: script",
+          "          script: echo lane",
+          "          worktree: { mode: managed }",
+          "    failFast: false",
+        ].join("\n")
+      );
+      await fs.writeFile(
+        path.join(tempDir, "child.ctrlyoke.yaml"),
+        "prompt: child\n",
+        "utf8"
+      );
+
+      try {
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result, String(parser.lastParseError));
+        assert.deepStrictEqual(result.steps?.[0], {
+          type: "workflow",
+          workflow: "child.ctrlyoke.yaml",
+          onFail: "continue",
+        });
+        assert.deepStrictEqual(result.steps?.[1], {
+          type: "workflow",
+          name: "lane",
+          workflow: {
+            type: "script",
+            script: "echo lane",
+            worktree: { mode: "managed" },
+          },
+        });
+        assert.deepStrictEqual(result.parallelGroups?.[0], {
+          id: result.parallelGroups?.[0].id,
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        });
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("reports inline boundary errors on a parallel member at its own pointer", () => {
+      const result = parser.validateWorkflowText(
+        [
+          "steps:",
+          "  - prompt: first",
+          "  - parallel:",
+          "      - prompt: sibling",
+          "      - type: workflow",
+          "        workflow:",
+          "          prompt: Fix $previous",
+        ].join("\n"),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      );
+
+      const issue = result.issues.find(
+        (candidate) => candidate.instancePath === "/steps/1/parallel/1/workflow"
+      );
+      assert.ok(issue, JSON.stringify(result.issues));
+      assert.strictEqual(issue.severity, "error");
+      assert.match(issue.message, /^Step 3: Inline sub-workflow/);
+    });
+
     test("merges YAML step defaults and lets explicit step values override them", async () => {
       const { tempDir, filePath } = await writeWorkflow(
         ".ctrlyoke.yaml",
@@ -1010,21 +1085,39 @@ suite("PromptFileParser Tests", () => {
             },
           ],
         },
-        message: /parallel member 2 must be a prompt or script step/i,
+        message: /parallel member 2 must be a prompt, script or workflow step/i,
       },
       {
-        name: "workflow member remains unsupported",
+        name: "workflow member with a missing file",
         workflow: {
           steps: [
             {
               parallel: [
                 { prompt: "one" },
-                { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+                { type: "workflow", workflow: "missing-child.ctrlyoke.yaml" },
               ],
             },
           ],
         },
-        message: /workflow steps are not supported in parallel groups/i,
+        message:
+          /Sub-workflow file reference "missing-child.ctrlyoke.yaml" could not be found/i,
+      },
+      {
+        name: "inline workflow member addressing the parent run",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one" },
+                {
+                  type: "workflow",
+                  workflow: { prompt: "two", sessionId: 1 },
+                },
+              ],
+            },
+          ],
+        },
+        message: /Step 2: Inline sub-workflow starts a new run boundary/i,
       },
     ];
 

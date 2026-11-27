@@ -11,11 +11,27 @@ import {
   MockIntegrationFactory,
   MockPlatform,
 } from "../helpers/mockHarness";
-import { RUNNER_IDS } from "../../types/DashboardConstants";
-import type {
-  SubWorkflowHandle,
-  SubWorkflowHost,
+import {
+  EXECUTION_MODES,
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  PROMPT_TERMINAL_STATUS,
+  RUNNER_IDS,
+  STEP_TYPES,
+} from "../../types/DashboardConstants";
+import {
+  SUB_WORKFLOW_SOURCE_KINDS,
+  type SubWorkflowHandle,
+  type SubWorkflowHost,
 } from "../../types/SubWorkflowTypes";
+import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
+import type { WorkflowInstance } from "../../core/WorkflowInstance";
+import {
+  isScriptStep,
+  type RunRef,
+  type WorkflowKey,
+} from "../../types/CtrlYokeTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 class UnusedSubWorkflowHost implements SubWorkflowHost {
   async launch(): Promise<SubWorkflowHandle> {
@@ -23,13 +39,13 @@ class UnusedSubWorkflowHost implements SubWorkflowHost {
   }
 }
 
-function makeDependencies(): CliWorkflowInstanceDependencies {
-  const platform = new MockPlatform();
+function makeDependencies(workspace?: string): CliWorkflowInstanceDependencies {
+  const platform = new MockPlatform(workspace);
   return {
     platform,
     integrationFactory: new MockIntegrationFactory(platform),
     detectorIntegration: new MockHarnessIntegration(undefined, false),
-    workspaceFolderPath: process.cwd(),
+    workspaceFolderPath: workspace ?? process.cwd(),
     hostCanProvidePty: true,
     supportsConcurrentInteractiveSessions: false,
     userFeedbackSink: new CompositeUserFeedbackSink([]),
@@ -86,6 +102,73 @@ suite("createCliSubWorkflowInstance", () => {
       config.dependencies.workflowSessionIdFromOverride,
       false
     );
+  });
+
+  test("a concurrent child launched through the CLI factory runs its interactive step headless (R5)", async () => {
+    const workspace = makeTempDir("ctrlyoke-cli-concurrent-child-");
+    const children: WorkflowInstance[] = [];
+    try {
+      const dependencies = makeDependencies(workspace);
+      let launcher: SubWorkflowLauncher;
+      launcher = new SubWorkflowLauncher((options) => {
+        const child = createCliSubWorkflowInstance(
+          dependencies,
+          options,
+          launcher
+        );
+        children.push(child);
+        return child;
+      });
+      const handle = await launcher.launch({
+        source: {
+          kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+          definition: {
+            steps: [
+              {
+                type: STEP_TYPES.SCRIPT,
+                script: "node --version",
+                executionMode: EXECUTION_MODES.INTERACTIVE,
+              },
+            ],
+          },
+          displayName: "Lane",
+          parentDefinition: {},
+        },
+        parent: {
+          workflowKey: "parent-key" as WorkflowKey,
+          runRef: "run-parent" as RunRef,
+          phase: FINAL_STEP_PHASES.QUEUE,
+          stepId: "lane",
+        },
+        parentExecution: {
+          executionRoot: workspace,
+          executionCheckoutRoot: workspace,
+        },
+        delegationChain: [],
+        stateRoot: workspace,
+        concurrent: true,
+      });
+      const result = await handle.done;
+
+      assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.COMPLETED);
+      const child = children[0]!;
+      assert.strictEqual(
+        child.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      const step = child.promptQueue.getState().steps[0];
+      assert.ok(step && isScriptStep(step));
+      assert.strictEqual(
+        step._runtime?.executionMode,
+        EXECUTION_MODES.HEADLESS
+      );
+    } finally {
+      for (const child of children) {
+        await child.outputHistoryManager.flushPendingIndexRefresh();
+        child.dispose();
+      }
+      removeTempDir(workspace);
+    }
   });
 
   test("builds a real instance from the resolved config", () => {

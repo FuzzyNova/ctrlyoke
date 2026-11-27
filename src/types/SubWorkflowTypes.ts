@@ -28,6 +28,11 @@ export interface SubWorkflowLaunchRequest {
     | {
         kind: typeof SUB_WORKFLOW_SOURCE_KINDS.FILE;
         resolvedPath: string;
+        /**
+         * The child file as parallel-group preflight already parsed it. The
+         * launcher loads this instead of parsing the file again.
+         */
+        parsed?: ParsedPromptFile;
       }
     | {
         kind: typeof SUB_WORKFLOW_SOURCE_KINDS.INLINE;
@@ -47,9 +52,34 @@ export interface SubWorkflowLaunchRequest {
   stateRoot: string;
   /** Reserved for cycle detection; ignored by this launcher round. */
   ancestorPaths?: readonly string[];
-  /** Passed to the instance factory; host-specific capability behavior is deferred. */
-  concurrent?: boolean;
+  /**
+   * True for a member of a parallel group that runs beside its siblings. The
+   * CLI factory then builds a headless-only child, so concurrent children
+   * never compete for the one TTY (R5).
+   */
+  concurrent: boolean;
 }
+
+/**
+ * A sub-workflow step's child, resolved (and, for a file, parsed) before it
+ * launches. Parallel-group preflight builds one per member and the launch
+ * reuses it; a failure settles the member FAILED under its `onFail`.
+ */
+export type PreparedSubWorkflowLaunch =
+  | {
+      readonly ok: true;
+      readonly source: SubWorkflowLaunchRequest["source"];
+      /** The child file's absolute path; absent for an inline child. */
+      readonly resolvedPath?: string;
+      /** The child definition creates its own worktree (D4c applies). */
+      readonly createsWorktree: boolean;
+      /**
+       * The group already ran the D4c parent-checkout check for this member
+       * before fan-out, so its launch must not run it again.
+       */
+      readonly parentCheckoutPrepared?: boolean;
+    }
+  | { readonly ok: false; readonly failureMessage: string };
 
 /**
  * The parent definition an inline child was authored in. The child has no

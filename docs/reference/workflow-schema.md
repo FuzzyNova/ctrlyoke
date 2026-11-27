@@ -46,7 +46,7 @@ say what it does.
 | [Prompt step](#prompt-step) | A step that sends a prompt to a harness. |
 | [Script step](#script-step) | A workflow step that runs a shell script/command with no AI interaction. |
 | [Sub-workflow step](#sub-workflow-step) | A step that runs a referenced workflow file or an inline single step as a child run. |
-| [Parallel group](#parallel-group) | An authored group of prompt or script steps. |
+| [Parallel group](#parallel-group) | An authored group of prompt, script or workflow steps. |
 | [Pre-condition](#pre-condition) | Script gate that runs before the prompt. |
 | [End condition](#end-condition) | Validation that runs after the prompt completes. |
 | [Condition presets](#condition-presets) | Author-defined named conditions available to MCP steps. |
@@ -633,7 +633,7 @@ Optional authored identity colour for this step. Not substituted: This structura
 
 ## Parallel group {#parallel-group}
 
-An authored group of prompt or script steps. Workflow steps are currently rejected as group members. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
+An authored group of prompt, script or workflow steps. Groups are flattened into steps plus parallelGroups when loaded. Prompt and script members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate them or merge their work, so give each member independent work. A workflow member is its own child run, so a child with its own `worktree` works in its own checkout. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
 
 ```yaml
 steps:
@@ -654,7 +654,7 @@ member can do through the `ctrlyoke` MCP server.
 - **Required:** yes
 - **Constraints:** at least 2 item(s)
 
-The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.
+The prompt, script or workflow steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.
 
 ### `failFast` {#parallel-group-failfast}
 

@@ -721,7 +721,7 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
     "properties": {
       "parallel": {
         "valueKind": "array",
-        "description": "The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored."
+        "description": "The prompt, script or workflow steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored."
       },
       "failFast": {
         "valueKind": "boolean",
