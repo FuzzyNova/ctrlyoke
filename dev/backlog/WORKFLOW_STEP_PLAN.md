@@ -51,10 +51,14 @@ Shipped:
   and "Started by", and D4c for sequential worktree children.
 - **Round 6:** D6 from a real resume, real-instance stop/pause propagation, the CLI child
   progress prefix, and D13 inline definitions for sequential steps (review fixes are round 7).
+- **Rounds 7–8:** parallel sub-workflow members (preflight branch, per-member failures, the
+  once-per-group D4c check when the group fans out, `concurrent` from the group width), the
+  `cancelledBy` join rule (fail-fast vs a user-stopped lane, resume re-entering the group), stop
+  and pause held until a child's cycle starts, and the single-sourced CLI reporter.
 
-Not shipped (everything else in this plan): D4b, the D4c once-per-group check,
-parallel members, entry points, D14 agent lanes and `worktreePresets`, and sibling merge wait
-(D4d rule 2).
+Not shipped (everything else in this plan): D4b, `MERGE_INTO_SHARED_ROOT`, D6 recovery of
+in-flight members, member presentation, entry points, D14 agent lanes and `worktreePresets`,
+and sibling merge wait (D4d rule 2).
 
 Line numbers were re-verified on 2026-11-26 wherever this revision touched a passage, and are
 otherwise pointers; re-locate by symbol. Every symbol and path named below was re-checked on
@@ -628,13 +632,13 @@ This is new and separate from the existing variant/re-run provenance (`sourceWor
 
 ### D9. Outcome mapping and `onFail`
 
-| Child terminal state                                                  | Parent step                                       | Parent workflow                                                                                                             |
-| --------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| COMPLETED                                                             | COMPLETED                                         | advances                                                                                                                    |
-| ERROR, failed, or failed to start (missing file, schema error, cycle) | `onFail: stopWorkflow` (default) → FAILED         | stops (`runtime.fail()`)                                                                                                    |
-|                                                                       | `onFail: continue` → COMPLETED + `failureMessage` | advances                                                                                                                    |
-| STOPPED (by anyone)                                                   | CANCELLED                                         | stops, regardless of `onFail`. Inside a parallel group, siblings finish first; see [Parallel](#parallel-sub-workflow-steps) |
-| COMPLETED, but `merge: true` ended `conflict`/`blocked`               | COMPLETED + warning (D4e)                         | advances                                                                                                                    |
+| Child terminal state                                                  | Parent step                                       | Parent workflow                                                                                                                                                                                          |
+| --------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| COMPLETED                                                             | COMPLETED                                         | advances                                                                                                                                                                                                 |
+| ERROR, failed, or failed to start (missing file, schema error, cycle) | `onFail: stopWorkflow` (default) → FAILED         | stops (`runtime.fail()`)                                                                                                                                                                                 |
+|                                                                       | `onFail: continue` → COMPLETED + `failureMessage` | advances                                                                                                                                                                                                 |
+| STOPPED (by anyone)                                                   | CANCELLED                                         | stops, regardless of `onFail`. Inside a parallel group, a lane stopped directly lets its siblings finish first; a fail-fast or parent cancel does not wait. See [Parallel](#parallel-sub-workflow-steps) |
+| COMPLETED, but `merge: true` ended `conflict`/`blocked`               | COMPLETED + warning (D4e)                         | advances                                                                                                                                                                                                 |
 
 `onFail` uses the existing `ScriptStepAction` type and `CONDITION_ACTIONS` values, and reuses
 `scriptStep.onFail`'s schema (`workflow-schema.json:1164-1177`, including its `varPlaceholder`
@@ -1907,7 +1911,8 @@ rule 1, plus queue-next from step 6) is roughly 9–11 days of that. The isolate
    inheriting child would conflict. **Decided (R1): D4a + D4d rule 1 (ancestor delegation only,
    about 1 day) ship in this step**, so the headline "implement in a managed worktree, then run a
    test sub-workflow in it" case works from the first release. A worktree child of a worktree
-   parent (which needs D4b) still gets a clear start error until step 4.
+   parent needs D4b; see the Progress Decision "D4b moves ahead of the rest of step 4" for why
+   it lands with step 3 instead of a start error.
 3. **Isolated lanes, for a parent on the main checkout.** The
    [motivating case](#motivating-case-isolated-parallel-lanes), shipped before the full worktree
    rules because it needs only a subset of them (see
@@ -1922,11 +1927,10 @@ rule 1, plus queue-next from step 6) is roughly 9–11 days of that. The isolate
    - D6/D7, because recovery of an in-flight lane must reattach rather than create a second
      worktree for the same work.
 
-   A parent that is itself in a worktree gets a clear start error for worktree children until
-   step 4.
+   D4b (the source-checkout override and the main-checkout worktrees root) lands with this step
+   too (Progress Decisions).
 
-4. **Remaining worktree rules (D4b, D4d rule 2).** The source-checkout override and the
-   main-checkout worktrees root for worktree parents, nested fan-out, and sibling delegation.
+4. **Remaining worktree rules (D4d rule 2).** Nested fan-out and sibling delegation.
    (R14's bug, [`mcp-queue-mutations-refused-on-paused-worktree-run`](../bugs/implemented/mcp-queue-mutations-refused-on-paused-worktree-run.md),
    is already fixed in `ffc623b4f`.)
 5. **Authored waves end to end:** inheriting members, `WORKTREE_COLLISION`, and named-worktree
@@ -2301,28 +2305,102 @@ summaries instead.
       sanitizer silently turns an inline `workflow` carrying `_runtime` into the text form; the
       dotted exclusions in the restored policy test can never match (paths are view-relative).
 
+- **Round 8 (reviewed 2026-11-27): round-7 gaps and the lane join rule.** `npm test` green
+  (8595 extension, 4926 UI). Three parallel reviewers went over the diffs. The six `claude-cli`
+  steps did what they were asked; the D13 step (codex) fixed most of the code but added few of
+  its tests, and its trust-identity fix introduced a bug. Gaps are round 9.
+  - `b440dcf53`: `subWorkflowSettled` records the queue step's `stepId` (optional; older events
+    fall back to the index); `SubWorkflowSettlements.ts` selects one entry per child run for
+    both CLI `subWorkflowRuns` and MCP; `status` is the child's `outcome.status`; in-flight
+    finalStep children only for the running pass; fixtures built with `TimelineRecorder`;
+    `workflow_status` reads the timeline once (`scanQueueStatusMetadata`); a real `read_output`
+    parity test against `PriorContextPreviewBuilder`.
+  - `53db230b7`: `CliRunProgressReporter` reports the root and every child through the same
+    handlers (`applyCliLinePrefix` is the one prefix rule); children get harness/model headers,
+    pass labels, parallel headers and retry tallies; a compiled-CLI test pins the root's exact
+    output; stronger `onFail: continue`, nested and finalStep-child compiled tests.
+  - `746238e02`: `gitWorktreeEntryMatchesManagedRecord` shared by the checkout lookup and both
+    discovery paths (recoverable discovery now skips prunable entries; stale discovery treats a
+    bare `prunable` line as stale, both intended); one `Log.warn` and "not managed" on any
+    failure; real-git stale/prunable/main/named/symlink tests and a `WorkflowInstance` wiring test.
+  - `4dfb23edb`: dispatch-substituted lineage name; parent trust identity through
+    `InlineParentDefinition`; missing-asset base from the parent's path; `ParallelGroupTopology`
+    through `getPromptReferenceTexts`; the sanitizer rejects an inline `workflow` with
+    `_runtime`. Tests only for the topology and sanitizer items.
+  - `b6dbb8268`: stop/pause/cancelPause held until the child's execution cycle starts (fresh
+    and D6 launches, one mechanism); dispose watched from creation; the relay registered before
+    the step's first await; one result mapping for step and `subWorkflowSettled`; one exported
+    `forwardSubWorkflowControl`; a settled handle ignores further controls.
+  - `aaa9c939b`: the prepared-member cache is scoped to one group dispatch; a member re-parses
+    at claim if its file changed; group D4c only at effective width > 1; `groupEffectiveWidth`
+    drives `concurrent`; condition wait in the stop-every-lane test.
+  - `d6095b6d8`: a lane cancelled by its parent never requests the parent's stop (fail-fast
+    fails the group under the failing member's `onFail`); a directly stopped lane lets siblings
+    finish and the group returns stopped (`stopsWorkflowAtJoin`, in memory); Continue re-enters
+    such a group and reattaches the stopped lane through D6.
+  - `c46238928` (review fix): the diff tests restored `getBoundingClientRect` by assignment,
+    leaving an own property on `HTMLElement.prototype` that hid `HarnessDropdown.test.tsx`'s
+    `Element.prototype` spy when files shared a worker (`stubBoundingClientRect`).
+  - **Found in review, not yet fixed** (round 9):
+    - Registry vs launcher (bug): children are registry instances, and the registry retires and
+      disposes any unviewed instance it sees COMPLETED/ERROR/STOPPED. `restoreFromWorkingFile`
+      emits the restored STOPPED/ERROR state during a D6 continuation's load, so in VS Code the
+      child can be disposed mid-load, `done` settles at once (the parent stops again or fails),
+      and the disposed child's execution keeps running without a lock heartbeat; a later
+      Continue can put a second executor on it. "Disposed while RUNNING settles CANCELLED" is
+      unsafe for the same reason. Integration tests bypass the registry.
+    - Join rule across a restart (bug): `stopsWorkflowAtJoin` is in memory only. A lane stopped
+      directly, then a host restart while a sibling still runs: the reloaded run is STOPPED
+      inside the group, `rewindCancelledStepForContinuation` checks `currentIndex-1` (before the
+      group), recovery returns a plain CANCELLED, and the group joins and advances without the
+      lane. Derive it from persisted state instead.
+    - Join rule gaps: an ad-hoc-promoted anchor that is a workflow step takes the sequential path
+      (stops the parent on fail-fast or a direct stop); under `anyStepKind` a group's cancelled
+      prompt members are not rewound, so a D6-continued child skips them; a fixed
+      `setTimeout(200)` in `waitForChildPausedCycle`.
+    - D13 (bug): the child's `sourceDefinitionPath` is set to the trust identity, which is also
+      the reference base, the append-rebasing destination and the `ancestorPaths` fallback. A
+      template parent ("Review loop") gives a child that resolves `./x` from the process cwd,
+      and a restored parent's working-file path makes its run directory a reference base. The
+      executor rebuilds the trust rule a third time. Missing tests: the executor's name
+      substitution end to end, a no-file parent's trust identity, a D6-continued inline child
+      in a managed worktree resolving a parent-relative reference, the missing-asset base; the
+      dotted-exclusion test is tautological; `getPromptReferenceTexts` was widened to
+      `step: object` with a cast; other non-inline objects still become the text form.
+    - CLI/MCP: child identity is `runRef` alone in `SubWorkflowSettlements.ts` and the builder
+      (`RunRef` is unique only within one lineage; two lanes starting in the same millisecond
+      collide), so key by `workflowKey` + `runRef`; a continued child still running shows its
+      earlier `cancelled`; an old event whose index no longer holds a workflow step is dropped
+      by the CLI but kept by MCP; the event → settlement conversion is written twice; the
+      nameless-child label prefers the key slug over the file name (the docs say file name);
+      child subscriptions live until the root's release; no MCP test for the `stepId` lookup
+      after a reorder.
+    - D4c: three more branch-plus-path copies (activation discovery, `currentOwnership`,
+      `reconcileBlockedManagedWorktrees`) that deliberately allow prunable entries; no test
+      that the warning is logged once.
+    - Landing step 2 promised a start error for a worktree child of a worktree parent until
+      D4b; the code gives none and branches from the main checkout, so a D4c checkpoint on a
+      managed parent is missing from the grandchild's worktree. Decision below.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 8 (queued 2026-11-27): close the round-7 gaps, then the lane join rule.** Every step
-  except the D13 one runs on `claude-cli`/`opus` (codex fell short on this area twice).
-  1. CLI JSON `subWorkflowRuns` from events plus MCP tests.
-  2. Single-sourced CLI progress reporter and compiled-CLI assertions.
-  3. D4c lookup through one shared matcher, logging, and the four tests.
-  4. D13 small fixes (name substitution, no-file trust identity, continuation test, asset
-     warning, topology/reference-text single-sourcing, sanitizer, policy test).
-  5. Stop/pause during a D6 continuation, early dispose, relay at the top of the step.
-  6. Parallel preflight fixes (cache lifetime, D4c only when the group fans out, `concurrent`
-     from the preflight width, test timing).
-  7. `cancelledBy` classification and the user-cancelled-lane join rule.
-- **Round 9: isolated lanes, part 1 continued (landing step 3).** `MERGE_INTO_SHARED_ROOT`,
-  D6 recovery of in-flight members, D12c per-member scope (a member may read only runs its own
-  step started), dashboard and CLI JSON for member children, joiners/ad-hoc promotion D4c.
+- **Round 9 (queued 2026-11-27): round-8 bugs, D4b, and the lane merge path.** All on
+  `claude-cli`/`opus`.
+  1. Registry ownership of launched children; dispose of a running child stops and waits.
+  2. Join rule from persisted state across a restart, adopted anchors, `anyStepKind` group
+     rewind.
+  3. D13 trust identity separate from the reference base, plus the missing D13 tests.
+  4. CLI/MCP identity by `workflowKey` + `runRef`, in-flight continued child, old-event parity,
+     label order, subscription lifetime; D4c sibling matcher and log test.
+  5. D4b (source checkout and worktrees root) plus D4d rule 1 for merge leases.
+  6. `MERGE_INTO_SHARED_ROOT` preflight and D6 recovery of in-flight members after a reload.
 - **Round 10: isolated lanes, part 2.** D4d sibling merge wait (R4), D14 `worktreePresets` +
-  `append_step`/`edit_step`/`workflow_status`, orchestrator agent and `spec-driven-loop`
-  template.
-- **Round 11: landing steps 4–5.** D4b, D4d rule 2, nested fan-out, inheriting members,
+  `append_step`/`edit_step`/`workflow_status` (including the `parallelWithCurrent` merge-lane
+  rejection), orchestrator agent and `spec-driven-loop` template, dashboard and CLI JSON for
+  member children.
+- **Round 11: landing steps 4–5.** D4d rule 2, nested fan-out, inheriting members,
   `WORKTREE_COLLISION`, named-worktree members.
 - **Round 12: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
   "Started by" label polish, editor mode + preview + completions polish (including skipping
@@ -2353,7 +2431,7 @@ Coarse roadmap; re-planned every pass.
   overlap is removed first (with the union widened only temporarily to list the sites), and
   the kind lands last. The `USER_INPUT_STEP_PLAN.md` kind will benefit from the same split.
 - **The sequential D4c dirty check is round 5** (moved from round 3, then round 4). It only
-  matters for a child with its own `worktree`, and D4b (branching from the parent) is round 8,
+  matters for a child with its own `worktree`, and D4b (branching from the parent) is round 9,
   so until then a worktree child branches from the main checkout as a top-level run does today.
 - **`settleNonHarnessStep` keeps one script quirk on purpose.** An errored script under
   `errorBehavior.onError: continue` fails its queue step and still returns "continue", as before
@@ -2418,8 +2496,10 @@ Coarse roadmap; re-planned every pass.
   Round 8 extends this to parents with no source file.
 - **A disposed child settles CANCELLED, not FAILED** (round 7): a host shutdown is not a child
   failure, and FAILED would let `onFail: continue` advance the parent past unfinished work.
-- **A pause that reaches a child still IDLE is held until it starts running** (round 7; D3 was
-  silent), so the child pauses before its first step.
+- **A stop, pause or cancel-pause that reaches a child before its execution cycle starts is
+  held and replayed once it starts** (round 7 for IDLE children; round 8 widened it to D6
+  continuations, which are STOPPED/PAUSED, not IDLE, while they load). D3 was silent. A paused
+  child pauses before its next step, and its parent stays PAUSING meanwhile (D3).
 - **`concurrent` is false when a group runs at width 1** (round 7), so a CLI child keeps the TTY
   as prompt members do. Round 8 makes the once-per-group D4c check follow the same rule: it
   applies only when the group actually fans out; at width 1 each member keeps the launcher's
@@ -2436,3 +2516,25 @@ Coarse roadmap; re-planned every pass.
   `parentRun` would make a direct child continue consistent with D6 at no cost to top-level
   runs; changing it for every run alters released behaviour (CHANGELOG **Changed**). Nothing
   queued depends on the answer.
+- **A group snapshots nothing at fan-out: a member re-parses at launch if its file changed
+  since preflight** (round 8), as a sequential step does. A re-parsed member carries no group
+  D4c result and runs the launcher's own check, like a late joiner.
+- **The lane join rule's precedence** (round 8; the spec was silent): after a lane is stopped
+  directly, members still waiting for a slot are dispatched; at the join a directly stopped
+  lane beats both a pause and a sibling failure (the parent stops, so Continue reconnects the
+  lane rather than advancing without it). Continue reconnects every cancelled workflow member
+  with a recorded child, whether a user or a parent stop cancelled it; prompt and script
+  members of a top-level run keep the top-level rule.
+- **A child disposed by a host shutdown counts as stopped by the child** (`cancelledBy:
+"child"`, round 8). Round 9 step 1 must make sure the registry's own retire path can never
+  dispose a child a launcher still owns, since that is not a shutdown.
+- **D4b moves ahead of the rest of landing step 4, into round 9** (round 8 review). The code
+  never gave the start error landing step 2 promised for a worktree child of a worktree
+  parent; it branches from the main checkout, so a D4c checkpoint on a managed parent is
+  silently missing from the grandchild (the exact loss D4c exists to prevent). A start error
+  would be built only to be removed. D4b is bounded (source checkout on the launch request,
+  worktrees root from the main checkout), and D4d rule 1 for merge leases goes with it, because
+  without a chain a lane's `merge: true` always ends `blocked` against its parent's lease.
+- **"D12c per-member scope" is dropped from the roadmap** (round 8). It was a forecast idea,
+  not a spec requirement: D12c's rule is descendants of the attached run, and every member's
+  child already is one.
