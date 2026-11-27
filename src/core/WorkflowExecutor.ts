@@ -755,6 +755,13 @@ export class WorkflowExecutor {
     string,
     RawWorkspaceState
   >();
+  /**
+   * Whether the current (or last) `execute()` confirmed a pause, which ends
+   * it. Settlement reads this instead of the run's status: a Continue
+   * pressed once the pause is confirmed makes the run RUNNING before the
+   * settlement starts, and the run still ended on that pause.
+   */
+  private pauseConfirmed = false;
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -877,6 +884,7 @@ export class WorkflowExecutor {
     this.clearResponseWaitState();
     this.fallbackRunStartView = undefined;
     this.pruneStaleJoinMarks();
+    this.pauseConfirmed = false;
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -4900,6 +4908,7 @@ export class WorkflowExecutor {
         runtime.confirmPaused();
         await this.promptQueue.commitRuntimeTransition();
       }
+      this.pauseConfirmed = true;
       Log.info(logMessage);
       return true;
     }
@@ -6839,6 +6848,14 @@ export class WorkflowExecutor {
 
   isAwaitingResponse(): boolean {
     return this.waitingResponseTargets.size > 0;
+  }
+
+  /**
+   * Whether the last `execute()` ended on a pause it confirmed, whatever the
+   * run's status has become since (see `pauseConfirmed`).
+   */
+  endedOnPause(): boolean {
+    return this.pauseConfirmed;
   }
 
   /**

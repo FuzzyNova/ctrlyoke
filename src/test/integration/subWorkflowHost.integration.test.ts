@@ -143,6 +143,39 @@ class ArtifactLeavingIntegration extends MockHarnessIntegration {
   }
 }
 
+/**
+ * An `ArtifactLeavingIntegration` whose best-effort cleanup can be held, so
+ * a test can act while a settlement is still cleaning up after it.
+ */
+class GatedCleanupIntegration extends ArtifactLeavingIntegration {
+  private gate: Promise<void> | undefined;
+  private openGate: (() => void) | undefined;
+  /** Best-effort cleanups that waited on the gate. */
+  heldCleanups = 0;
+
+  /** Hold every best-effort cleanup from now on until `releaseCleanups`. */
+  holdCleanups(): void {
+    this.gate ??= new Promise<void>((resolve) => {
+      this.openGate = resolve;
+    });
+  }
+
+  releaseCleanups(): void {
+    this.openGate?.();
+    this.gate = undefined;
+    this.openGate = undefined;
+  }
+
+  override async cleanupWorkflowArtifacts(): Promise<void> {
+    await super.cleanupWorkflowArtifacts();
+    const gate = this.gate;
+    if (gate) {
+      this.heldCleanups++;
+      await gate;
+    }
+  }
+}
+
 suite("Sub-workflow host end to end", () => {
   /**
    * Per child: whether anything subscribed to its queue state while it was
@@ -3638,17 +3671,24 @@ suite("Sub-workflow host end to end", () => {
     parent: WorkflowInstance,
     stepIndex: number
   ): WorkflowInstance | undefined {
-    const childRunRef = childRunRefOf(
-      parent.promptQueue.getState().steps[stepIndex]
-    );
-    return [...instances]
-      .reverse()
-      .find(
-        (instance) =>
-          instance !== parent &&
-          childRunRef !== undefined &&
-          instance.promptQueue.getState().runRef === childRunRef
+    const step = parent.promptQueue.getState().steps[stepIndex];
+    const childRunRef = childRunRefOf(step);
+    // Run refs are timestamps, so two lanes launched in the same millisecond
+    // share one in their own lineages: match the lineage too.
+    const childWorkflowKey =
+      step && isSubWorkflowStep(step)
+        ? step._runtime?.childWorkflowKey
+        : undefined;
+    return [...instances].reverse().find((instance) => {
+      const state = instance.promptQueue.getState();
+      return (
+        instance !== parent &&
+        childRunRef !== undefined &&
+        state.runRef === childRunRef &&
+        (childWorkflowKey === undefined ||
+          state.workflowKey === childWorkflowKey)
       );
+    });
   }
 
   /**
@@ -7487,6 +7527,40 @@ suite("Sub-workflow host end to end", () => {
     instances: WorkflowInstance[],
     leadingSteps: readonly unknown[] = []
   ): Promise<T> {
+    const { parent, execution } = await pausingWorktreeRun(
+      workspace,
+      control,
+      worktree,
+      createInstance,
+      instances,
+      { leadingSteps }
+    );
+    await settlesWithin("the paused execution", execution, 60_000);
+    assert.strictEqual(
+      parent.promptQueue.getState().status,
+      EXECUTION_STATES.PAUSED
+    );
+    return parent;
+  }
+
+  /**
+   * `pausedWorktreeRun` up to the pause request: the gated step is released
+   * and the execution (still unwinding or settling) is returned unawaited.
+   * `beforeRelease` runs once the pause is requested, before the gated step
+   * may finish.
+   */
+  async function pausingWorktreeRun<T extends WorkflowInstance>(
+    workspace: string,
+    control: string,
+    worktree: unknown,
+    createInstance: () => T,
+    instances: WorkflowInstance[],
+    options: {
+      leadingSteps?: readonly unknown[];
+      beforeRelease?: (parent: T) => Promise<void>;
+    } = {}
+  ): Promise<{ parent: T; execution: Promise<void> }> {
+    const leadingSteps = options.leadingSteps ?? [];
     initGitRepository(workspace);
     await writeGateScript(control);
     await fs.writeFile(
@@ -7517,13 +7591,30 @@ suite("Sub-workflow host end to end", () => {
     const execution = parent.executeLoadedPromptFile();
     await waitForFile(path.join(control, "a-runs"));
     await parent.pause();
+    await options.beforeRelease?.(parent);
     await fs.writeFile(path.join(control, "a-go"), "");
-    await settlesWithin("the paused execution", execution, 60_000);
-    assert.strictEqual(
-      parent.promptQueue.getState().status,
-      EXECUTION_STATES.PAUSED
-    );
-    return parent;
+    return { parent, execution };
+  }
+
+  /** How many times a captured log settled a managed worktree. */
+  function managedSettlements(lines: readonly { message: string }[]): number {
+    return lines.filter((line) =>
+      line.message.includes("Settling managed worktree")
+    ).length;
+  }
+
+  /** Wait for the run's manifest to record `state`, failing with what it holds. */
+  async function waitForManifestState(
+    instance: WorkflowInstance,
+    state: string
+  ): Promise<void> {
+    const deadline = Date.now() + 10000;
+    let manifestState = await readExecutionState(instance);
+    while (manifestState !== state && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      manifestState = await readExecutionState(instance);
+    }
+    assert.strictEqual(manifestState, state, "the manifest's run status");
   }
 
   /**
@@ -7800,6 +7891,9 @@ suite("Sub-workflow host end to end", () => {
       assert.strictEqual(settled.mergeOutcome, "fast-forward");
       await fs.access(path.join(workspace, "lane.txt"));
       await assert.rejects(fs.access(path.join(control, "c-runs")));
+      // The manifest ends as the run does, not on the CANCELLING a stop
+      // pressed after a Continue passes through.
+      await waitForManifestState(parent, EXECUTION_STATES.STOPPED);
     } finally {
       configService.setCliOverlay({});
       for (const name of ["a", "b", "c"]) {
@@ -7967,6 +8061,263 @@ suite("Sub-workflow host end to end", () => {
       );
       await fs.access(path.join(control, "second-ran"));
     } finally {
+      await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(control);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a stop pressed while a paused managed run's settlement still cleans up waits for it, then lands once through the strict check", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-paused-settling-stop-");
+    const control = makeTempDir("ctrlyoke-paused-settling-stop-control-");
+    const integration = new GatedCleanupIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      integration
+    );
+    const log = captureLog();
+    try {
+      let leasesRoot: string | undefined;
+      const { parent, execution } = await pausingWorktreeRun(
+        workspace,
+        control,
+        { mode: "managed", merge: true },
+        createInstance,
+        instances,
+        {
+          leadingSteps: [{ prompt: "write the provider hooks" }],
+          beforeRelease: async (pausing) => {
+            leasesRoot = await worktreeLeasesRoot(pausing);
+            // The pause's own settlement cleans up the integration after
+            // the executor has returned; hold it there.
+            pausing.promptQueue.onDidChangeState((state) => {
+              if (state.status === EXECUTION_STATES.PAUSED) {
+                integration.holdCleanups();
+              }
+            });
+          },
+        }
+      );
+      await waitFor(
+        "the pause's settlement to clean up the integration",
+        () => integration.heldCleanups > 0,
+        60_000,
+        () => parent.promptQueue.getState().status
+      );
+      assert.strictEqual(parent.startPending, true, "the pause is settling");
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.PAUSED
+      );
+
+      const stop = parent.stop();
+      // Either the stop waits for the settlement, or it ends the run beside
+      // it (the bug); release the cleanup once it has done one of them.
+      await waitFor(
+        "the stop to wait for the pause's settlement",
+        () =>
+          parent.promptQueue.getState().status === EXECUTION_STATES.STOPPED ||
+          log.lines.some((line) =>
+            line.message.includes("waiting for the paused execution")
+          ),
+        60_000,
+        () => parent.promptQueue.getState().status
+      );
+      integration.releaseCleanups();
+      await settlesWithin("the stop", stop, 60_000);
+      await settlesWithin("the paused execution", execution, 60_000);
+
+      assert.deepStrictEqual(
+        log.lines.filter((line) =>
+          line.message.includes(STOP_FALLBACK_WARNING)
+        ),
+        [],
+        "stop settled without the fallback"
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.ok(
+        integration.strictCleanupRoots.length > 0,
+        "the strict cleanup covered the integration the pause was settling"
+      );
+      assert.ok(integration.closedTerminals.length > 0, "terminals closed");
+      assert.ok(
+        integration.closedTerminals.every(
+          (reason) => reason === TERMINAL_END_REASONS.WORKTREE_RELEASED
+        ),
+        integration.closedTerminals.join(", ")
+      );
+      const settled = await worktreeRuntimeOf(parent);
+      assert.strictEqual(settled.landingOutcome, "blocked");
+      assert.ok(
+        settled.message?.includes(ArtifactLeavingIntegration.LEFT_ARTIFACT),
+        String(settled.message)
+      );
+      assert.strictEqual(
+        managedSettlements(log.lines),
+        1,
+        "the worktree settled once"
+      );
+      await assert.rejects(
+        fs.access(path.join(workspace, "lane.txt")),
+        "nothing landed in the main checkout"
+      );
+      assert.ok(leasesRoot);
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: false, leases: 0 }
+      );
+      await waitForManifestState(parent, EXECUTION_STATES.STOPPED);
+    } finally {
+      log.restore();
+      integration.releaseCleanups();
+      await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(control);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a Continue pressed as a managed run confirms its pause after a final step appended work keeps the worktree, and the run finishes in it with one landing", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-paused-managed-continue-");
+    const control = makeTempDir("ctrlyoke-paused-managed-continue-control-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const log = captureLog();
+    try {
+      initGitRepository(workspace);
+      await writeGateScript(control);
+      // The appended step records where it ran and leaves work to land.
+      await fs.writeFile(
+        path.join(control, "second.js"),
+        [
+          "const fs = require('fs');",
+          "fs.writeFileSync(process.argv[2], fs.realpathSync.native(process.cwd()));",
+          "fs.writeFileSync('second.txt', 'ran\\n');",
+        ].join("\n")
+      );
+      const secondCwd = path.join(control, "second-cwd");
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Paused final step",
+        worktree: { mode: "managed", merge: true },
+        steps: [
+          {
+            type: "script",
+            script: `node -e "require('fs').writeFileSync('lane.txt','ran\\n')"`,
+          },
+        ],
+        // Gated on its first pass; every later pass finds the gate open.
+        finalStep: {
+          type: "script",
+          script: `node "${path.join(control, "gate.js")}" "${path.join(control, "a")}"`,
+        },
+      });
+      commitAll(workspace, "add workflow");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(control, "a-runs"));
+      const pausedWorktree = await realWorktreePathOf(parent);
+      const leasesRoot = await worktreeLeasesRoot(parent);
+
+      // The final step's pass appends queue work, as an orchestrating final
+      // step does through MCP; the run is paused before the pass ends.
+      const { workflowKey, runRef } = parent.promptQueue.getState();
+      await RunContinuationService.appendStepsToRun(
+        workspace,
+        workflowKey!,
+        runRef!,
+        [
+          {
+            type: STEP_TYPES.SCRIPT,
+            script: `node "${path.join(control, "second.js")}" "${secondCwd}"`,
+          },
+        ],
+        await RunContinuationService.readRunDefinitionRevision(
+          workspace,
+          workflowKey!,
+          runRef!
+        ),
+        100,
+        undefined,
+        true
+      );
+      await parent.pause();
+      // Continue the moment the pause is confirmed, before the executor's
+      // settlement reads the run's status.
+      let resumed: Promise<void> | undefined;
+      parent.promptQueue.onDidChangeState((state) => {
+        if (resumed || state.status !== EXECUTION_STATES.PAUSED) return;
+        resumed = parent.resume();
+      });
+      await fs.writeFile(path.join(control, "a-go"), "");
+      await settlesWithin("the paused execution", execution, 60_000);
+      await waitFor("the continue", () => resumed !== undefined);
+      await settlesWithin("the continue", resumed!, 60_000);
+      await waitFor(
+        "the run to complete",
+        () =>
+          parent.promptQueue.getState().status === EXECUTION_STATES.COMPLETED &&
+          !parent.startPending,
+        60_000,
+        () => parent.promptQueue.getState().status
+      );
+
+      assert.deepStrictEqual(
+        log.lines.filter((line) =>
+          line.message.includes(STOP_FALLBACK_WARNING)
+        ),
+        []
+      );
+      assert.strictEqual(
+        await fs.readFile(secondCwd, "utf8"),
+        pausedWorktree,
+        "the step after the pause ran in the paused run's worktree"
+      );
+      assert.strictEqual(
+        managedSettlements(log.lines),
+        1,
+        "the worktree landed once, when the run completed"
+      );
+      const settled = await worktreeRuntimeOf(parent);
+      assert.strictEqual(settled.landingOutcome, "landed");
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "lane.txt"), "utf8"),
+        "ran\n"
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "second.txt"), "utf8"),
+        "ran\n",
+        "the landing carried the work from both sides of the pause"
+      );
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: false, leases: 0 }
+      );
+    } finally {
+      log.restore();
       await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
       restoreGitTimeouts();
       await disposeAll(instances, workspace);

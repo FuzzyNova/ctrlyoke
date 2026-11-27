@@ -312,6 +312,15 @@ interface RunEndReservation {
   readonly managedTerminalRun: boolean;
 }
 
+/**
+ * The strict artifact cleanup of the integrations a run's end settled: it
+ * decides whether a managed worktree may land.
+ */
+interface StrictArtifactCleanup {
+  readonly strictArtifactCleanupSucceeded: boolean;
+  readonly strictArtifactCleanupMessage: string | undefined;
+}
+
 /** A managed worktree's `merge` and `keep`, as its settlement applies them. */
 interface ManagedWorktreeSettlement {
   readonly merge: boolean;
@@ -3252,20 +3261,28 @@ export class WorkflowInstance
     // it. This comes before the setup branch: a Continue's resume marks its
     // startup before it has done any setup, and the reservation its pause
     // kept is settled here, not by that resume.
+    //
+    // The wait covers the pause's own settlement too, which runs after the
+    // executor has returned (so it is no longer live) and is what parks the
+    // integrations and keeps the reservation that the idle branch settles:
+    // run beside it, that branch would miss the integrations not yet
+    // parked, and the pause's settlement would clear `startPending` under it.
     if (pausedAtEntry) {
-      if (this.workflowExecutor.hasLiveExecution()) {
+      const liveExecution = this.workflowExecutor.hasLiveExecution();
+      if (liveExecution || this.startPending) {
         // A Continue pressed first has already made the run RUNNING, and the
         // still-live executor carries on in place when it sees that (the
         // Continue's resume waits for it rather than starting its own).
         // Requesting the stop now holds it at the step boundary it paused
         // at; nothing is in flight, so no attempt is cancelled.
         if (
+          liveExecution &&
           this.workflowRuntime.status === EXECUTION_STATES.RUNNING &&
           this.workflowRuntime.requestStop()
         ) {
           await this.promptQueue.commitRuntimeTransition({ persist: false });
         }
-        await this.waitForPausedExecutionToUnwind();
+        await this.waitForPausedExecutionToSettle();
       }
       if (
         this.activeTargetResources.size === 0 &&
@@ -3521,12 +3538,16 @@ export class WorkflowInstance
   }
 
   /**
-   * Wait, bounded, for an execution that confirmed PAUSED at a step boundary
-   * to finish unwinding, so `stop()` can treat it as an idle pause.
+   * Wait for an execution that confirmed PAUSED at a step boundary to finish
+   * unwinding and settling, so `stop()` can treat it as an idle pause. The
+   * unwind is bounded (`PAUSED_UNWIND_TIMEOUT_MS`; an execution still live
+   * after it goes through the cancellation path). The settlement after it
+   * is not: it is finite work (artifact cleanup, history finalization) and
+   * the idle branch must not run beside it.
    */
-  private async waitForPausedExecutionToUnwind(): Promise<void> {
+  private async waitForPausedExecutionToSettle(): Promise<void> {
     Log.info(
-      `[inst:${this.id.slice(0, 8)}] stop() while paused - waiting for the paused execution to unwind`
+      `[inst:${this.id.slice(0, 8)}] stop() while paused - waiting for the paused execution to unwind and settle`
     );
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
@@ -3539,6 +3560,9 @@ export class WorkflowInstance
       }),
     ]);
     clearTimeout(timeoutHandle);
+    if (this.startPending && !this.workflowExecutor.hasLiveExecution()) {
+      await this.executionSettledPromise;
+    }
   }
 
   /**
@@ -5877,9 +5901,19 @@ export class WorkflowInstance
     workingFilePath: string | undefined;
   }): Promise<void> {
     this.runStartView = undefined;
+    const status = this.workflowRuntime.status;
+    // A Continue pressed once the executor confirmed its pause has already
+    // made the run RUNNING, but the execution still ended on that pause,
+    // and the Continue (waiting for this settlement) carries on in its
+    // worktree: settle it as paused. A CANCELLING run is ending and settles
+    // here (a stop pressed after that Continue while the execution was
+    // live requested it; one that fell back to the cancellation path after
+    // the unwind cap settles nothing itself), as does an ended one.
     const paused =
-      this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
-      this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
+      status === EXECUTION_STATES.PAUSED ||
+      status === EXECUTION_STATES.PAUSING ||
+      (status === EXECUTION_STATES.RUNNING &&
+        this.workflowExecutor.endedOnPause());
     const reservation = this.resolveRunEndReservation(paused);
     const integrationCleanup = await this.settleExecutionIntegrations(
       options,
@@ -5939,10 +5973,10 @@ export class WorkflowInstance
   private async settleRunEndReservations(
     options: { workingFilePath: string | undefined },
     reservation: RunEndReservation,
-    cleanup: {
-      strictArtifactCleanupSucceeded: boolean;
-      strictArtifactCleanupMessage?: string;
-    } = { strictArtifactCleanupSucceeded: true }
+    cleanup: StrictArtifactCleanup = {
+      strictArtifactCleanupSucceeded: true,
+      strictArtifactCleanupMessage: undefined,
+    }
   ): Promise<void> {
     // Only a started run reaches settlement, and a run needs a state root.
     const workspaceRoot = this.executionWorkspace.stateRoot;
@@ -5950,8 +5984,7 @@ export class WorkflowInstance
       options,
       reservation.terminalWorktreeRun,
       workspaceRoot,
-      cleanup.strictArtifactCleanupSucceeded,
-      cleanup.strictArtifactCleanupMessage
+      cleanup
     );
     await this.settleActiveExecutionWorktree(
       reservation.terminalWorktreeRun,
@@ -5970,12 +6003,11 @@ export class WorkflowInstance
     preserveWorktreeReservation: boolean,
     terminalWorktreeRun: boolean,
     workspaceRoot: string
-  ): Promise<{
-    strictArtifactCleanupSucceeded: boolean;
-    strictArtifactCleanupMessage: string | undefined;
-  }> {
-    let strictArtifactCleanupSucceeded = true;
-    let strictArtifactCleanupMessage: string | undefined;
+  ): Promise<StrictArtifactCleanup> {
+    let cleanup: StrictArtifactCleanup = {
+      strictArtifactCleanupSucceeded: true,
+      strictArtifactCleanupMessage: undefined,
+    };
     this.lastRunIntegrations = [];
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
@@ -6044,21 +6076,13 @@ export class WorkflowInstance
           );
           execIntegration.dispose();
         }
-        const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+        cleanup = await this.settleIntegrationArtifacts(
           execIntegration,
           options.workingFilePath,
-          execIntegration.getExecutionRoot() ?? workspaceRoot,
-          terminalWorktreeRun
+          workspaceRoot,
+          terminalWorktreeRun,
+          cleanup
         );
-        if (!cleanup.cleaned) {
-          strictArtifactCleanupSucceeded = false;
-          strictArtifactCleanupMessage = [
-            strictArtifactCleanupMessage,
-            cleanup.message,
-          ]
-            .filter(Boolean)
-            .join("; ");
-        }
         // Normal path: terminal closed or terminal reuse not active — dispose now
         // and save so the next run can close any VS Code terminal tab left open.
         if (!terminalWorktreeRun) {
@@ -6085,19 +6109,15 @@ export class WorkflowInstance
     this.targetScriptProcessRunners.clear();
     this.activeTargetResources.clear();
 
-    return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
+    return cleanup;
   }
 
   private async settleRetainedIntegrations(
     options: { workingFilePath: string | undefined },
     terminalWorktreeRun: boolean,
     workspaceRoot: string,
-    strictArtifactCleanupSucceeded: boolean,
-    strictArtifactCleanupMessage: string | undefined
-  ): Promise<{
-    strictArtifactCleanupSucceeded: boolean;
-    strictArtifactCleanupMessage: string | undefined;
-  }> {
+    cleanup: StrictArtifactCleanup
+  ): Promise<StrictArtifactCleanup> {
     // A retained entry can survive an unusual handoff path even when it was
     // not reinserted into executionIntegrations. It is still part of the
     // worktree cleanup barrier and must never outlive the lease. So are the
@@ -6124,26 +6144,51 @@ export class WorkflowInstance
         ...parked,
         ...this.liveReusableIntegrations.values(),
       ]) {
-        const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+        cleanup = await this.settleIntegrationArtifacts(
           integration,
           options.workingFilePath,
-          integration.getExecutionRoot() ?? workspaceRoot,
-          true
+          workspaceRoot,
+          true,
+          cleanup
         );
-        if (!cleanup.cleaned) {
-          strictArtifactCleanupSucceeded = false;
-          strictArtifactCleanupMessage = [
-            strictArtifactCleanupMessage,
-            cleanup.message,
-          ]
-            .filter(Boolean)
-            .join("; ");
-        }
       }
       this.liveReusableIntegrations.clear();
     }
 
-    return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
+    return cleanup;
+  }
+
+  /**
+   * Clean up one settled integration's workflow artifacts in its own
+   * execution root (strictly when its worktree is being settled) and fold
+   * the result into `cleanup`: a strict failure blocks the landing, with
+   * its message joined to any earlier one.
+   */
+  private async settleIntegrationArtifacts(
+    integration: HarnessIntegration,
+    workingFilePath: string | undefined,
+    workspaceRoot: string,
+    strict: boolean,
+    cleanup: StrictArtifactCleanup
+  ): Promise<StrictArtifactCleanup> {
+    const result = await this.cleanupIntegrationArtifactsForSettlement(
+      integration,
+      workingFilePath,
+      integration.getExecutionRoot() ?? workspaceRoot,
+      strict
+    );
+    if (result.cleaned) {
+      return cleanup;
+    }
+    return {
+      strictArtifactCleanupSucceeded: false,
+      strictArtifactCleanupMessage: [
+        cleanup.strictArtifactCleanupMessage,
+        result.message,
+      ]
+        .filter(Boolean)
+        .join("; "),
+    };
   }
 
   /**
