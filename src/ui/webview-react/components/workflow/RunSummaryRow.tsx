@@ -263,7 +263,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
                   getVsCodeApi(),
                   {
                     workflowKey: parentRun.workflowKey,
-                    kind: "run",
+                    kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
                     runRef: parentRun.runRef,
                   },
                   row.parentWorkflowName

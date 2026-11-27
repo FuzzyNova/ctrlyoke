@@ -1,3 +1,4 @@
+import type { SubWorkflowParentLink } from "@root/types/SubWorkflowTypes";
 import React, {
   useState,
   useRef,
@@ -175,6 +176,15 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
   const recentWorkflows = useUiStore((s) => s.recentWorkflows);
   const recentWorkflowsLoaded = useUiStore((s) => s.recentWorkflowsLoaded);
+  /** "Started by" label target; undefined when the parent lineage is not in this project. */
+  const parentWorkflowNameFor = (
+    parentRun: SubWorkflowParentLink | undefined
+  ): string | undefined =>
+    parentRun
+      ? recentWorkflows.find(
+          (workflow) => workflow.address.workflowKey === parentRun.workflowKey
+        )?.workflowName
+      : undefined;
   const setRecentWorkflows = useUiStore((s) => s.setRecentWorkflows);
   const openDuplicateWorkflowDialog = useUiStore(
     (s) => s.openDuplicateWorkflowDialog
@@ -1667,13 +1677,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
         ...runPanelSummaries.map((summary) => ({
           kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary,
-          parentWorkflowName: summary.parentRun
-            ? recentWorkflows.find(
-                (workflow) =>
-                  workflow.address.workflowKey ===
-                  summary.parentRun?.workflowKey
-              )?.workflowName
-            : undefined,
+          parentWorkflowName: parentWorkflowNameFor(summary.parentRun),
         })),
       ]
     : [];
@@ -1715,12 +1719,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
           (summary) => summary.runRef === displayedViewAddress.runRef
         )?.parentRun
       : undefined;
-  const displayedParentWorkflowName = displayedParentRun
-    ? recentWorkflows.find(
-        (workflow) =>
-          workflow.address.workflowKey === displayedParentRun.workflowKey
-      )?.workflowName
-    : undefined;
+  const displayedParentWorkflowName = parentWorkflowNameFor(displayedParentRun);
 
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">

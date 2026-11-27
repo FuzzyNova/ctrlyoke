@@ -329,6 +329,20 @@ export type RunOutputResolverAttemptEvent =
  * `resolveAttempt()` is a convenience reduction that retains only one attempt's
  * output (the value it returns), never the run's complete event log.
  */
+/** Visited-set key for sub-workflow recursion: one entry per run address. */
+function subWorkflowVisitKey(workflowKey: string, runRef: string): string {
+  return `${workflowKey}/${runRef}`;
+}
+
+/** The same key, from a run's manifest path (`<runsRoot>/<workflowKey>/<runRef>/manifest.json`). */
+function subWorkflowVisitKeyFromManifest(manifestPath: string): string {
+  const runDirectory = path.dirname(manifestPath);
+  return subWorkflowVisitKey(
+    path.basename(path.dirname(runDirectory)),
+    path.basename(runDirectory)
+  );
+}
+
 export class RunOutputResolver {
   constructor(
     private readonly recorder: TimelineRecorder = new TimelineRecorder()
@@ -1494,9 +1508,7 @@ export class RunOutputResolver {
       deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]),
       options,
       visitedSubWorkflows ??
-        new Set([
-          `${path.basename(path.dirname(path.dirname(manifestPath)))}/${path.basename(path.dirname(manifestPath))}`,
-        ])
+        new Set([subWorkflowVisitKeyFromManifest(manifestPath)])
     );
   }
 
@@ -1509,7 +1521,7 @@ export class RunOutputResolver {
       if (!item.subWorkflow) continue;
       const { childWorkflowKey, childRunRef } = item.subWorkflow.output;
       try {
-        const address = `${childWorkflowKey}/${childRunRef}`;
+        const address = subWorkflowVisitKey(childWorkflowKey, childRunRef);
         if (visited.has(address)) {
           Log.warn(`[RunOutputResolver] Sub-workflow cycle at ${address}`);
           continue;
@@ -1579,9 +1591,7 @@ export class RunOutputResolver {
       maxIndex + 1,
       options,
       visitedSubWorkflows ??
-        new Set([
-          `${path.basename(path.dirname(path.dirname(manifestPath)))}/${path.basename(path.dirname(manifestPath))}`,
-        ])
+        new Set([subWorkflowVisitKeyFromManifest(manifestPath)])
     );
   }
 

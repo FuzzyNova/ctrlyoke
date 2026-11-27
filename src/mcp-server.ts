@@ -1411,26 +1411,7 @@ export class CtrlYokeMCPServer {
     const workflowExecutionMode =
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
-    const manifestPath = WorkflowPaths.manifestPath(
-      this.workspaceRoot,
-      selected.workflowKey,
-      selected.runRef
-    );
-    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
-    try {
-      for (const event of await new TimelineRecorder().readEvents(
-        manifestPath
-      )) {
-        if (
-          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
-          event.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          subWorkflowOutputs.set(event.target.stepIndex, event.payload);
-        }
-      }
-    } catch {
-      // The timeline is the durable source; absent history simply omits output metadata.
-    }
+    const subWorkflowOutputs = await this.readQueueSubWorkflowOutputs(selected);
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -2143,6 +2124,36 @@ export class CtrlYokeMCPServer {
   }
 
   /**
+   * Settled child metadata per queue step index for one run, from its timeline.
+   * Missing or unreadable history yields an empty map, so callers just omit it.
+   */
+  private async readQueueSubWorkflowOutputs(selected: {
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+  }): Promise<Map<number, SubWorkflowOutput>> {
+    const outputs = new Map<number, SubWorkflowOutput>();
+    try {
+      for (const event of await new TimelineRecorder().readEvents(
+        WorkflowPaths.manifestPath(
+          this.workspaceRoot,
+          selected.workflowKey,
+          selected.runRef
+        )
+      )) {
+        if (
+          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+          event.target.kind === FINAL_STEP_PHASES.QUEUE
+        ) {
+          outputs.set(event.target.stepIndex, event.payload);
+        }
+      }
+    } catch {
+      // The timeline is the durable source; absent history omits the metadata.
+    }
+    return outputs;
+  }
+
+  /**
    * Handle read_output tool invocation.
    * Returns AI response text from completed prompts.
    */
@@ -2225,26 +2236,7 @@ export class CtrlYokeMCPServer {
             .map((stepIndex) => ({ kind: "queue" as const, stepIndex }))
         )
       : new Map();
-    const subWorkflowOutputs = new Map<number, SubWorkflowOutput>();
-    const manifestPath = WorkflowPaths.manifestPath(
-      this.workspaceRoot,
-      selected.workflowKey,
-      selected.runRef
-    );
-    try {
-      for (const event of await new TimelineRecorder().readEvents(
-        manifestPath
-      )) {
-        if (
-          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
-          event.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          subWorkflowOutputs.set(event.target.stepIndex, event.payload);
-        }
-      }
-    } catch {
-      // The regular output projection below remains available if history is missing.
-    }
+    const subWorkflowOutputs = await this.readQueueSubWorkflowOutputs(selected);
     const outputs = await Promise.all(
       requestedIndices
         .filter((i) => i >= 0 && i < allSteps.length)

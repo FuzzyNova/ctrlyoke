@@ -558,8 +558,10 @@ export function buildManagedAutoCommitMessage(label: string): string {
   return `chore(ctrlyoke): auto-commit changes for "${singleLine}"`;
 }
 
-export const DIRTY_PARENT_WORKTREE_CHILD_MESSAGE =
-  "Commit or stash the parent's changes before starting worktree sub-workflows (dirty: N files)";
+/** D4c start failure for a dirty user-owned parent checkout (spec wording, verbatim). */
+export function dirtyParentWorktreeChildMessage(dirtyCount: number): string {
+  return `Commit or stash the parent's changes before starting worktree sub-workflows (dirty: ${dirtyCount} files)`;
+}
 
 /** Ensure a child worktree starts from a checkout that includes parent changes. */
 export async function prepareParentCheckoutForWorktreeChild(args: {
@@ -576,9 +578,7 @@ export async function prepareParentCheckoutForWorktreeChild(args: {
   )(args.checkoutRoot);
   if (dirtyCount === 0) return;
   if (!args.managed) {
-    throw new Error(
-      DIRTY_PARENT_WORKTREE_CHILD_MESSAGE.replace("N", String(dirtyCount))
-    );
+    throw new Error(dirtyParentWorktreeChildMessage(dirtyCount));
   }
   await (args.operations?.commit ?? commitAll)(
     args.checkoutRoot,

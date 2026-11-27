@@ -8,7 +8,7 @@ import {
   WorktreeManager,
   WorktreeSetupError,
   buildManagedAutoCommitMessage,
-  DIRTY_PARENT_WORKTREE_CHILD_MESSAGE,
+  dirtyParentWorktreeChildMessage,
   prepareParentCheckoutForWorktreeChild,
   type WorktreeMergeOperations,
   type WorktreeSetupRunner,
@@ -177,9 +177,7 @@ suite("WorktreeManager", function () {
         managed: false,
         operations,
       }),
-      (error: Error) =>
-        error.message ===
-        DIRTY_PARENT_WORKTREE_CHILD_MESSAGE.replace("N files", "2 files")
+      (error: Error) => error.message === dirtyParentWorktreeChildMessage(2)
     );
     await prepareParentCheckoutForWorktreeChild({
       checkoutRoot: "/repo",

@@ -24,6 +24,7 @@ import { getStepKindIconClass } from "@utils/status";
 import {
   STEP_TYPES,
   SUB_WORKFLOW_DASHBOARD_LABELS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import {
   assertNever,
@@ -379,7 +380,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                     getVsCodeApi(),
                     {
                       workflowKey: workflowRun.workflowKey,
-                      kind: "run",
+                      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
                       runRef: workflowRun.runRef,
                     },
                     workflowRun.workflowName
