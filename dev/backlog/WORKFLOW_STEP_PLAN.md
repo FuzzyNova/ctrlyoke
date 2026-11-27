@@ -2541,26 +2541,104 @@ summaries instead.
       step fails anyway); join marks keyed by index (no edit path moves settled steps); a file
       child counts as neither editor nor merger at join time (as in preview).
 
+- **Round 11 (reviewed 2026-11-27): round-10 gaps, lanes for agents and users.** All five
+  `claude-cli`/`opus` steps did what they were asked, with tests; `npm test` green (8739
+  extension, 4945 UI, packaging). Three parallel reviewers read the diffs. The live dashboard
+  check the round's step 5 could not run (no Playwright in its session) was done in review:
+  an authored two-lane group renders Workflow and Worktree badges and inherited harness/model
+  per lane (a lane with its own `harness: codex-cli` shows Codex). Review fix `6f440a65b`: the
+  agent's integration step now merges only lanes ending `conflict`/`blocked`/`abort-failed`
+  (a lane with no changes has no `mergeOutcome` and maybe no branch), finds lanes by name, and
+  makes every member of a merging-preset group a lane; docs/CHANGELOG no longer promise the
+  worktree is kept when a stop ends the lease backoff (the lane has already landed and removed
+  it); two misleading test comments.
+  - `2a4238d26`: `WorkflowExecutor.hasLiveExecution()`; `stop()`'s `confirmStopped` defers only
+    while the loop or a group run is live, and a PAUSED run with nothing in flight confirms at
+    once (it stuck in CANCELLING; CHANGELOG **Fixed**); Continue re-enters the group; tests
+    for the promoted-anchor confirm and retiring a released PAUSED child;
+    `getViewDefinitionSources` gated on `sameViewAddress`.
+  - `e0cfc94ff`: `edit_step` runs the `MERGE_INTO_SHARED_ROOT` join refusal for members of the
+    running group (only edits that create a new conflict for that step); `carryQueueSlotRuntime`
+    (`StepIdentity.ts`) carries `stepId` and `rewoundFailure` across a kind change;
+    `runsInMainCheckout(executionRoot, stateRoot)` single-sources the rule for executor, preview
+    and both RunContinuationService checks, with MCP passing `CTRLYOKE_EXECUTION_ROOT`; refusal
+    wording; Save As keeps `worktreePresets`.
+  - `a4731feb3`: injectable lock timeouts; real-git tests that a merging lane outlasts the short
+    timeout and that chainless and non-merge settlements keep it; `withFileLock` takes a
+    `signal` (`FileLockAbortedError`; the first attempt always runs, so a free lock is still
+    taken); `stop()` aborts a settling lane's lock wait and merge-lease backoff
+    (`waitForRetryDelay`), recording merge `blocked`; a lock timeout on a merging lane also
+    records `blocked`.
+  - `9623bd7e3`: orchestrator agent "Lanes" / "Shared-tree members" guidance, `committed` scoped
+    to shared-tree members; `spec-driven-loop` declares `worktreePresets.lane` (`merge: true`,
+    `setup: "{laneSetup}"`, default `npm ci`); CHANGELOG **Changed** (the template shipped in
+    0.2.0).
+  - `dcb55cafa`: lane rows show inherited harness/model and a worktree badge (branch once known);
+    a COMPLETED lane with a `conflict`/`blocked`/`abort-failed` merge shows a warning badge
+    (`subWorkflowDisplay.ts`, labels in `SUB_WORKFLOW_DASHBOARD_LABELS`); the settlement block is
+    no longer dropped when a status activity shares its step (`isSubWorkflowSettlement`); CLI
+    `--json` `subWorkflowRuns[].worktree` (additive).
+  - **Found in review, not yet fixed** (round 12 steps 1–3):
+    - Skill-mode MCP (bug, regression from `e0cfc94ff`): `runMcpToolCli` (`mcp-server.ts`
+      ~3071) sets `CTRLYOKE_EXECUTION_ROOT` to `process.cwd()` when no `--execution-root` is
+      given, and skill command lines pass it only for the coordination tools, so `edit_step` /
+      `append_step` in skill mode take the agent's shell directory as the run's root. A run in
+      the main checkout driven from `<repo>/src` then admits a merging lane beside a
+      `worktree: false` member. The doc comment on `launchedExecutionRoot` says the opposite.
+      No MCP test sets the variable; the edit path's `executionRoot` argument is untested.
+    - Idle-pause stop (bug): the new PAUSED branch in `stop()` still runs
+      `markInFlightPromptCancelled()` and `cancelAttempt(...)` before confirming, so a completed
+      group member at the head is likely shown CANCELLED, and a sequential paused run's next
+      (never started) step is cancelled and skipped on Continue (`finalizeCancelledPromptAfterStop`).
+      Pre-existing after the 10 s detector, now instant. It should mirror the
+      `preDispatchStartup` branch: nothing cancelled, nothing skipped. A stop landing just as a
+      group pauses still waits the 10 s detector (state ends right; spurious warning).
+    - Settlement paths that ignore the stop signal (bug): `WorkflowStartupPipeline`
+      `settleProvisionedWorktreeAfterEarlyFailure` (~1488) and
+      `releaseReservationsAfterSetupStop` (~1526) call `completeManagedRun` directly, so a
+      `merge: true` lane stopped during its `setup` (likely with the template's `npm ci`)
+      waits up to 120 s behind a sibling and a second Stop can't end it; the merge/keep-from-config
+      logic is copied at four call sites. The stopped-merge message (`WorktreeManager.ts` ~416)
+      says the worktree is kept, false on the lease path. `FileLockUnavailableError` before the
+      lock is held gets no `mergeOutcome`. The "still lands" test starts its 1 s clock before
+      the waiter reaches the lock, so it can pass without the fix under load.
+    - Dashboard: a lane's harness colour differs between the steps list and the output
+      blocks/chip rail (`outputRows.ts` `getEffectiveStepHarness`, `StepChipRail.tsx`
+      `getChipHarnessId` still give a workflow step no harness); a finished lane's harness/model
+      follow later workflow-setting changes instead of what it ran with; no panel-level
+      inheritance test; `hasInlineWorktree` and the inline title re-derive
+      `classifySubWorkflowWorktree` and `getSubWorkflowDisplayName`; `CliJsonSubWorkflowRun.worktree`
+      is typed from an internal Pick (give the public contract its own interface); at the
+      default steps-panel width (240 px) the two badges squeeze a lane's name to "L…"
+      (seen live); a named worktree's badge could show its branch from the definition;
+      no `ABORT_FAILED` severity case or "no badge unless COMPLETED" test.
+    - Low, left: CLI `step edit` and the preview pass no execution root, so an inherited child
+      counts as in the main checkout (errs toward refusing); a never-held lock's `blocked()`
+      writes the record outside the lock (pre-existing); the hand-written manifest poll in
+      `subWorkflowHost.integration.test.ts` (a third copy of that deadline loop).
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 11 (queued 2026-11-27): round-10 gaps, then lanes for agents and users.** All on
+- **Round 12 (queued 2026-11-27): round-11 gaps, then landing step 4.** All on
   `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Stop of a PAUSED run inside a group confirms; `commitSequentialOutcome` and PAUSED-retire
-     tests; `getViewDefinitionSources` gated on the run address.
-  2. D14 fixes: `edit_step` join refusal for running-group members, `rewoundFailure` across a
-     kind change, single-sourced main-checkout rule, Save As test, refusal wording.
-  3. Merge wait: lock-wait tests, abortable lock wait, and the docs' account of where siblings
-     queue.
-  4. Orchestrator agent `<parallelSteps>` lane guidance and the `spec-driven-loop` template
-     (`worktreePresets.lane`, `laneSetup`).
-  5. Dashboard lane row (worktree badge, D4e merge-outcome warning badge, member output chips),
-     CLI `--json` for member children, and a dev-host/Playwright check of a lane group.
-- **Round 12: landing steps 4–5.** D4d rule 2, nested fan-out, inheriting members,
-  `WORKTREE_COLLISION`, named-worktree members.
-- **Round 13: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
-  "Started by" label polish, editor mode + preview + completions polish (including skipping
+  1. Core/MCP fixes: skill-mode execution root, idle-pause stop cancels nothing, MCP
+     forwarding and edit-path tests.
+  2. Worktree settlement fixes: the two startup-pipeline settlements take the stop signal
+     through one shared settle helper, stopped-merge message, `FileLockUnavailableError`,
+     the "still lands" test clock.
+  3. Dashboard lane fixes (colour single-sourced, frozen harness after run, narrow-width
+     badges, DRY, CLI worktree interface, tests).
+  4. D4d rule 2 (sibling delegation) and inheriting parallel members of a worktree parent, with
+     a real-git nested fan-out test (grandchild branches from and merges into its parent's
+     worktree).
+  5. `WORKTREE_COLLISION`, named-worktree members, and a real-git authored-wave test (wave,
+     merge step, wave 2 branching from the merge commit).
+- **Round 13: landing step 5 leftovers and step 6.** Whatever rounds 12's steps 4–5 leave of
+  authored waves; queue-next / run-alongside entry points (`appendMode`); the open question on
+  continuing stopped children.
+- **Round 14: landing step 7.** "Started by" label polish, editor mode + preview + completions polish (including skipping
   inline definitions in `StepReferenceShifts.ts` and step-number completions), and the
   `schemaUiPropertyRoundTrip` UI-control coverage for `subWorkflowStep` (the editor control is
   what that suite checks, so it lands with the editor mode, never as an opt-out).
@@ -2722,8 +2800,23 @@ Coarse roadmap; re-planned every pass.
 - **Sibling lanes queue on the repository-wide worktree mutation lock** (round 10), whose wait
   for a chained `merge: true` settlement is 120 s (`WORKTREE_MERGE_LEASE_WAIT_MS`); chainless
   and non-merge mutations keep 5 s. The D4d lease wait stays as the guard for merges taken
-  outside that lock. Round 11 step 3 makes the lock wait abortable.
+  outside that lock. Both waits end on a stop (round 11, `a4731feb3`).
 - **The join refusal counts pending group members, and runs both ways** (round 10; the spec said
   "a running prompt or script step"): a pending member will run beside the lane too, and the
   preflight rule is symmetric, so a plain prompt cannot join a group holding a merging lane.
   Neither case existed in 0.2.0 (no workflow steps), so nothing released is newly refused.
+- **A stop ends a lane's settlement wait, not its settlement** (round 11; D4e was silent). A
+  stop while a lane waits on the mutation lock or the merge-lease backoff records merge
+  `blocked` and keeps the branch; a free lock is always taken, so a stopped lane that reaches
+  settlement still commits its work. A lane stopped _before_ settling starts still queues
+  behind its siblings (the docs say "while a lane waits").
+- **A blank `laneSetup` uses its default (`npm ci`)** (round 11). `TemplateManager.createWorkflow`
+  replaces every blank template variable with its default, and `_templateMeta.variables` has
+  no allow-empty flag. The variable's description says to set the created workflow's
+  `setup: ""` for no setup (R13 assumed a blank would render `""`). A template-variable
+  allow-empty flag would be a small separate change; not planned unless Nathan wants it.
+- **`abort-failed` gets the merge warning badge too** (round 11), beside `conflict` and
+  `blocked` (D4e names only those two); the agent's integration step treats it the same way.
+- **MCP's merge-lane checks take the run's execution root only from ctrlyoke** (round 11 review).
+  The edit/join merge-lane checks use `CTRLYOKE_EXECUTION_ROOT` as ctrlyoke set it, else the run
+  file; never the agent's working directory (round 12 step 1 fixes skill mode).
