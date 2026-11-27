@@ -374,9 +374,10 @@ The step goes onto the workflow the dashboard panel is showing:
   the run continues with it.
 - Otherwise it is added to the queue like any other step.
 
-In the dashboard, the same action is in three places. Each one asks for the
-file, through VS Code's file picker in the panel or a workspace file list in
-the browser dashboard, and puts the step on the workflow you are viewing:
+In the dashboard, the same action is in three places. Each one puts the step on
+the workflow you are viewing. The workspace viewer uses the file you
+right-clicked; the other two ask for the file, through VS Code's file picker in
+the panel or a workspace file list in the browser dashboard:
 
 - **New → Queue as Sub-workflow…**, while a workflow is open.
 - In the workspace viewer, right-click a workflow file and choose **Queue as
@@ -384,7 +385,8 @@ the browser dashboard, and puts the step on the workflow you are viewing:
 - In the workflow dropdown, right-click the run you are viewing and choose
   **Queue Workflow to Run Next…** while it runs, pauses or once it has
   finished. The item is offered only on that run's row, so open a run before
-  queuing onto it.
+  queuing onto it. It is unavailable for a run that another process (the CLI,
+  or another window) is executing.
 
 To run a file beside the step that is running now instead of after it, choose
 **Run Workflow Alongside Current Step…** from the same right-click menu while
