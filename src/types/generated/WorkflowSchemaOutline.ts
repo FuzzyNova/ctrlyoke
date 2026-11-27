@@ -273,6 +273,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "object",
         "description": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`. Not substituted: Preset definitions and parameter names are author-only contracts."
       },
+      "worktreePresets": {
+        "valueKind": "object",
+        "description": "Named worktree presets that MCP agents may attach to an appended step by name (`worktree: { use: \"<name>\" }`), queuing it as a lane: a single-step sub-workflow that runs in its own managed worktree. Only the managed object form is accepted, so every use creates a fresh branch. Agents can choose a preset but can never supply or override its fields, including `setup`. The preset is copied into the lane when it is queued, so later edits do not change lanes already queued. Without this property, agents cannot queue steps in their own worktree. Not substituted: Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree."
+      },
       "trustedExternalRoots": {
         "valueKind": "oneOf",
         "alternatives": [
@@ -1045,7 +1049,8 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "enum": [
           "managed",
           "named"
-        ]
+        ],
+        "description": "Always `managed`: a fresh worktree and branch for each run."
       },
       "merge": {
         "valueKind": "boolean",

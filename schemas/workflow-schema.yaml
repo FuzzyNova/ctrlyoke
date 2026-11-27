@@ -478,6 +478,22 @@ $defs:
         additionalProperties:
           $ref: '#/$defs/conditionPreset'
         title: Conditions
+      worktreePresets:
+        type: object
+        description: >-
+          Named worktree presets that MCP agents may attach to an appended step by name (`worktree:
+          { use: "<name>" }`), queuing it as a lane: a single-step sub-workflow that runs in its own
+          managed worktree. Only the managed object form is accepted, so every use creates a fresh
+          branch. Agents can choose a preset but can never supply or override its fields, including
+          `setup`. The preset is copied into the lane when it is queued, so later edits do not
+          change lanes already queued. Without this property, agents cannot queue steps in their own
+          worktree. Not substituted: Preset definitions are author-only contracts; a preset's base
+          and setup are substituted by the lane once copied into its worktree.
+        propertyNames:
+          pattern: ^[A-Za-z][A-Za-z0-9_-]*$
+        additionalProperties:
+          $ref: '#/$defs/managedWorktreeConfig'
+        title: Worktree Presets
       trustedExternalRoots:
         oneOf:
           - type: array
@@ -2892,6 +2908,7 @@ $defs:
       mode:
         type: string
         const: managed
+        description: 'Always `managed`: a fresh worktree and branch for each run.'
         title: Mode
       merge:
         type: boolean

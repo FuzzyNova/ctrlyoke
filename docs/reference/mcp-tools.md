@@ -34,8 +34,9 @@ Step indices are **zero-based** everywhere in these tools, except `sessionId` in
 
 Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
 
-- `metadata`: `workflowName`, `harness`, `model`, `resumeSession`, `executionMode` (`interactive` or `headless`), `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxSteps` and `remainingSteps` (numbers; `-1` means unlimited), `conditionPresets`, `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`. The limit fields report the effective cap after applying the workflow's `maxSteps` override to the global `queue.maxSteps` setting; `remainingSteps` is based on the current total step count.
+- `metadata`: `workflowName`, `harness`, `model`, `resumeSession`, `executionMode` (`interactive` or `headless`), `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxSteps` and `remainingSteps` (numbers; `-1` means unlimited), `conditionPresets`, `worktreePresets`, `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`. The limit fields report the effective cap after applying the workflow's `maxSteps` override to the global `queue.maxSteps` setting; `remainingSteps` is based on the current total step count.
 - `metadata.conditionPresets` lists every [condition preset](/workflows/end-conditions#condition-presets) the workflow declares, in order, as `{ name, script, params, maxRetries }`. `script` is the first line of the preset's script. `params` names every param the caller must supply. `maxRetries` is the preset's retry limit (`-1` means unlimited), which a caller's own `maxRetries` cannot exceed. The list is empty when the workflow declares no presets.
+- `metadata.worktreePresets` lists every [worktree preset](/workflows/sub-workflow-steps#agent-queued-lanes) the workflow declares, in order, as `{ name, merge, setup }`. `merge` says whether a lane's branch merges back into this run's checkout when it finishes. `setup` is the first line of the preset's setup command, or `""` when it has none. An empty list means the workflow declares no presets, so `append_step` cannot queue lanes.
 - `steps[]`: `index`, `prompt` for prompt steps, or `type: "script"` and `script` for script steps, `status` (`completed`, `failed`, `cancelled`, `skipped`, `noTurnStarted`, `running`, or `pending`), `resumeSession`, `sessionId`, and `harness`, `executionMode` and `model` for prompt steps. The workflow-level `harness`, `model`, `resumeSession` and `executionMode` are what an appended step inherits. A step that has started reports the harness and mode it actually ran with. A `ctrlyoke run` without a terminal runs interactive steps headless, for example. A pending step reports its configured value.
 - Finished prompt steps may include `gitOutcome` when git snapshots are available. `repositories` lists `headAtStart`, `headAtEnd` and `dirtyAtEnd` for each captured repository; top-level `dirtyAtEnd` is present only when every workspace root had a successful git status capture. This is advisory data and is omitted when unavailable, including filesystem snapshots and unfinished steps.
 
@@ -44,7 +45,7 @@ A headless step cannot wait for background work: the harness process, and anythi
 ## `append_step`
 
 - `steps`: one or more queue items, in order. Each item is either a step or a future parallel group.
-  - A prompt step takes `prompt` (required), `name`, `model`, `harness`, `agent`, `skills`, `executionMode` (`interactive` or `headless`), `endCondition`, `preCondition`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). Omit execution settings to inherit the workflow values. Condition fields attach named author-defined presets from the workflow's `conditions` map; see [condition presets](/workflows/end-conditions#condition-presets). No other fields are accepted; in particular, harness arguments and permission fields cannot be appended. Script steps cannot be appended through MCP.
+  - A prompt step takes `prompt` (required), `name`, `model`, `harness`, `agent`, `skills`, `executionMode` (`interactive` or `headless`), `endCondition`, `preCondition`, `worktree`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). Omit execution settings to inherit the workflow values. Condition fields attach named author-defined presets from the workflow's `conditions` map; see [condition presets](/workflows/end-conditions#condition-presets). No other fields are accepted; in particular, harness arguments and permission fields cannot be appended. Script steps cannot be appended through MCP.
   - A parallel group is `{ "parallel": [step, step, ...], "failFast": true }` with at least two steps. `failFast` defaults to `true`.
 - `position`:
   - `"next"` — after the current step, or after the running parallel group. Never joins that group.
@@ -76,11 +77,38 @@ Example:
 }
 ```
 
-Returns `success`, `destination` (`queue` or `activeParallelGroup`), `queueItemsAdded`, `stepsAdded`, `newQueueSize`, `insertIndex`, `insertedEndIndex`, `placement`, `parallelGroupsAdded`, `joinedParallelGroup` (when joining), plus `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. `effectiveSettings` lists each appended prompt step in queue order, including parallel members, with its zero-based `index`, resolved `harness`, `model`, `executionMode`, `resumeSession`, and any materialized condition preset names. These values use the same inheritance and runtime resolution as `workflow_status`. With `"next"`, `insertIndex` is resolved at write time and can differ from what an earlier `workflow_status` suggested if the run advanced in between. When the workflow declares condition presets, `warning` names each added step outside a parallel group that will run with no end condition (neither its own nor a workflow-level one), and lists the presets that could gate it.
+Returns `success`, `destination` (`queue` or `activeParallelGroup`), `queueItemsAdded`, `stepsAdded`, `newQueueSize`, `insertIndex`, `insertedEndIndex`, `placement`, `parallelGroupsAdded`, `joinedParallelGroup` (when joining), plus `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. `effectiveSettings` lists each appended prompt step in queue order, including parallel members, with its zero-based `index`, resolved `harness`, `model`, `executionMode`, `resumeSession`, any materialized condition preset names, and `worktreePreset` for a step queued as a lane. These values use the same inheritance and runtime resolution as `workflow_status`. With `"next"`, `insertIndex` is resolved at write time and can differ from what an earlier `workflow_status` suggested if the run advanced in between. When the workflow declares condition presets, `warning` names each added step outside a parallel group that will run with no end condition (neither its own nor a workflow-level one), and lists the presets that could gate it.
 
 The optional `warnings` array calls out execution constraints. In particular, Codex cannot wait on background work in either mode; use a non-Codex harness for a step that must wait for a long command.
 
 For `endCondition` or `preCondition`, pass `{ "use": "presetName" }` to attach a preset from the workflow's `conditions` map. The object may also include declared `params`, retry-prompt overrides, and a `maxRetries` value no higher than the preset limit. The preset owns its script and execution settings. Attaching it replaces any workflow-level condition that the step would inherit. See [condition presets](/workflows/end-conditions#condition-presets) for authoring and parameter rules.
+
+For `worktree`, pass `{ "use": "presetName" }` to queue the step as a lane from the workflow's `worktreePresets` map: a single-step [sub-workflow](/workflows/sub-workflow-steps#agent-queued-lanes) that runs in its own fresh managed worktree and branch. It works on a flat step and on a parallel group member. The step is stored as a `type: workflow` step with the prompt step inline, and the preset is copied into it, so later changes to the preset do not affect the queued lane. Condition presets resolve first and travel with the lane. A lane starts a new run, so a numeric `sessionId` or a `$previous`-style reference in its prompt is rejected. An unknown name is rejected with the list of available presets; a workflow with no `worktreePresets` rejects every `worktree`. The object takes only `use`: the preset's `setup`, `base`, `merge` and `keep` come from the author. A `type: workflow` step or a workflow file path cannot be appended.
+
+<!-- no-validate -->
+
+```json
+{
+  "steps": [
+    {
+      "parallel": [
+        {
+          "prompt": "Implement the API",
+          "worktree": { "use": "lane" },
+          "endCondition": { "use": "committed" }
+        },
+        {
+          "prompt": "Implement the CLI",
+          "worktree": { "use": "lane" },
+          "endCondition": { "use": "committed" }
+        }
+      ],
+      "failFast": false
+    }
+  ],
+  "position": "end"
+}
+```
 
 ## Step mutations
 

@@ -37,6 +37,7 @@ import { isRecord } from "./utils/ctrlyokeToolViews/shared";
 import * as path from "path";
 import type {
   PromptStep,
+  SubWorkflowStep,
   WorkflowStep,
   WorkingFile,
   CoordinationParticipant,
@@ -266,11 +267,20 @@ import {
   summarizeMcpConditionPresets,
 } from "./utils/McpConditionPresetResolver";
 import {
+  laneOrPromptStep,
+  materializeMcpWorktreePreset,
+  summarizeMcpWorktreePresets,
+  wrapPromptStepAsLane,
+} from "./utils/McpWorktreePresetResolver";
+import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
 } from "./utils/CoordinationAttribution";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
-import { PromptFileParser } from "./core/PromptFileParser";
+import {
+  inlineRunBoundaryErrors,
+  PromptFileParser,
+} from "./core/PromptFileParser";
 import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
 import {
   selectLatestSubWorkflowSettlements,
@@ -551,9 +561,33 @@ function sequentialAppendOffsets(
   return offsets;
 }
 
+/**
+ * Build the step an `append_step` item queues: a prompt step with its
+ * condition presets resolved, wrapped into a lane (D14) when the item names a
+ * worktree preset. Conditions resolve first, so a lane carries them inside
+ * its inline definition.
+ */
 function materializeAppendStep(
   workingFile: WorkingFile,
   step: McpAppendStepInput
+): PromptStep | SubWorkflowStep {
+  const { worktree, ...promptInput } = step;
+  const promptStep = materializeAppendPromptStep(workingFile, promptInput);
+  if (!worktree) return promptStep;
+  const lane = wrapPromptStepAsLane(
+    promptStep,
+    materializeMcpWorktreePreset(workingFile, worktree)
+  );
+  const boundaryErrors = inlineRunBoundaryErrors(lane, "worktree");
+  if (boundaryErrors.length > 0) {
+    throw new Error(boundaryErrors.join("; "));
+  }
+  return lane;
+}
+
+function materializeAppendPromptStep(
+  workingFile: WorkingFile,
+  step: Omit<McpAppendStepInput, "worktree">
 ): PromptStep {
   const { endCondition, preCondition, ...stepFields } = step;
   return {
@@ -1504,6 +1538,7 @@ export class CtrlYokeMCPServer {
           queueData,
           ConfigurationUtils.getDefaultMaxRetries()
         ),
+        worktreePresets: summarizeMcpWorktreePresets(queueData),
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,
@@ -1626,9 +1661,15 @@ export class CtrlYokeMCPServer {
     const requestedSteps = resolvedItems.flatMap((item) =>
       "parallel" in item ? item.parallel : [item]
     );
+    // A lane's inline prompt step inherits the parent's root (D13), so its
+    // effective harness, model and grants resolve exactly as an unwrapped
+    // step's would.
+    const appendedPromptSteps = flattened.topology.steps.flatMap(
+      (step) => laneOrPromptStep(step) ?? []
+    );
 
     await this.validateStepHarnessAndModelCapabilities(
-      flattened.topology.steps,
+      appendedPromptSteps,
       attachedRun.harness
     );
 
@@ -1716,7 +1757,7 @@ export class CtrlYokeMCPServer {
     }
 
     const executionWarnings = executionModeWarnings(
-      flattened.topology.steps,
+      appendedPromptSteps,
       updatedWorkingFile
     );
     if (executionWarnings.length > 0) {
@@ -1726,19 +1767,23 @@ export class CtrlYokeMCPServer {
     response.effectiveSettings = requestedSteps.map((requested, offset) => {
       const index = response!.insertIndex + offset;
       const addedStep = updatedWorkingFile!.steps?.[index];
-      if (!addedStep || !isPromptStep(addedStep)) {
+      const promptStep = addedStep ? laneOrPromptStep(addedStep) : undefined;
+      if (!promptStep) {
         throw new Error(
           `Failed to resolve effective settings for appended step at index ${index}`
         );
       }
       return {
         index,
-        ...resolveEffectiveStepSettings(addedStep, updatedWorkingFile!),
+        ...resolveEffectiveStepSettings(promptStep, updatedWorkingFile!),
         ...(requested.endCondition
           ? { endConditionPreset: requested.endCondition.use }
           : {}),
         ...(requested.preCondition
           ? { preConditionPreset: requested.preCondition.use }
+          : {}),
+        ...(requested.worktree
+          ? { worktreePreset: requested.worktree.use }
           : {}),
       };
     });
@@ -1754,11 +1799,13 @@ export class CtrlYokeMCPServer {
         ? []
         : sequentialAppendOffsets(resolvedItems)
             .map((offset) => response!.insertIndex + offset)
-            .filter(
-              (index) =>
-                (updatedWorkingFile!.steps?.[index] as PromptStep | undefined)
-                  ?.endCondition === undefined
-            )
+            .filter((index) => {
+              const added = updatedWorkingFile!.steps?.[index];
+              return (
+                added !== undefined &&
+                laneOrPromptStep(added)?.endCondition === undefined
+              );
+            })
     );
     if (ungatedPresetWarning) {
       response.warning = [response.warning, ungatedPresetWarning]
@@ -1770,7 +1817,7 @@ export class CtrlYokeMCPServer {
     // tell the appending agent now instead of letting the step fail at
     // dispatch with nobody listening.
     const unapprovedSecretGrants = findUnapprovedStepSecretGrants(
-      flattened.topology.steps,
+      appendedPromptSteps,
       updatedWorkingFile,
       this.workspaceRoot
     );

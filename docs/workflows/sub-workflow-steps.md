@@ -215,6 +215,41 @@ something other than a sibling's merge holds the parent's checkout. To resolve
 the lanes together in one place, drop `merge` and leave the merge to a step
 after the group, as in the example.
 
+### Agent-queued lanes {#agent-queued-lanes}
+
+An agent can queue lanes too, through the built-in ctrlyoke MCP server's
+`append_step`, but only from worktree presets the workflow author declares in
+the root `worktreePresets` map. A worktree's `setup` is a script, and agents
+never supply scripts, so the author owns every field of a preset; the agent only
+names one. A preset is always the managed form, so each lane gets a fresh
+branch:
+
+```yaml
+worktreePresets:
+  lane:
+    mode: managed
+    merge: true
+    setup: npm ci
+conditions:
+  committed:
+    script: git status --porcelain
+    compareSource: stdout
+    operator: isEmpty
+steps:
+  - prompt: Split the plan into independent tasks and queue each one as a lane.
+    mcpServers:
+      - ctrlyoke
+```
+
+The agent adds `worktree: { "use": "lane" }` to a step, flat or as a parallel
+group member, and ctrlyoke queues it as an inline workflow step whose child
+runs in its own worktree, exactly like an authored lane. The preset is copied
+into the step when it is queued, so editing the preset later does not change
+lanes already queued. `workflow_status` lists the presets under
+`metadata.worktreePresets`; an empty list means the workflow declares none, and
+then `append_step` refuses `worktree` altogether. See
+[MCP tools](/reference/mcp-tools#append-step) for the request shape.
+
 ## Outcomes, Stop, and Pause
 
 A completed child completes the parent step. If the child fails or cannot

@@ -125,7 +125,7 @@ function hasOwn(value: Record<string, unknown>, key: string): boolean {
 }
 
 /** References that would address the parent run cannot be used by a child run. */
-function inlineRunBoundaryErrors(
+export function inlineRunBoundaryErrors(
   step: SubWorkflowStep,
   label: string
 ): string[] {
@@ -1529,6 +1529,8 @@ export class PromptFileParser {
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
     if (parsed.conditions !== undefined)
       promptFile.conditions = parsed.conditions;
+    if (parsed.worktreePresets !== undefined)
+      promptFile.worktreePresets = parsed.worktreePresets;
   }
 
   /** Copy every schema-backed execution property while preserving null values. */

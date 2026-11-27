@@ -15,22 +15,12 @@ import {
   promptFirstLinePreview,
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
 } from "./TextUtils";
+import { formatDeclaredPresetList, getDeclaredPreset } from "./McpNamedPresets";
 
 /** Maximum size of one caller-provided environment value for a preset. */
 const MCP_CONDITION_PARAM_MAX_LENGTH = 4096;
 
 type ConditionField = "endCondition" | "preCondition";
-
-/** Resolve only presets explicitly declared by the workflow. */
-function getDeclaredConditionPreset(
-  workingFile: WorkingFile,
-  name: string
-): ConditionPreset | undefined {
-  const conditions = workingFile.conditions;
-  return conditions && Object.hasOwn(conditions, name)
-    ? conditions[name]
-    : undefined;
-}
 
 /**
  * Describe every preset the workflow declares, in declaration order. This is
@@ -54,15 +44,11 @@ export function summarizeMcpConditionPresets(
 
 /** "committed, inspect (params: BUG_FILE)", or "none". */
 function formatPresetList(workingFile: WorkingFile): string {
-  const entries = Object.entries(workingFile.conditions ?? {});
-  if (entries.length === 0) return "none";
-  return entries
-    .map(([name, preset]) =>
-      preset.params && preset.params.length > 0
-        ? `${name} (params: ${preset.params.join(", ")})`
-        : name
-    )
-    .join(", ");
+  return formatDeclaredPresetList(workingFile.conditions, (name, preset) =>
+    preset.params && preset.params.length > 0
+      ? `${name} (params: ${preset.params.join(", ")})`
+      : name
+  );
 }
 
 /**
@@ -91,7 +77,7 @@ export function materializeMcpConditionPreset(
   reference: McpConditionPresetUse,
   defaultMaxRetries = 0
 ): EndCondition | PreCondition {
-  const preset = getDeclaredConditionPreset(workingFile, reference.use);
+  const preset = getDeclaredPreset(workingFile.conditions, reference.use);
   if (!preset) {
     throw new Error(
       `${field}: unknown condition preset '${reference.use}'. Available presets: ${formatPresetList(workingFile)}. ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`

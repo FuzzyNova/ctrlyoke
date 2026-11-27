@@ -40,6 +40,21 @@ import { PromptFileResolver } from "../../core/PromptFileResolver";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInstanceRegistry";
 import { TestWorkflowInstanceRegistryHost } from "../helpers/workflowInstanceRegistryHost";
+import { CtrlYokeMCPServer } from "../../mcp-server";
+import { MCP_APPEND_STEP_TOOL_NAME } from "../../utils/McpToolDefinitions";
+import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
+
+function restoreEnvironmentValues(
+  values: Readonly<Record<string, string | undefined>>
+): void {
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
 
 suite("Sub-workflow host end to end", () => {
   /**
@@ -5181,6 +5196,108 @@ suite("Sub-workflow host end to end", () => {
         `neither lane was blocked: ${outcomes.join(", ")}`
       );
     } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("an MCP-appended lane runs as an inline child in its own managed worktree", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(120_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const environment = {
+      CTRLYOKE_WORKING_FILE: process.env.CTRLYOKE_WORKING_FILE,
+      CTRLYOKE_EXECUTION_ROOT: process.env.CTRLYOKE_EXECUTION_ROOT,
+    };
+    const workspace = makeTempDir("ctrlyoke-mcp-lane-");
+    const integration = new MockHarnessIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      integration
+    );
+    let parent: WorkflowInstance | undefined;
+    let appendError: unknown;
+    integration.onSend = async (prompt) => {
+      if (prompt.prompt === "lane work") return { responseText: "lane done" };
+      try {
+        const queue = parent!.promptQueue;
+        const runFile = queue.getState().workingFilePath;
+        assert.ok(runFile, "the parent run has a working file");
+        process.env.CTRLYOKE_WORKING_FILE = runFile;
+        process.env.CTRLYOKE_EXECUTION_ROOT = workspace;
+        await new CtrlYokeMCPServer({ workspaceRoot: workspace }).invokeTool(
+          MCP_APPEND_STEP_TOOL_NAME,
+          {
+            position: "end",
+            steps: [
+              { prompt: "lane work", name: "Lane", worktree: { use: "lane" } },
+            ],
+          }
+        );
+        // The working-file watcher's merge of an out-of-process append.
+        await queue.mergeStepsFromDisk();
+      } catch (error) {
+        appendError = error;
+      }
+      return { responseText: "anchor done" };
+    };
+    try {
+      // The MCP server and this host share one project state directory, so
+      // register it before the parent writes its first run.
+      await ensureMcpStorageInitialized(workspace);
+      initGitRepository(workspace);
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Agent lanes",
+        worktreePresets: { lane: { mode: "managed", keep: true } },
+        steps: [{ prompt: "queue a lane" }],
+      });
+      commitAll(workspace, "add parent");
+      parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      assert.ifError(appendError);
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      const lane = state.steps[1];
+      assert.ok(isSubWorkflowStep(lane), "the appended step is a lane");
+      assert.strictEqual(lane.name, "Lane");
+      const child = launchedChild(instances, parent, 1);
+      assert.strictEqual(child.promptQueue.getState().status, "completed");
+      const laneWorktree = await worktreeRuntimeOf(child);
+      assert.strictEqual(laneWorktree.mode, "managed");
+      assert.ok(integration.sentPrompts.includes("lane work"));
+      assert.notStrictEqual(
+        await fs.realpath(laneWorktree.executionRoot),
+        await fs.realpath(workspace)
+      );
+      const linkedWorktrees = execFileSync(
+        "git",
+        ["-C", workspace, "worktree", "list", "--porcelain"],
+        { encoding: "utf8" }
+      );
+      assert.ok(
+        linkedWorktrees.includes(
+          `branch refs/heads/${laneWorktree.branchName}`
+        ),
+        linkedWorktrees
+      );
+    } finally {
+      restoreEnvironmentValues(environment);
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);

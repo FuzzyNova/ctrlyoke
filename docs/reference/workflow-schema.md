@@ -116,6 +116,44 @@ Default values for <code v-pre>{{varName}}</code> substitutions. Not substituted
 
 Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `"$BUG_FILE"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`. Not substituted: Preset definitions and parameter names are author-only contracts.
 
+### `worktreePresets` {#workflow-file-worktreepresets}
+
+- **Type:** map of `{ mode: "managed", merge?, keep?, … }`
+
+Named worktree presets that MCP agents may attach to an appended step by name (`worktree: { use: "<name>" }`), queuing it as a lane: a single-step sub-workflow that runs in its own managed worktree. Only the managed object form is accepted, so every use creates a fresh branch. Agents can choose a preset but can never supply or override its fields, including `setup`. The preset is copied into the lane when it is queued, so later edits do not change lanes already queued. Without this property, agents cannot queue steps in their own worktree. Not substituted: Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree.
+
+### `worktreePresets.*.mode` {#workflow-file-worktreepresets-items-mode}
+
+- **Type:** `"managed"`
+- **Required:** yes
+
+Always `managed`: a fresh worktree and branch for each run.
+
+### `worktreePresets.*.merge` {#workflow-file-worktreepresets-items-merge}
+
+- **Type:** `boolean`
+
+Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.
+
+### `worktreePresets.*.keep` {#workflow-file-worktreepresets-items-keep}
+
+- **Type:** `boolean`
+
+Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node\_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.
+
+### `worktreePresets.*.base` {#workflow-file-worktreepresets-items-base}
+
+- **Type:** `string`
+- **Constraints:** at least 1 character(s)
+
+Optional Git ref resolved to a commit when the worktree is created.
+
+### `worktreePresets.*.setup` {#workflow-file-worktreepresets-items-setup}
+
+- **Type:** `string`
+
+Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.
+
 ### `trustedExternalRoots` {#workflow-file-trustedexternalroots}
 
 - **Type:** `string[]` or `null`

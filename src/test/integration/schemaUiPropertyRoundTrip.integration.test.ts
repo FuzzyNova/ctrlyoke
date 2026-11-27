@@ -114,6 +114,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
     "conditions",
     "author-defined MCP preset catalog; preserved as workflow metadata and tested below, not edited as a dashboard execution property",
   ],
+  [
+    "worktreePresets",
+    "author-defined MCP lane preset catalog; preserved as workflow metadata and tested below, not edited as a dashboard execution property",
+  ],
   ["runtimeMetadata", "engine-written runtime block"],
   ["startedAt", "engine-written timestamp"],
   ["definitionRevision", "engine-written optimistic-concurrency counter"],
@@ -160,6 +164,9 @@ const SAMPLES: Record<string, unknown> = {
       operator: "isEmpty",
       params: ["BUG_FILE"],
     },
+  },
+  worktreePresets: {
+    lane: { mode: "managed", merge: true, setup: "npm ci" },
   },
   additionalArgs: "--effort high",
   maxSteps: 30,
@@ -585,6 +592,33 @@ suite("Schema -> dashboard property round trip", () => {
     assert.deepStrictEqual(
       (await harness.readRunDefinition()).conditions,
       conditions
+    );
+  });
+
+  test("worktree presets validate and survive a dashboard save", async () => {
+    const worktreePresets = sampleFor("worktreePresets");
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-worktree-presets-")
+    );
+    const ajv = new Ajv({ allErrors: true, strict: false });
+    const validate = ajv.compile(schema);
+    assert.strictEqual(
+      validate({ steps: [promptStepSeed()], worktreePresets }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    const run = await createPromotedRun(workspace, {
+      steps: [{ prompt: PROMPT_TEXT }],
+    });
+    const harness = createRoundTripHarness(workspace, run);
+    await harness.patchRunDefinition((head) => {
+      head.worktreePresets = worktreePresets;
+    });
+    await harness.routeWorkflowPropertyUpdate("model", "sonnet");
+    assert.deepStrictEqual(
+      (await harness.readRunDefinition()).worktreePresets,
+      worktreePresets
     );
   });
 

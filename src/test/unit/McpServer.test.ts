@@ -78,6 +78,7 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
 import { CoordinationParticipantRegistry } from "../../core/orchestration/ExecutionRootCoordination";
 import { materializeMcpConditionPreset } from "../../utils/McpConditionPresetResolver";
+import { MCP_NO_WORKTREE_PRESETS_MESSAGE } from "../../utils/McpWorktreePresetResolver";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import {
   resolveRetryBudget,
@@ -3388,6 +3389,232 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         beforeEdit
       );
     }
+  });
+
+  /** The authored shape of a persisted step, without its engine-written runtime. */
+  function stripStepIds(step: WorkflowStep): Record<string, unknown> {
+    const { _runtime: _ignored, ...authored } = step as WorkflowStep & {
+      _runtime?: unknown;
+    };
+    return authored;
+  }
+
+  /** A RUNNING one-step run declaring a `lane` worktree preset and a `committed` gate. */
+  async function createLaneRun(
+    suffix: string,
+    worktreePresets: WorkingFile["worktreePresets"] | null = {
+      lane: { mode: "managed", merge: true, setup: "npm ci\necho ready" },
+    }
+  ): Promise<RunFixture> {
+    const run = await createRun(suffix, "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.conditions = {
+      committed: { script: "git status --porcelain", operator: "isEmpty" },
+    };
+    if (worktreePresets) workingFile.worktreePresets = worktreePresets;
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    return run;
+  }
+
+  test("workflow_status lists the workflow's worktree presets", async () => {
+    const server = await setup();
+    const run = await createLaneRun("worktree-preset-status", null);
+
+    const none = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.deepStrictEqual(none.metadata.worktreePresets, []);
+
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.worktreePresets = {
+      lane: { mode: "managed", merge: true, setup: "npm ci\necho ready" },
+      scratch: { mode: "managed", keep: true },
+    };
+    await writeTrustedRunFile(run.runFilePath, workingFile);
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.deepStrictEqual(status.metadata.worktreePresets, [
+      { name: "lane", merge: true, setup: "npm ci" },
+      { name: "scratch", merge: false, setup: "" },
+    ]);
+  });
+
+  test("append_step wraps flat items and parallel members into lanes with a copied preset", async () => {
+    const server = await setup();
+    const run = await createLaneRun("worktree-lanes");
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "implement the API",
+            name: "API lane",
+            model: "opus",
+            worktree: { use: "lane" },
+            endCondition: { use: "committed" },
+          },
+          {
+            parallel: [
+              { prompt: "lane member", worktree: { use: "lane" } },
+              { prompt: "shared member" },
+            ],
+            failFast: false,
+          },
+        ],
+      })
+    );
+
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const preset = {
+      mode: "managed",
+      merge: true,
+      setup: "npm ci\necho ready",
+    };
+    assert.deepStrictEqual(stripStepIds(persisted.steps![1]), {
+      type: STEP_TYPES.WORKFLOW,
+      name: "API lane",
+      workflow: {
+        prompt: "implement the API",
+        model: "opus",
+        endCondition: {
+          script: "git status --porcelain",
+          operator: "isEmpty",
+          env: {},
+        },
+        worktree: preset,
+      },
+    });
+    assert.deepStrictEqual(stripStepIds(persisted.steps![2]), {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "lane member", worktree: preset },
+    });
+    assert.deepStrictEqual(stripStepIds(persisted.steps![3]), {
+      prompt: "shared member",
+    });
+    assert.deepStrictEqual(
+      result.effectiveSettings.map(
+        (entry: { worktreePreset?: string; endConditionPreset?: string }) => [
+          entry.worktreePreset,
+          entry.endConditionPreset,
+        ]
+      ),
+      [
+        ["lane", "committed"],
+        ["lane", undefined],
+        [undefined, undefined],
+      ]
+    );
+    assert.strictEqual(result.effectiveSettings[0].model, "opus");
+    // The gated sequential lane does not trigger the ungated-step warning.
+    assert.strictEqual(result.warning, undefined);
+
+    // The preset was copied by value: editing it later leaves queued lanes alone.
+    persisted.worktreePresets!.lane.setup = "echo changed later";
+    persisted.worktreePresets!.lane.merge = false;
+    await writeTrustedRunFile(run.runFilePath, persisted);
+    const later = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    for (const index of [1, 2]) {
+      const lane = later.steps![index];
+      assert.ok(lane.type === STEP_TYPES.WORKFLOW);
+      assert.deepStrictEqual(
+        (lane.workflow as { worktree?: unknown }).worktree,
+        preset
+      );
+    }
+  });
+
+  test("append_step rejects unknown, missing and prototype worktree presets without changing the run file", async () => {
+    const server = await setup();
+    const run = await createLaneRun("worktree-lane-rejections");
+    const before = await fs.readFile(run.runFilePath, "utf8");
+
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "unknown", worktree: { use: "missing" } }],
+      }),
+      /unknown worktree preset 'missing'\. Available presets: lane\. workflow_status lists each preset under metadata\.worktreePresets\./
+    );
+    for (const name of ["toString", "constructor", "__proto__"]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              parallel: [
+                { prompt: "a", worktree: { use: name } },
+                { prompt: "b" },
+              ],
+            },
+          ],
+        }),
+        /unknown worktree preset/
+      );
+    }
+    // An agent names a preset; it never supplies or overrides its fields.
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          { prompt: "override", worktree: { use: "lane", setup: "rm -rf ." } },
+        ],
+      }),
+      /append_step\.steps\[0\]/
+    );
+    // Agents only get lanes: no `type: workflow` item and no file path.
+    for (const item of [
+      { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+      { prompt: "x", workflow: "child.ctrlyoke.yaml" },
+      { prompt: "x", type: "workflow" },
+    ]) {
+      await assert.rejects(
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [item],
+        }),
+        /append_step\.steps\[0\]/
+      );
+    }
+    // A lane starts a new run, so it cannot continue a parent step's session.
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [
+          {
+            prompt: "continue",
+            resumeSession: true,
+            sessionId: 1,
+            worktree: { use: "lane" },
+          },
+        ],
+      }),
+      /new run boundary; numeric and final-pass sessionId references select parent-run sessions/
+    );
+    assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+
+    const noPresets = await createLaneRun("worktree-lane-none", null);
+    const beforeNone = await fs.readFile(noPresets.runFilePath, "utf8");
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "end",
+        steps: [{ prompt: "lane", worktree: { use: "lane" } }],
+      }),
+      (error: Error) => error.message.includes(MCP_NO_WORKTREE_PRESETS_MESSAGE)
+    );
+    assert.strictEqual(
+      await fs.readFile(noPresets.runFilePath, "utf8"),
+      beforeNone
+    );
   });
 
   test("caps preset retries and validates declared parameter values", async () => {

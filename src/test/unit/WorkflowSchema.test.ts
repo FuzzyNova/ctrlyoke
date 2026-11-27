@@ -147,6 +147,53 @@ suite("Workflow template schema", () => {
     }
   });
 
+  test("accepts managed worktree presets only at a steps or prompt root", async () => {
+    const lane = { mode: "managed", merge: true, setup: "npm ci" };
+    for (const document of [
+      { steps: [{ prompt: "x" }], worktreePresets: { lane } },
+      { prompt: "x", worktreePresets: { lane, scratch: { mode: "managed" } } },
+      { steps: [{ prompt: "x" }], worktreePresets: {} },
+    ]) {
+      assert.strictEqual(
+        validate(document),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+    for (const worktreePresets of [
+      { lane: true },
+      { lane: "feature/x" },
+      { lane: { mode: "named", branch: "feature/x" } },
+      { lane: { mode: "managed", branch: "feature/x" } },
+      { lane: { merge: true } },
+      { "bad name": { mode: "managed" } },
+      { lane: { mode: "managed", setup: "{{laneSetup}}", extra: 1 } },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ prompt: "x" }], worktreePresets }),
+        false,
+        JSON.stringify(worktreePresets)
+      );
+    }
+    // R9: a root workflow or script step has no agent to use presets.
+    for (const root of [
+      { type: "script", script: "npm test" },
+      { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+    ]) {
+      assert.strictEqual(
+        validate({ ...root, worktreePresets: { lane } }),
+        false,
+        JSON.stringify(root)
+      );
+    }
+
+    const parsed = await new PromptFileParser().validateAndNormalize(
+      { steps: [{ prompt: "x" }], worktreePresets: { lane } },
+      process.cwd()
+    );
+    assert.deepStrictEqual(parsed.worktreePresets, { lane });
+  });
+
   test("stamps every bundled workflow template with schemaVersion 1", () => {
     const workflowsDirectory = path.resolve(
       __dirname,

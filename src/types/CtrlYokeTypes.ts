@@ -269,6 +269,13 @@ export type WorktreeConfig =
 /** Settings defaults reuse the same shorthand/object forms as workflow worktree. */
 export type WorktreeDefaultConfig = WorktreeConfig;
 export type WorktreeObjectConfig = Extract<WorktreeConfig, { mode: string }>;
+/** The managed object form of a worktree selection; the only form a preset takes. */
+export type ManagedWorktreeConfig = Extract<
+  WorktreeObjectConfig,
+  { mode: typeof WORKTREE_MODES.MANAGED }
+>;
+/** Author-defined worktree presets MCP agents may attach to appended steps. */
+export type WorktreePresets = Record<string, ManagedWorktreeConfig>;
 
 /** Worktree settings plus the tier that supplied the value for one run. */
 export interface WorktreeResolution {
@@ -461,6 +468,8 @@ export interface PromptFile extends ExecutionProperties {
   trustedExternalRoots?: string[] | null;
   /** Author-defined named condition presets available to MCP steps. */
   conditions?: Record<string, ConditionPreset>;
+  /** Author-defined worktree presets MCP agents may queue lanes with (D14). */
+  worktreePresets?: WorktreePresets;
   prompt?: string;
   steps?: WorkflowStep[];
   /** Normalized flat-step topology for authored parallel groups. */

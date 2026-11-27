@@ -483,6 +483,11 @@ export const VAR_SUBSTITUTION_EXCLUDED_FIELDS = [
     path: "conditions",
     reason: "Preset definitions and parameter names are author-only contracts.",
   },
+  {
+    path: "worktreePresets",
+    reason:
+      "Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree.",
+  },
   { path: "vars", reason: "Variables are not recursively expanded." },
   {
     path: "steps[].workflow",
