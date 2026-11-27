@@ -7,24 +7,61 @@ import { runCli } from "./helpers/cliProcess";
 
 const temporaryRoots: string[] = [];
 
+// Each case spawns two or three compiled-CLI runs that each start child
+// instances, which is more than the 30-second default allows under `npm test`.
+const CLI_RUN_TIMEOUT_MS = 90_000;
+
 suite("CLI sub-workflow runs", () => {
   teardown(async () => {
     for (const root of temporaryRoots.splice(0)) {
-      await fs.rm(root, { recursive: true, force: true });
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
     }
   });
 
-  test("uses the parent's exit code for child failures according to onFail", async function () {
-    this.timeout(60_000);
-    const root = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-cli-subfail-")
-    );
-    temporaryRoots.push(root);
-    await writeWorkflow(root, "child.ctrlyoke.json", {
-      name: "Child",
-      steps: [{ type: "script", script: 'node -e "process.exit(1)"' }],
+  test("keeps the root run's progress output unprefixed", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-root-output-");
+    const env = await fakeCopilotEnv(root);
+    const workflow = await writeWorkflow(root, "root.ctrlyoke.json", {
+      name: "Root",
+      harness: "copilot-cli",
+      model: "gpt-5",
+      steps: [
+        { name: "ask", prompt: "hello" },
+        { type: "script", name: "first", script: markerScript("first") },
+      ],
+      finalStep: { type: "script", name: "wrap", script: markerScript("wrap") },
     });
 
+    const run = await runCli(
+      ["run", workflow, "--headless", "--cwd", root],
+      root,
+      env
+    );
+
+    assert.strictEqual(run.code, 0, run.stderr);
+    assert.strictEqual(normalizeOutput(run.stdout, root), ROOT_GOLDEN_OUTPUT);
+  });
+
+  test("a child that fails under onFail continue runs, fails and leaves the parent at exit 0", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-subfail-");
+    const env = { CTRLYOKE_HOME: path.join(root, "state") };
+    const childRanMarker = path.join(root, "child-ran.txt");
+    await writeWorkflow(root, "child.ctrlyoke.json", {
+      name: "Child",
+      steps: [
+        {
+          type: "script",
+          script: `node -e "require('fs').writeFileSync(process.argv[1], 'ran'); process.exit(1)" ${JSON.stringify(childRanMarker)}`,
+        },
+      ],
+    });
     const continuing = await writeWorkflow(root, "continue.ctrlyoke.json", {
       steps: [
         {
@@ -39,42 +76,43 @@ suite("CLI sub-workflow runs", () => {
     });
 
     const continuedRun = await runCli(
-      ["run", continuing, "--headless", "--cwd", root],
-      root
-    );
-    const failedRun = await runCli(
-      ["run", stopping, "--headless", "--cwd", root],
-      root
+      ["run", continuing, "--headless", "--json", "--cwd", root],
+      root,
+      env
     );
     assert.strictEqual(continuedRun.code, 0, continuedRun.stderr);
-    assert.notStrictEqual(failedRun.code, 0, failedRun.stderr);
+    assert.strictEqual(await fs.readFile(childRanMarker, "utf8"), "ran");
+    const continued = JSON.parse(continuedRun.stdout) as CliJsonWithChildren;
+    assert.deepStrictEqual(
+      continued.subWorkflowRuns.map((child) => child.status),
+      ["failed"]
+    );
+
+    await fs.rm(childRanMarker);
+    const failedRun = await runCli(
+      ["run", stopping, "--headless", "--cwd", root],
+      root,
+      env
+    );
+    assert.strictEqual(failedRun.code, 1, failedRun.stderr);
+    assert.strictEqual(await fs.readFile(childRanMarker, "utf8"), "ran");
   });
 
-  test("reports nested script progress with child names and JSON child addresses", async function () {
-    this.timeout(60_000);
-    const root = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-cli-nested-")
-    );
-    temporaryRoots.push(root);
+  test("labels nested progress with the nearest child's name and prints one summary", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-nested-");
+    // The grandchild has no `name`: it is labelled from its file name.
     await writeWorkflow(root, "grandchild.ctrlyoke.json", {
-      name: "Grandchild",
       steps: [
-        {
-          type: "script",
-          name: "leaf-script",
-          script: "node -e \"console.log('grandchild-marker')\"",
-        },
+        { type: "script", name: "leaf-script", script: markerScript("leaf") },
       ],
     });
     await writeWorkflow(root, "child.ctrlyoke.json", {
       name: "Child",
       steps: [
-        {
-          type: "script",
-          name: "child-script",
-          script: "node -e \"console.log('child-marker')\"",
-        },
+        { type: "script", name: "child-script", script: markerScript("child") },
         { type: "workflow", workflow: "grandchild.ctrlyoke.json" },
+        { type: "script", name: "after-script", script: markerScript("after") },
       ],
     });
     const parent = await writeWorkflow(root, "parent.ctrlyoke.json", {
@@ -83,12 +121,12 @@ suite("CLI sub-workflow runs", () => {
         {
           type: "script",
           name: "parent-script",
-          script: "node -e \"console.log('parent-marker')\"",
+          script: markerScript("parent"),
         },
         { type: "workflow", workflow: "child.ctrlyoke.json" },
       ],
     });
-    const env = { CTRLYOKE_HOME: path.join(root, "state"), FORCE_COLOR: "0" };
+    const env = { CTRLYOKE_HOME: path.join(root, "state") };
 
     const text = await runCli(
       ["run", parent, "--headless", "--cwd", root],
@@ -96,11 +134,25 @@ suite("CLI sub-workflow runs", () => {
       env
     );
     assert.strictEqual(text.code, 0, text.stderr);
-    assert.match(text.stdout, /\[Child\]/);
-    assert.match(text.stdout, /\[Grandchild\]/);
-    assert.match(text.stdout, /parent-marker/);
-    assert.match(text.stdout, /child-marker/);
-    assert.match(text.stdout, /grandchild-marker/);
+    assert.doesNotMatch(text.stdout, /child workflow/);
+    assert.strictEqual(
+      scriptHeaderBeforeMarker(text.stdout, "parent"),
+      "│ [Script step] parent-script"
+    );
+    assert.strictEqual(
+      scriptHeaderBeforeMarker(text.stdout, "child"),
+      "│ [Script step] [Child] child-script"
+    );
+    assert.strictEqual(
+      scriptHeaderBeforeMarker(text.stdout, "leaf"),
+      "│ [Script step] [grandchild] leaf-script"
+    );
+    assert.strictEqual(
+      scriptHeaderBeforeMarker(text.stdout, "after"),
+      "│ [Script step] [Child] after-script"
+    );
+    assert.strictEqual(countMatches(text.stdout, /Workflow completed/g), 1);
+    assert.strictEqual(countMatches(text.stdout, /^Run ID: /gm), 1);
 
     const json = await runCli(
       ["run", parent, "--headless", "--json", "--cwd", root],
@@ -108,21 +160,192 @@ suite("CLI sub-workflow runs", () => {
       env
     );
     assert.strictEqual(json.code, 0, json.stderr);
-    const result = JSON.parse(json.stdout) as {
-      subWorkflowRuns: Array<{
-        stepId: string;
-        workflowKey: string;
-        runRef: string;
-        status: string;
-      }>;
-    };
+    const result = JSON.parse(json.stdout) as CliJsonWithChildren;
     assert.strictEqual(result.subWorkflowRuns.length, 1);
     assert.strictEqual(result.subWorkflowRuns[0]?.status, "completed");
     assert.ok(result.subWorkflowRuns[0]?.workflowKey);
     assert.ok(result.subWorkflowRuns[0]?.runRef);
     assert.ok(result.subWorkflowRuns[0]?.stepId);
   });
+
+  test("reports a child's prompt headers and final-step pass label under its prefix", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-child-final-");
+    const env = await fakeCopilotEnv(root);
+    // D11: harness is not inherited, so the child names the fake harness.
+    await writeWorkflow(root, "kid.ctrlyoke.json", {
+      name: "Kid",
+      harness: "copilot-cli",
+      model: "gpt-5",
+      steps: [{ name: "kid-prompt", prompt: "say hi" }],
+      finalStep: {
+        type: "script",
+        name: "kid-final",
+        script: markerScript("kid-final"),
+      },
+    });
+    const parent = await writeWorkflow(root, "parent.ctrlyoke.json", {
+      steps: [{ type: "workflow", workflow: "kid.ctrlyoke.json" }],
+    });
+
+    const run = await runCli(
+      ["run", parent, "--headless", "--cwd", root],
+      root,
+      env
+    );
+
+    assert.strictEqual(run.code, 0, run.stderr);
+    const lines = run.stdout.split(/\r?\n/);
+    const header = lines.indexOf("│ Step 1/1 — [Kid] kid-prompt");
+    assert.ok(header >= 0, run.stdout);
+    assert.deepStrictEqual(lines.slice(header + 1, header + 3), [
+      "│ Harness: copilot-cli",
+      "│ Model: gpt-5",
+    ]);
+    assert.ok(lines.includes("│ [Kid] Final Step Pass 1"), run.stdout);
+    assert.strictEqual(
+      scriptHeaderBeforeMarker(run.stdout, "kid-final"),
+      "│ [Script step] [Kid] kid-final"
+    );
+    assert.strictEqual(countMatches(run.stdout, /Final Step Pass/g), 1);
+  });
 });
+
+interface CliJsonWithChildren {
+  subWorkflowRuns: Array<{
+    stepId?: string;
+    workflowKey: string;
+    runRef: string;
+    status: string | null;
+  }>;
+}
+
+/** The root's output before child reporting was single-sourced. */
+const ROOT_GOLDEN_OUTPUT = [
+  "ctrlyoke CLI v<version>",
+  "━".repeat(52),
+  "",
+  "Running: root.ctrlyoke.json",
+  "Harness: copilot-cli (gpt-5)",
+  "─".repeat(52),
+  "",
+  "─".repeat(52),
+  "│ Step 1/2 — ask",
+  "│ Harness: copilot-cli",
+  "│ Model: gpt-5",
+  "│ hello",
+  "",
+  "│ <cwd>> <command>",
+  "",
+  "",
+  "Session (copilot-cli): fake-session | <t>s",
+  "│ [Script step] first",
+  "│ <cwd>> <command>",
+  "",
+  "│ Script step output:",
+  "first-marker",
+  "",
+  "<t>s",
+  ...passedVerdict(),
+  "",
+  "",
+  "│ Final Step Pass 1",
+  "│ [Script step] wrap",
+  "│ <cwd>> <command>",
+  "",
+  "│ Script step output:",
+  "wrap-marker",
+  "",
+  "<t>s",
+  ...passedVerdict(),
+  "",
+  "",
+  "━".repeat(52),
+  "✓ Workflow completed successfully",
+  "Run ID: <run>",
+  "",
+].join("\n");
+
+function passedVerdict(): string[] {
+  return [
+    "│ ✔ Passed — Script step passed (exit code == 0) → continue",
+    "│   Compare: exit code == 0",
+    "│   Expected: 0",
+    "│   Actual: 0",
+    "│   Result: Passed",
+    "│   Action: continue",
+    "│   Exit code: 0",
+    "│   Duration: <t>s",
+    "│   Timed out: no",
+  ];
+}
+
+/** Masks what varies between runs and hosts: timings, ids, paths, commands. */
+function normalizeOutput(stdout: string, root: string): string {
+  return stdout
+    .replace(/\r\n/g, "\n")
+    .replace(/^ctrlyoke CLI v\S+$/m, "ctrlyoke CLI v<version>")
+    .replace(/^Run ID: \S+$/gm, "Run ID: <run>")
+    .split("\n")
+    .map((line) =>
+      line.startsWith("│ ") && line.includes(path.basename(root) + ">")
+        ? "│ <cwd>> <command>"
+        : line
+    )
+    .join("\n")
+    .replace(/\b\d+(?:\.\d+)?s\b/g, "<t>s");
+}
+
+/** The nearest script-step header above a marker's output line. */
+function scriptHeaderBeforeMarker(stdout: string, marker: string): string {
+  const lines = stdout.split(/\r?\n/);
+  const markerLine = lines.indexOf(`${marker}-marker`);
+  assert.ok(markerLine >= 0, `missing ${marker}-marker in:\n${stdout}`);
+  for (let index = markerLine; index >= 0; index -= 1) {
+    if (lines[index].startsWith("│ [Script step] ")) return lines[index];
+  }
+  assert.fail(`no script header above ${marker}-marker`);
+}
+
+function countMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
+}
+
+function markerScript(marker: string): string {
+  return `node -e "console.log('${marker}-marker')"`;
+}
+
+async function makeRoot(prefix: string): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  temporaryRoots.push(root);
+  return root;
+}
+
+/** A `copilot` on PATH that answers one turn without a real harness. */
+async function fakeCopilotEnv(root: string): Promise<NodeJS.ProcessEnv> {
+  const bin = path.join(root, "bin");
+  await fs.mkdir(bin, { recursive: true });
+  const result = '{"type":"result","sessionId":"fake-session","content":"ok"}';
+  if (process.platform === "win32") {
+    await fs.writeFile(
+      path.join(bin, "copilot.cmd"),
+      `@echo off\r\nif /i "%~1"=="--version" (echo fake version&exit /b 0)\r\necho ${result}\r\nexit /b 0\r\n`,
+      "utf8"
+    );
+  } else {
+    const script = path.join(bin, "copilot");
+    await fs.writeFile(
+      script,
+      `#!/bin/sh\ncase "$1" in --version) echo 'fake version';; *) echo '${result}';; esac\nexit 0\n`,
+      "utf8"
+    );
+    await fs.chmod(script, 0o755);
+  }
+  return {
+    CTRLYOKE_HOME: path.join(root, "state"),
+    PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
+  };
+}
 
 async function writeWorkflow(
   root: string,

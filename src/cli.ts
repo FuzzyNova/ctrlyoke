@@ -49,17 +49,14 @@ import {
   projectWorktreeRuntime,
 } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
-import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
   isPromptStep,
-  isScriptStep,
   isExecutionStep,
   type PromptFile,
   type RunRef,
   type WorkflowKey,
   type WorkflowStep,
   type WorkingFile,
-  type ParallelGroupDefinition,
   type WorkflowValidationWarning,
 } from "./types/CtrlYokeTypes";
 import { configService } from "./config/CtrlYokeConfigService";
@@ -70,7 +67,6 @@ import {
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
-import { outputTargetKey } from "./utils/OutputTargetKeys";
 import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
 import {
   defaultShutdownTimers,
@@ -82,12 +78,8 @@ import {
   PROCESS_SIGNALS,
   TRUST_DECISIONS,
 } from "./types/DashboardConstants";
-import { CliAttemptTally } from "./cli/CliAttemptTally";
-import { settleCliParallelGroupMember } from "./cli/CliParallelGroupTally";
-import {
-  CliTerminalFormatter,
-  type CliOutputTarget,
-} from "./cli/CliTerminalFormatter";
+import { CliRunProgressReporter } from "./cli/CliRunProgressReporter";
+import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { formatCliRunHeaderLabel } from "./cli/CliRunHeader";
 import {
   CLI_INTERRUPTED_EXIT_CODE,
@@ -283,7 +275,6 @@ import {
   selectCliValidationHarnesses,
   type CliValidationTarget,
 } from "./cli/CliValidation";
-import { formatFinalPassLabel } from "./utils/FinalStepLabels";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 import { getErrorMessage } from "./utils/ErrorUtils";
 
@@ -810,14 +801,6 @@ void program.parseAsync().catch((error: unknown) => {
 
 type RunOptions = RunCommandOptions;
 
-interface CliParallelGroupState {
-  group: ParallelGroupDefinition;
-  memberCount: number;
-  started: Set<number>;
-  completed: Set<number>;
-  failed: Set<number>;
-}
-
 /**
  * The workflow-level harness and model a run reports in its header and
  * `--json` result, using the precedence execution applies: an explicit
@@ -872,128 +855,6 @@ function getCliReportingWorkflow(
       ? { model: options.model }
       : {}),
   };
-}
-
-function getCliPromptExecutionDetails(
-  instance: WorkflowInstance,
-  stepIndex: number,
-  defaults: { harness: HarnessId; model?: string }
-): { harness?: HarnessId; model?: string } {
-  const workflow = instance.promptQueue.getWorkflowFile();
-  const step = instance.promptQueue.getState().steps[stepIndex];
-  const promptStep = step && isPromptStep(step) ? step : undefined;
-  return resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
-    ...defaults,
-    modelForHarness: (harness) =>
-      ConfigurationUtils.getModelForHarness(harness) || undefined,
-  });
-}
-
-function getCliOutputStepName(
-  instance: WorkflowInstance,
-  target: OutputExecutionTarget
-): string {
-  const workflow = instance.promptQueue.getWorkflowFile();
-  const step =
-    target.kind === FINAL_STEP_PHASES.QUEUE
-      ? instance.promptQueue.getState().steps[target.stepIndex]
-      : workflow.finalStep;
-  if (step?.name?.trim()) return step.name.trim();
-  if (step && isScriptStep(step))
-    return step.script.split(/\s+/)[0] ?? "script";
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `Step ${target.stepIndex + 1}`
-    : formatFinalPassLabel(target.loopIndex + 1);
-}
-
-/** The terminal output target for an execution target's attempt. */
-function toCliOutputTarget(
-  target: OutputExecutionTarget,
-  stepName: string
-): CliOutputTarget & { key: string } {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? {
-        stepIndex: target.stepIndex,
-        stepName,
-        key: outputTargetKey(target),
-      }
-    : {
-        stepIndex: target.loopIndex,
-        stepName,
-        key: outputTargetKey(target),
-      };
-}
-
-let nextCliChildReporterId = 1;
-
-/** Subscribe child instances to the same formatter and terminal gate as the CLI root. */
-function subscribeCliChildProgress(
-  child: WorkflowInstance,
-  outputGate: CliTerminalOutputGate
-): void {
-  const reporterId = nextCliChildReporterId++;
-  const prefixStepName = (stepName: string): string => {
-    const childName =
-      child.workflowName?.trim() ||
-      child.promptQueue.getState().workflowName?.trim() ||
-      "child workflow";
-    return `[${childName}] ${stepName}`;
-  };
-  const outputTarget = (target: OutputExecutionTarget, stepName?: string) => {
-    const resolvedName = stepName ?? getCliOutputStepName(child, target);
-    return {
-      ...toCliOutputTarget(target, prefixStepName(resolvedName)),
-      key: `child-${reporterId}:${outputTargetKey(target)}`,
-    };
-  };
-
-  child.onTargetAttemptStart(({ target }) =>
-    outputGate.write(() =>
-      CliTerminalFormatter.replaceEventStream(outputTarget(target))
-    )
-  );
-  child.onTargetAttemptComplete(({ target, stats }) =>
-    outputGate.write(() => {
-      const renderedTarget = outputTarget(target);
-      CliTerminalFormatter.finishEventStream(renderedTarget);
-      CliTerminalFormatter.renderStats(stats);
-    })
-  );
-  child.onPromptStart((data) =>
-    outputGate.write(() =>
-      CliTerminalFormatter.renderPromptHeader({
-        ...data,
-        stepName: prefixStepName(data.stepName),
-      })
-    )
-  );
-  child.onTargetScriptOutput((data) =>
-    outputGate.write(() =>
-      CliTerminalFormatter.renderScriptOutput(
-        data.output,
-        outputTarget(data.target),
-        data.output.scriptOutput
-      )
-    )
-  );
-  child.onTargetStreamingEvents((data) => {
-    if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
-    outputGate.write(() =>
-      CliTerminalFormatter.renderEvents(
-        data.events,
-        outputTarget(data.target, data.stepName)
-      )
-    );
-  });
-  child.onTargetStreamingChunk((data) => {
-    if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
-    outputGate.write(() =>
-      CliTerminalFormatter.renderStreamingChunk(
-        data.chunk,
-        outputTarget(data.target, data.stepName)
-      )
-    );
-  });
 }
 
 interface ValidateCommandOptions {
@@ -1410,212 +1271,13 @@ async function runCommand(
       (deferredCount) =>
         CliTerminalFormatter.renderTerminalReturned(deferredCount)
     );
+    const reporter = new CliRunProgressReporter(outputGate);
+    // `--model` applies to the root workflow only; harness defaults are the
+    // same settings default for every run (D11).
+    reporter.subscribeRoot(instance, { harness, model: config.model });
     registerChildProgressReporter = (child) =>
-      subscribeCliChildProgress(child, outputGate);
-    const parallelGroups = new Map<string, CliParallelGroupState>();
-    const attempts = new CliAttemptTally();
-    const renderedFinalStepLabels = new Set<number>();
-    let parallelGroupStateSubscription: { dispose(): void } | undefined;
-    let released = false;
-
-    const renderFinalStepLabel = (target: OutputExecutionTarget): void => {
-      if (
-        target.kind !== FINAL_STEP_PHASES.FINAL_STEP ||
-        renderedFinalStepLabels.has(target.loopIndex)
-      ) {
-        return;
-      }
-      renderedFinalStepLabels.add(target.loopIndex);
-      CliTerminalFormatter.renderFinalStepLabel(target.loopIndex);
-    };
-
-    const renderPromptHeader = (
-      data: Parameters<typeof CliTerminalFormatter.renderPromptHeader>[0]
-    ): void => {
-      CliTerminalFormatter.renderPromptHeader({
-        ...data,
-        ...getCliPromptExecutionDetails(instance, data.stepIndex, {
-          harness,
-          model: config.model,
-        }),
-      });
-    };
-
-    const getParallelGroup = (
-      parallelGroupId: string | undefined
-    ): CliParallelGroupState | undefined => {
-      if (!parallelGroupId) {
-        return undefined;
-      }
-      const group = instance.promptQueue
-        .getState()
-        .parallelGroups.find((candidate) => candidate.id === parallelGroupId);
-      if (!group) {
-        return undefined;
-      }
-      let state = parallelGroups.get(group.id);
-      if (!state) {
-        state = {
-          group,
-          memberCount: group.endIndex - group.startIndex + 1,
-          started: new Set<number>(),
-          completed: new Set<number>(),
-          failed: new Set<number>(),
-        };
-        parallelGroups.set(group.id, state);
-      }
-      return state;
-    };
-
-    const renderParallelGroupProgress = (
-      state: CliParallelGroupState
-    ): void => {
-      const running = Math.max(
-        0,
-        state.started.size - state.completed.size - state.failed.size
-      );
-      CliTerminalFormatter.renderParallelGroupProgress(
-        state.group.id,
-        running,
-        state.completed.size,
-        state.failed.size
-      );
-    };
-
-    releaseLiveOutputState = (): void => {
-      if (released) {
-        return;
-      }
-      released = true;
-      parallelGroupStateSubscription?.dispose();
-      outputGate.write(() => {
-        for (const attempt of attempts.retriedGroups()) {
-          CliTerminalFormatter.renderAttemptGroupSummary(
-            attempt.stepName,
-            attempt.attemptCount,
-            attempt.totalElapsed,
-            attempt.tokenStats
-          );
-        }
-        attempts.clear();
-        parallelGroups.clear();
-        renderedFinalStepLabels.clear();
-        CliTerminalFormatter.disposeEventStreams();
-      });
-    };
-
-    // Every attempt, queue step or finalStep pass, streams into a fresh
-    // stream; the stream outlives completion so follow-up activity pairs.
-    // Retry tallies cover every target, keyed like its output stream.
-    instance.onTargetAttemptStart(({ target, attemptIndex }) =>
-      outputGate.write(() => {
-        const outputTarget = toCliOutputTarget(
-          target,
-          getCliOutputStepName(instance, target)
-        );
-        CliTerminalFormatter.replaceEventStream(outputTarget);
-        attempts.start(outputTarget.key, outputTarget.stepName, attemptIndex);
-      })
-    );
-    instance.onTargetAttemptComplete(({ target, stats }) =>
-      outputGate.write(() => {
-        const outputTarget = toCliOutputTarget(
-          target,
-          getCliOutputStepName(instance, target)
-        );
-        attempts.complete(outputTarget.key, stats);
-        CliTerminalFormatter.finishEventStream(outputTarget);
-        CliTerminalFormatter.renderStats(stats);
-      })
-    );
-    instance.onPromptStart((data) =>
-      outputGate.write(() => {
-        if (data.cliCommand !== undefined) {
-          CliTerminalFormatter.renderPromptHeader(data);
-          return;
-        }
-
-        const state = getParallelGroup(data.parallelGroupId);
-        if (!state) {
-          renderPromptHeader(data);
-          return;
-        }
-        if (!state.started.has(data.stepIndex)) {
-          state.started.add(data.stepIndex);
-          CliTerminalFormatter.renderParallelGroupHeader(
-            state.group,
-            state.memberCount
-          );
-        }
-        // A retry re-opens a branch that was tentatively settled by its prior
-        // attempt. The tally therefore remains truthful while branches stream
-        // concurrently into one linear terminal.
-        state.completed.delete(data.stepIndex);
-        state.failed.delete(data.stepIndex);
-        renderParallelGroupProgress(state);
-        renderPromptHeader(data);
-      })
-    );
-    parallelGroupStateSubscription = instance.promptQueue.onDidChangeState(
-      (queueState) =>
-        outputGate.write(() => {
-          for (const state of parallelGroups.values()) {
-            for (const stepIndex of state.started) {
-              if (
-                settleCliParallelGroupMember(
-                  state,
-                  stepIndex,
-                  queueState.results[stepIndex]?.status
-                )
-              ) {
-                renderParallelGroupProgress(state);
-              }
-            }
-          }
-        })
-    );
-    instance.onTargetScriptOutput((data) =>
-      outputGate.write(() => {
-        renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderScriptOutput(
-          data.output,
-          toCliOutputTarget(
-            data.target,
-            getCliOutputStepName(instance, data.target)
-          ),
-          data.output.scriptOutput
-        );
-      })
-    );
-    instance.onTargetStreamingEvents((data) => {
-      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) {
-        return;
-      }
-      outputGate.write(() => {
-        renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderEvents(
-          data.events,
-          toCliOutputTarget(data.target, data.stepName)
-        );
-      });
-    });
-    instance.onTargetStreamingChunk((data) => {
-      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) {
-        return;
-      }
-      outputGate.write(() => {
-        renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderStreamingChunk(
-          data.chunk,
-          toCliOutputTarget(data.target, data.stepName)
-        );
-      });
-    });
-    instance.onWorkflowStatusMessage((data) =>
-      outputGate.write(() => {
-        CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
-      })
-    );
+      reporter.subscribeChild(child, { harness });
+    releaseLiveOutputState = () => reporter.release();
   }
 
   // Runner-lock acquire/heartbeat/release is owned entirely by

@@ -231,6 +231,18 @@ function scriptOutcomePresentation(outcome: ScriptVerdict["outcome"]): {
   return { icon: "⚠", label: "Errored", color: chalk.yellow };
 }
 
+/**
+ * The one rule for labelling a sub-workflow child's progress: its label
+ * (`[name] `) goes in front of the step name or caption. The root run has no
+ * prefix, so its lines are returned unchanged.
+ */
+export function applyCliLinePrefix(
+  prefix: string | undefined,
+  text: string
+): string {
+  return prefix ? `[${prefix}] ${text}` : text;
+}
+
 export interface CliOutputTarget {
   stepIndex: number;
   stepName: string;
@@ -477,11 +489,17 @@ export class CliTerminalFormatter {
   /** Renders the live start marker for one workflow parallel group. */
   static renderParallelGroupHeader(
     group: ParallelGroupDefinition,
-    memberCount: number
+    memberCount: number,
+    prefix?: string
   ): void {
     console.log();
     console.log(
-      chalk.bold(`Parallel group ${group.id} — ${memberCount} member(s)`)
+      chalk.bold(
+        applyCliLinePrefix(
+          prefix,
+          `Parallel group ${group.id} — ${memberCount} member(s)`
+        )
+      )
     );
   }
 
@@ -490,11 +508,12 @@ export class CliTerminalFormatter {
     groupId: string,
     running: number,
     completed: number,
-    failed: number
+    failed: number,
+    prefix?: string
   ): void {
     console.log(
       chalk.dim(
-        `  Parallel group ${groupId}: ${running} running · ${completed} done · ${failed} failed`
+        `  ${applyCliLinePrefix(prefix, `Parallel group ${groupId}`)}: ${running} running · ${completed} done · ${failed} failed`
       )
     );
   }
@@ -572,10 +591,10 @@ export class CliTerminalFormatter {
   }
 
   /** Renders the caption that starts one finalStep pass in the terminal stream. */
-  static renderFinalStepLabel(loopIndex: number): void {
+  static renderFinalStepLabel(loopIndex: number, prefix?: string): void {
     console.log();
     console.log(
-      `${chalk.blue("│")} ${chalk.dim(formatFinalPassLabel(loopIndex + 1))}`
+      `${chalk.blue("│")} ${chalk.dim(applyCliLinePrefix(prefix, formatFinalPassLabel(loopIndex + 1)))}`
     );
   }
 
@@ -1835,9 +1854,14 @@ export class CliTerminalFormatter {
    * Renders a workflow status message (end condition result, retry notification, etc.)
    * using severity-appropriate chalk colour.
    */
-  static renderStatusMessage(message: string, severity: string): void {
+  static renderStatusMessage(
+    message: string,
+    severity: string,
+    prefix?: string
+  ): void {
     CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     CliTerminalFormatter.flushStreamingBuffer();
+    message = applyCliLinePrefix(prefix, message);
     if (severity === STATUS_MESSAGE_SEVERITY.ERROR) {
       // Red left border mirrors border-l-severity-error in the webview
       console.log(`${chalk.red("│")} ${chalk.red("✗ " + message)}`);

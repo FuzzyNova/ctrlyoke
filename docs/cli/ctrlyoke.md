@@ -184,8 +184,12 @@ passes the harness's own terminal UI through with minimal ctrlyoke framing.
 Headless mode streams formatted output: step headers, streamed text, tool
 calls, diffs, script verdicts, and per-step statistics. Subagent output is
 indented and labeled beneath its spawn, including when child work interleaves.
-Sub-workflow step progress uses the nearest child workflow name as a prefix,
-so nested child output remains identifiable in the shared terminal stream.
+A sub-workflow child's progress is reported like the parent's (step headers
+with harness and model, final step pass labels, parallel group headers and
+retry totals), prefixed with the nearest child workflow's name, such as
+`[Build] Step 1/2 — compile`. A child without a `name` is labelled with its
+file name minus the `.ctrlyoke.*` extension. The run summary is printed once,
+for the workflow you started.
 
 ### Tool permissions
 
