@@ -92,6 +92,47 @@ suite("HistoryRunDocumentBuilder", () => {
     assert.strictEqual(document?.text, "stdout search hit");
   });
 
+  test("indexes sub-workflow identity and failure details at its attempt", () => {
+    const builder = new HistoryRunDocumentBuilder();
+    const documents = builder.buildEventDocuments(
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        workflowId: "builder-test",
+        runId: 7,
+        sequence: 9,
+        timestampMs: 1900,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 3,
+        definitionRevision: 1,
+        payload: {
+          childWorkflowKey: "child-search-key" as WorkflowKey,
+          childRunRef: "run-search-ref" as RunRef,
+          outcome: {
+            status: "failed",
+            failureMessage: "distinctive child failure",
+          },
+        },
+      },
+      {
+        manifest: createManifest(),
+        workflowKey: "builder-test" as WorkflowKey,
+        runRef: "run-1000" as RunRef,
+        workflowName: "Builder Test",
+      }
+    );
+    assert.deepStrictEqual(
+      documents.map((item) => item.text),
+      [
+        "child-search-key",
+        "run-search-ref",
+        "failed",
+        "distinctive child failure",
+      ]
+    );
+    assert.ok(documents.every((item) => item.attemptIndex === 3));
+  });
+
   async function* streamEvents(
     events: WorkflowTimelineEvent[]
   ): AsyncGenerator<WorkflowTimelineEvent> {

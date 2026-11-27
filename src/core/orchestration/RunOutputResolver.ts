@@ -7,6 +7,7 @@ import type {
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import {
+  getStepType,
   getWorkflowStepText,
   isPromptStep,
   isScriptStep,
@@ -1126,7 +1127,8 @@ export class RunOutputResolver {
     contexts: readonly PriorContextRequest[],
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number,
-    options: RunOutputProjectionOptions
+    options: RunOutputProjectionOptions,
+    visitedSubWorkflows: Set<string> = new Set()
   ): Promise<PriorContextItem[]> {
     // Steps with no output are skipped when selecting the most recent N, so
     // previous selectors resolve every earlier candidate before selecting.
@@ -1287,6 +1289,7 @@ export class RunOutputResolver {
               detail:
                 merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
               subWorkflow: { output: value.subWorkflowOutput },
+              stepKind: getStepType(step),
               workflowPath:
                 typeof step.workflow === "string" ? step.workflow : undefined,
             },
@@ -1317,6 +1320,7 @@ export class RunOutputResolver {
                 {
                   index,
                   name: step.name,
+                  stepKind: getStepType(step),
                   detail:
                     merged.detailByQueueIndex.get(index) ??
                     merged.allQueueDetail,
@@ -1359,6 +1363,7 @@ export class RunOutputResolver {
               {
                 index,
                 name: step.name,
+                stepKind: getStepType(step),
                 prompt: getWorkflowStepText(step),
                 detail:
                   merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
@@ -1431,6 +1436,7 @@ export class RunOutputResolver {
         const targetKey = outputTargetKey(value.target);
         const common = {
           index,
+          ...(step ? { stepKind: getStepType(step) } : {}),
           type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
           // Set below, once the latest pass with output is known.
           detail: merged.allFinalStepsDetail,
@@ -1447,6 +1453,7 @@ export class RunOutputResolver {
             {
               ...common,
               subWorkflow: { output: value.subWorkflowOutput },
+              stepKind: getStepType(step),
               workflowPath:
                 typeof step.workflow === "string" ? step.workflow : undefined,
             },
@@ -1484,32 +1491,43 @@ export class RunOutputResolver {
         : [];
     return this.resolveSubWorkflowChildren(
       deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]),
-      options
+      options,
+      visitedSubWorkflows
     );
   }
 
   private async resolveSubWorkflowChildren(
     items: PriorContextItem[],
-    options: RunOutputProjectionOptions
+    options: RunOutputProjectionOptions,
+    visited: Set<string>
   ): Promise<PriorContextItem[]> {
     for (const item of items) {
       if (!item.subWorkflow) continue;
       const { childWorkflowKey, childRunRef } = item.subWorkflow.output;
-      const childManifestPath = WorkflowPaths.manifestPath(
-        options.workspaceRoot,
-        childWorkflowKey,
-        childRunRef
-      );
       try {
+        const address = `${childWorkflowKey}/${childRunRef}`;
+        if (visited.has(address)) {
+          Log.warn(`[RunOutputResolver] Sub-workflow cycle at ${address}`);
+          continue;
+        }
+        const childManifestPath = WorkflowPaths.manifestPath(
+          options.workspaceRoot,
+          childWorkflowKey,
+          childRunRef
+        );
         await fs.promises.access(childManifestPath);
+        const childVisited = new Set(visited);
+        childVisited.add(address);
         item.subWorkflow.children = await this.resolveAllPriorContextItems(
           childManifestPath,
           options,
-          item.detail
+          item.detail,
+          childVisited
         );
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-        throw error;
+        Log.debug(
+          `[RunOutputResolver] Child run unavailable: ${String(error)}`
+        );
       }
     }
     return items;
@@ -1519,7 +1537,8 @@ export class RunOutputResolver {
   async resolveAllPriorContextItems(
     manifestPath: string,
     options: RunOutputProjectionOptions,
-    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
+    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL,
+    visitedSubWorkflows: Set<string> = new Set()
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
     for await (const event of this.stream(manifestPath)) {
@@ -1543,7 +1562,8 @@ export class RunOutputResolver {
         prompt: "",
       })),
       maxIndex + 1,
-      options
+      options,
+      visitedSubWorkflows
     );
   }
 

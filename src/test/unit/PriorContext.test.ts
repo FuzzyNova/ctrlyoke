@@ -10,6 +10,7 @@ import {
   PRIOR_CONTEXT_LIMITS,
   SCRIPT_OPERATORS,
   SCRIPT_VERDICT_OUTCOMES,
+  STEP_TYPES,
   USER_STEER_ATTRIBUTIONS,
 } from "../../types/DashboardConstants";
 import { inlinePriorContextRefToPriorContext } from "../../utils/PriorContextMerge";
@@ -59,10 +60,12 @@ suite("prior-context XML", () => {
       {
         index: 1,
         name: "lane & merge",
+        stepKind: STEP_TYPES.WORKFLOW,
         detail: "full",
         workflowPath: "waves/a&b.yaml",
         subWorkflow: {
           output: {
+            resolvedWorkflowPath: "/private/absolute/child.yaml",
             childWorkflowKey: "child&key" as never,
             childRunRef: 'run"1' as never,
             outcome: { status: "completed" as never },
@@ -83,6 +86,7 @@ suite("prior-context XML", () => {
               prompt: "implement",
               text: "done",
               detail: "full",
+              stepKind: STEP_TYPES.WORKFLOW,
               subWorkflow: {
                 output: {
                   childWorkflowKey: "grandchild" as never,
@@ -100,6 +104,7 @@ suite("prior-context XML", () => {
       xml.includes('name="lane &amp; merge" workflow="waves/a&amp;b.yaml"'),
       xml
     );
+    assert.ok(!xml.includes("/private/absolute"), xml);
     assert.ok(
       xml.includes(
         'workflowKey="child&amp;key" runRef="run&quot;1" outcome="completed"'
@@ -110,11 +115,35 @@ suite("prior-context XML", () => {
     assert.ok(xml.includes('workflowKey="grandchild"'), xml);
   });
 
+  test("omits unset worktree attributes", () => {
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        stepKind: STEP_TYPES.WORKFLOW,
+        detail: "full",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child" as never,
+            childRunRef: "run-child" as never,
+            outcome: { status: "completed" as never },
+            worktree: { mode: "managed" } as never,
+          },
+          children: [],
+        },
+      },
+    ]);
+    assert.ok(xml.includes('<worktree mode="managed"/>'), xml);
+    assert.ok(!xml.includes('branch=""'), xml);
+    assert.ok(!xml.includes('base=""'), xml);
+    assert.ok(!xml.includes('tip=""'), xml);
+  });
+
   test("marks an unavailable workflow child run", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
         detail: "full",
+        stepKind: STEP_TYPES.WORKFLOW,
         subWorkflow: {
           output: {
             childWorkflowKey: "gone" as never,
@@ -140,6 +169,7 @@ suite("prior-context XML", () => {
       {
         index: 1,
         name: "lane",
+        stepKind: STEP_TYPES.WORKFLOW,
         detail: "summary",
         subWorkflow: {
           output: {
@@ -297,7 +327,13 @@ suite("prior-context XML", () => {
   test("leaves steps without a verdict unchanged", () => {
     const xml = buildPriorContextXmlFromItems([
       { index: 0, prompt: "plan it", text: "answer", detail: "full" },
-      { index: 1, text: "3 failing\n1", scriptOutput, detail: "full" },
+      {
+        index: 1,
+        text: "3 failing\n1",
+        scriptOutput,
+        stepKind: STEP_TYPES.SCRIPT,
+        detail: "full",
+      },
     ]);
 
     assert.strictEqual(

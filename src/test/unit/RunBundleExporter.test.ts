@@ -28,6 +28,7 @@ import {
 } from "../../types/DashboardConstants";
 import { RUN_BUNDLE_FILES } from "../../types/RunBundleTypes";
 import { readRunBundle } from "../../core/orchestration/RunBundleReader";
+import { RunBundleImporter } from "../../core/orchestration/RunBundleImporter";
 import { execGit } from "../../utils/GitUtils";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -104,6 +105,80 @@ suite("RunBundleExporter secrets", () => {
     });
     const bundle = await readRunBundle(exported.bundleDir, workspace);
     assert.deepStrictEqual(bundle.runManifest.parentRun, parentRun);
+  });
+
+  test("round-trips subWorkflowSettled in a run bundle", async () => {
+    const { workflowKey, runRef } = await createRun({
+      state: EXECUTION_STATES.COMPLETED,
+      currentIndex: 0,
+      steps: [{ prompt: "parent" }],
+    });
+    const manifestPath = WorkflowPaths.manifestPath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    await new TimelineRecorder().appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 200,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 2,
+        definitionRevision: 1,
+        payload: {
+          childWorkflowKey: "child-key" as never,
+          childRunRef: "run-2026-11-26T23-00-00-000Z" as never,
+          outcome: {
+            status: PROMPT_TERMINAL_STATUS.FAILED,
+            failureMessage: "child failed",
+          },
+        },
+      },
+    ]);
+    const exported = await exportRunBundle({
+      stateRoot: workspace,
+      workspaceRoot: workspace,
+      workflowKey,
+      runRef,
+      bundleDir: path.join(root, "sub-workflow.ctrlyokerun"),
+      exportedByVersion: "test",
+    });
+    const bundle = await readRunBundle(exported.bundleDir, workspace);
+    const event = bundle.events.find(
+      (candidate) =>
+        candidate.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+    );
+    assert.ok(event);
+    assert.strictEqual(event.attemptIndex, 2);
+    assert.strictEqual(event.payload.childWorkflowKey, "child-key");
+    assert.strictEqual(event.payload.outcome.failureMessage, "child failed");
+    const imported = await new RunBundleImporter().importRun({
+      bundleDir: exported.bundleDir,
+      workspaceRoot: workspace,
+    });
+    assert.strictEqual(imported.status, "imported");
+    if (imported.status !== "imported") return;
+    const importedEvents = await new TimelineRecorder().readEvents(
+      WorkflowPaths.manifestPath(
+        workspace,
+        imported.workflowKey,
+        imported.runRef
+      )
+    );
+    const importedSettlement = importedEvents.find(
+      (candidate) =>
+        candidate.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+    );
+    assert.ok(importedSettlement);
+    assert.strictEqual(
+      importedSettlement.payload.childRunRef,
+      "run-2026-11-26T23-00-00-000Z"
+    );
+    assert.strictEqual(
+      importedSettlement.payload.outcome.failureMessage,
+      "child failed"
+    );
   });
 
   test("skips a granted secret with no value on this machine", async () => {

@@ -7,6 +7,7 @@ import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
 import { PriorContextPreviewBuilder } from "../../utils/PriorContextPreviewBuilder";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { getStepOutputText } from "../../utils/StepOutputText";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import {
@@ -1315,6 +1316,237 @@ suite("RunOutputResolver", () => {
         )
         .then((items) => items.map(getPriorText)),
       ["older run output"]
+    );
+  });
+
+  test("resolves a workflow step from its timeline and includes child output", async () => {
+    const parentKey = "parent-workflow" as never;
+    const childKey = "child-workflow" as never;
+    const childRun = "run-2026-11-26T23-00-00-000Z" as never;
+    const grandchildKey = "grandchild-workflow" as never;
+    const grandchildRun = "run-2026-11-26T23-01-00-000Z" as never;
+    const workflowStep = {
+      type: "workflow" as const,
+      workflow: "waves/child.yaml",
+      name: "child",
+    };
+    const secondParentStep = { prompt: "next parent step" };
+    await recorder.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      initialDefinition: {
+        workflowName: "parent",
+        steps: [workflowStep, secondParentStep],
+      },
+      workflowId: parentKey,
+    }));
+    const childDir = WorkflowPaths.runDir(workspaceRoot, childKey, childRun);
+    const childManifest = await recorder.initializeRunAt(
+      childDir,
+      childKey,
+      2,
+      10,
+      EXECUTION_STATES.COMPLETED,
+      1,
+      {
+        workflowName: "child",
+        steps: [{ type: "workflow", workflow: "nested/grandchild.yaml" }],
+      }
+    );
+    const grandchildManifest = await recorder.initializeRunAt(
+      WorkflowPaths.runDir(workspaceRoot, grandchildKey, grandchildRun),
+      grandchildKey,
+      3,
+      11,
+      EXECUTION_STATES.COMPLETED,
+      1,
+      { workflowName: "grandchild", steps: [{ prompt: "grandchild prompt" }] }
+    );
+    await recorder.appendEvents(grandchildManifest, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 12,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          kind: "ai",
+          startReason: "initial",
+          prompt: "grandchild prompt",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 13,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            structured: {
+              events: [{ type: "text", data: { text: "grandchild response" } }],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+    ]);
+    await recorder.appendEvents(childManifest, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 14,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 1,
+        definitionRevision: 1,
+        payload: {
+          childWorkflowKey: grandchildKey,
+          childRunRef: grandchildRun,
+          outcome: { status: "completed" },
+        },
+      },
+    ]);
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 13,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 4,
+        definitionRevision: 1,
+        payload: {
+          resolvedWorkflowPath: "/private/absolute/child.yaml",
+          childWorkflowKey: childKey,
+          childRunRef: childRun,
+          outcome: { status: "completed" },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 15,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          kind: "ai",
+          startReason: "initial",
+          prompt: "next parent step",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 16,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            structured: {
+              events: [
+                { type: "text", data: { text: "second parent response" } },
+              ],
+              metadata: {},
+            },
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+    ]);
+    const items = await new RunOutputResolver(
+      recorder
+    ).resolvePriorContextItems(manifestPath, ["previous"], [workflowStep], 1, {
+      workspaceRoot,
+    });
+    const xml = buildPriorContextXmlFromItems(items);
+    assert.match(xml, /workflow="waves\/child\.yaml"/);
+    assert.ok(!xml.includes("/private/absolute"), xml);
+    assert.ok(xml.includes("grandchild response"), xml);
+    const preview = await PriorContextPreviewBuilder.buildPreview(
+      "previous",
+      1,
+      [workflowStep],
+      new RunOutputResolver(recorder),
+      manifestPath,
+      { workspaceRoot }
+    );
+    assert.strictEqual(preview, xml);
+    const summaryContext = await new RunOutputResolver(
+      recorder
+    ).resolvePriorContextItems(
+      manifestPath,
+      [{ context: "previous", detail: "summary" }],
+      [workflowStep],
+      1,
+      { workspaceRoot }
+    );
+    const summaryXml = buildPriorContextXmlFromItems(summaryContext);
+    const summaryPreview = await PriorContextPreviewBuilder.buildPreview(
+      "previous:summary",
+      1,
+      [workflowStep],
+      new RunOutputResolver(recorder),
+      manifestPath,
+      { workspaceRoot }
+    );
+    assert.strictEqual(summaryPreview, summaryXml);
+    const previousTwo = await new RunOutputResolver(
+      recorder
+    ).resolvePriorContextItems(
+      manifestPath,
+      [{ previous: 2 }],
+      [workflowStep, secondParentStep],
+      2,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(
+      previousTwo.map((item) => item.index),
+      [0, 1]
+    );
+
+    await fs.rm(childDir, { recursive: true, force: true });
+    const missingItems = await new RunOutputResolver(
+      recorder
+    ).resolvePriorContextItems(manifestPath, ["previous"], [workflowStep], 1, {
+      workspaceRoot,
+    });
+    assert.ok(
+      buildPriorContextXmlFromItems(missingItems).includes(
+        "<childRunUnavailable/>"
+      )
+    );
+
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 14,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 5,
+        definitionRevision: 1,
+        payload: {
+          childWorkflowKey: childKey,
+          childRunRef: "../../invalid" as never,
+          outcome: { status: "completed" },
+        },
+      },
+    ]);
+    const invalidItems = await new RunOutputResolver(
+      recorder
+    ).resolvePriorContextItems(manifestPath, ["previous"], [workflowStep], 1, {
+      workspaceRoot,
+    });
+    assert.ok(
+      buildPriorContextXmlFromItems(invalidItems).includes(
+        "<childRunUnavailable/>"
+      )
     );
   });
 

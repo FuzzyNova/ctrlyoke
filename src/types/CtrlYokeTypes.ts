@@ -49,6 +49,7 @@ import {
   type SandboxRequest,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import type { SubWorkflowResult } from "./SubWorkflowTypes";
 export type {
   HarnessId,
   HookEvent,
@@ -1233,28 +1234,13 @@ export interface ScriptRuntimeOutput {
 }
 
 /** Durable metadata for a settled child workflow run. */
-export interface SubWorkflowOutput {
+export type SubWorkflowOutput = {
   resolvedWorkflowPath?: string;
   childWorkflowKey: WorkflowKey;
   childRunRef: RunRef;
-  outcome: {
-    status: import("./DashboardConstants").PromptTerminalStatus;
-    failedToStart?: boolean;
-    cancelledBy?: import("./DashboardConstants").SubWorkflowCancellationSource;
-    failureMessage?: string;
-  };
-  worktree?: Pick<
-    WorkingFileWorktreeRuntime,
-    | "mode"
-    | "branchName"
-    | "baseCommit"
-    | "finalBranchTip"
-    | "changedFileCount"
-    | "landingOutcome"
-    | "mergeOutcome"
-    | "conflictFiles"
-  >;
-}
+  outcome: Omit<SubWorkflowResult, "worktree">;
+  worktree?: SubWorkflowResult["worktree"];
+};
 
 export interface ScriptVerdict {
   compareSource: CompareSource;
