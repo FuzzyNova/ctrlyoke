@@ -525,6 +525,11 @@ export class ExecutionPreviewService {
     const diagnostics = [
       ...compatibilityDiagnostics,
       ...steps.flatMap((step) => step.diagnostics),
+      ...this.unpreviewedMemberDiagnostics(
+        preparedWorkflow,
+        targets,
+        parallelDiagnostics
+      ),
     ];
     const workflowSummary: WorkflowPreviewSummary = {
       name: this.resolveWorkflowName(request),
@@ -937,6 +942,41 @@ export class ExecutionPreviewService {
       ]),
       ...substitutionFields,
     };
+  }
+
+  /**
+   * Group preflight issues on members with no step preview of their own (a
+   * member outside the scope, or a workflow step, which has no step preview
+   * yet), for every group a previewed step belongs to. Some issues name only
+   * such members (`WORKTREE_COLLISION` is always between workflow steps), and
+   * the group still fails on them.
+   */
+  private unpreviewedMemberDiagnostics(
+    workflow: PromptFile,
+    targets: readonly PreviewStepTarget[],
+    parallelDiagnostics: ReadonlyMap<number, readonly CompatibilityDiagnostic[]>
+  ): CompatibilityDiagnostic[] {
+    const previewed = new Set(
+      targets
+        .filter((target) => !target.isFinalStep)
+        .map((target) => target.stepIndex)
+    );
+    return (workflow.parallelGroups ?? [])
+      .filter((group) =>
+        [...previewed].some(
+          (index) => index >= group.startIndex && index <= group.endIndex
+        )
+      )
+      .flatMap((group) =>
+        [...parallelDiagnostics.entries()]
+          .filter(
+            ([index]) =>
+              !previewed.has(index) &&
+              index >= group.startIndex &&
+              index <= group.endIndex
+          )
+          .flatMap(([, entries]) => entries)
+      );
   }
 
   private selectTargets(

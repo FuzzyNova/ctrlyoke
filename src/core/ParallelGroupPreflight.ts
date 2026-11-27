@@ -62,6 +62,13 @@ import * as path from "path";
 export const MERGE_INTO_SHARED_ROOT_GUIDANCE =
   "Give the editing member its own worktree (a workflow step whose child sets worktree), or drop merge from the merging lane.";
 
+/**
+ * What an author does about a `WORKTREE_COLLISION` issue: only one run can
+ * hold a named worktree at a time.
+ */
+export const WORKTREE_COLLISION_GUIDANCE =
+  "Give each member its own branch, or move one of them out of the parallel group.";
+
 export interface ParallelGroupPreflightIssue {
   readonly code: ParallelGroupPreflightDiagnosticCode;
   readonly memberIndices: readonly number[];
@@ -232,11 +239,7 @@ export function stepParentCheckoutUse(
   if (!isSubWorkflowStep(step)) {
     return { edits: true, mergesInto: false };
   }
-  const resolvedPlan =
-    plan ??
-    (typeof step.workflow === "string"
-      ? undefined
-      : classifySubWorkflowWorktree(step.workflow.worktree));
+  const resolvedPlan = subWorkflowStepWorktreePlan(step, plan);
   if (!resolvedPlan) return NO_PARENT_CHECKOUT_USE;
   return {
     edits:
@@ -245,6 +248,62 @@ export function stepParentCheckoutUse(
         SUB_WORKFLOW_WORKTREE_PLACEMENTS.MAIN_CHECKOUT &&
         parentRunsInMainCheckout),
     mergesInto: resolvedPlan.mergesIntoParent,
+  };
+}
+
+/**
+ * A sub-workflow step's worktree plan: `plan` when its child was prepared,
+ * otherwise, for an inline child, its authored definition. A file child that
+ * was never parsed has none.
+ */
+function subWorkflowStepWorktreePlan(
+  step: SubWorkflowStep,
+  plan: SubWorkflowWorktreePlan | undefined
+): SubWorkflowWorktreePlan | undefined {
+  return (
+    plan ??
+    (typeof step.workflow === "string"
+      ? undefined
+      : classifySubWorkflowWorktree(step.workflow.worktree))
+  );
+}
+
+/**
+ * The named worktree branch a member's child will hold, or undefined when it
+ * holds none or fails alone before it runs.
+ */
+function memberNamedBranch(
+  member: ParallelGroupPreflightMember
+): string | undefined {
+  if (member.varSubstitutionError !== undefined) return undefined;
+  if (!isSubWorkflowStep(member.step)) return undefined;
+  const launch = member.subWorkflowLaunch;
+  if (launch && !launch.ok) return undefined;
+  return subWorkflowStepWorktreePlan(member.step, launch?.worktreePlan)
+    ?.namedBranch;
+}
+
+/**
+ * Two members whose children name the same worktree branch: only one run
+ * can hold a named worktree's exclusive lease, so the later member could
+ * never start beside the earlier one.
+ */
+function worktreeCollisionIssue(
+  workflow: PromptFile,
+  member: ParallelGroupPreflightMember,
+  reservedMembers: readonly ParallelGroupPreflightMember[]
+): ParallelGroupPreflightIssue | undefined {
+  const branch = memberNamedBranch(member);
+  if (branch === undefined) return undefined;
+  const holders = reservedMembers
+    .filter((reserved) => memberNamedBranch(reserved) === branch)
+    .map((reserved) => reserved.stepIndex);
+  if (holders.length === 0) return undefined;
+  const indices = [...holders, member.stepIndex].sort((a, b) => a - b);
+  return {
+    code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION,
+    memberIndices: indices,
+    message: `${memberList(workflow, indices)} use the same named worktree "${branch}" in one parallel group. ${WORKTREE_COLLISION_GUIDANCE}`,
   };
 }
 
@@ -440,18 +499,26 @@ export async function preflightParallelGroupMember(
       variables,
       ...(subWorkflowLaunch ? { subWorkflowLaunch } : {}),
     };
-    const mergeIssue = mergeIntoSharedRootIssue(
-      workflow,
-      subWorkflowMember,
-      options.reservedMembers ?? [],
-      options.parentRunsInMainCheckout ?? false
-    );
+    const subWorkflowIssues = [
+      mergeIntoSharedRootIssue(
+        workflow,
+        subWorkflowMember,
+        options.reservedMembers ?? [],
+        options.parentRunsInMainCheckout ?? false
+      ),
+      worktreeCollisionIssue(
+        workflow,
+        subWorkflowMember,
+        options.reservedMembers ?? []
+      ),
+    ].filter((issue): issue is ParallelGroupPreflightIssue => !!issue);
     return {
       member: subWorkflowMember,
-      issues: mergeIssue ? [mergeIssue] : [],
-      failureMessage: mergeIssue
-        ? formatMemberPreflightFailure(options.stepIndex, [mergeIssue])
-        : "",
+      issues: subWorkflowIssues,
+      failureMessage:
+        subWorkflowIssues.length > 0
+          ? formatMemberPreflightFailure(options.stepIndex, subWorkflowIssues)
+          : "",
     };
   }
   const prompt = promptProjection(step);

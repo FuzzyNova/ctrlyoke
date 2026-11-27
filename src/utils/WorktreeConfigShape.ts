@@ -9,6 +9,7 @@ import type {
   WorktreeObjectConfig,
 } from "../types/CtrlYokeTypes";
 import type { SubWorkflowWorktreePlan } from "../types/SubWorkflowTypes";
+import { normalizeNamedWorktreeBranch } from "./BranchName";
 
 export type WorktreeDirectoryValueKind =
   (typeof WORKTREE_DIRECTORY_VALUE_KINDS)[keyof typeof WORKTREE_DIRECTORY_VALUE_KINDS];
@@ -117,7 +118,13 @@ export function classifySubWorkflowWorktree(
     : {
         placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.NAMED,
         mergesIntoParent: false,
+        ...namedBranchField(config.branch),
       };
+}
+
+function namedBranchField(branch: string): { namedBranch?: string } {
+  const namedBranch = normalizeNamedWorktreeBranch(branch);
+  return namedBranch && !namedBranch.includes("{{") ? { namedBranch } : {};
 }
 
 /** Whether a classified child creates (or reuses) a worktree of its own. */

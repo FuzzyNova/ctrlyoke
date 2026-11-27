@@ -19,6 +19,8 @@ import {
 import { manifestPath } from "../../utils/WorkflowPaths";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { Log } from "../../utils/Log";
+import { WorkingFileManager } from "../WorkingFileManager";
+import type { WorkingFileWorktreeRuntime } from "../../types/CtrlYokeTypes";
 import { forwardSubWorkflowControl } from "./SubWorkflowControlRelay";
 
 const LOG_SOURCE = "SubWorkflowLauncher";
@@ -302,6 +304,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
             }
           : result
       )
+      .then(async (result) => this.withRecordedWorktree(instance, result))
       .finally(() => {
         settled = true;
         watch.dispose();
@@ -630,32 +633,68 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     );
   }
 
+  /**
+   * `result` with the worktree its child's run file records. Worktree
+   * lifecycle metadata is disk-authoritative and kept out of the queue's
+   * in-memory projection (`WorkingFileManager.updateWorktreeRuntime`), so a
+   * child loaded from a file never holds it in memory: read it from the run
+   * file once the run has settled, and fall back to memory only when the
+   * file cannot be read.
+   */
+  private async withRecordedWorktree(
+    instance: SubWorkflowInstance,
+    result: SubWorkflowResult
+  ): Promise<SubWorkflowResult> {
+    const workingFilePath = instance.promptQueue.getState().workingFilePath;
+    if (!workingFilePath) return result;
+    let recorded: WorkingFileWorktreeRuntime | undefined;
+    try {
+      recorded = (
+        await WorkingFileManager.readWorkingFileFromDisk(workingFilePath)
+      )._runtime?.worktree;
+    } catch (error) {
+      Log.warn(
+        `[${LOG_SOURCE}] Could not read the child's worktree from ${workingFilePath}: ${errorMessage(error)}`
+      );
+      return result;
+    }
+    return recorded
+      ? { ...result, worktree: projectWorktree(recorded) }
+      : result;
+  }
+
   private worktree(
     instance: SubWorkflowInstance
   ): SubWorkflowResult["worktree"] {
     const worktree = instance.promptQueue.getWorkflowFile()._runtime?.worktree;
-    if (!worktree) return undefined;
-    const {
-      mode,
-      branchName,
-      baseCommit,
-      finalBranchTip,
-      changedFileCount,
-      landingOutcome,
-      mergeOutcome,
-      conflictFiles,
-    } = worktree;
-    return {
-      mode,
-      branchName,
-      baseCommit,
-      finalBranchTip,
-      changedFileCount,
-      landingOutcome,
-      mergeOutcome,
-      conflictFiles,
-    };
+    return worktree ? projectWorktree(worktree) : undefined;
   }
+}
+
+/** The worktree fields a settled child reports (D12a). */
+function projectWorktree(
+  worktree: WorkingFileWorktreeRuntime
+): NonNullable<SubWorkflowResult["worktree"]> {
+  const {
+    mode,
+    branchName,
+    baseCommit,
+    finalBranchTip,
+    changedFileCount,
+    landingOutcome,
+    mergeOutcome,
+    conflictFiles,
+  } = worktree;
+  return {
+    mode,
+    branchName,
+    baseCommit,
+    finalBranchTip,
+    changedFileCount,
+    landingOutcome,
+    mergeOutcome,
+    conflictFiles,
+  };
 }
 
 function errorMessage(error: unknown): string {

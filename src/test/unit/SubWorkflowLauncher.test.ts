@@ -102,6 +102,9 @@ class FakeChild implements SubWorkflowInstance {
     this.stateEmitter.fire(this.promptQueue.getState());
   }
 
+  /** The child's run file, when a test puts one on disk. */
+  workingFilePath?: string;
+
   readonly promptQueue = {
     getState: (): QueueState => ({
       status: this.status,
@@ -115,6 +118,9 @@ class FakeChild implements SubWorkflowInstance {
       definitionRevision: 0,
       workflowKey: "child-key" as WorkflowKey,
       runRef: "run-child" as RunRef,
+      ...(this.workingFilePath !== undefined
+        ? { workingFilePath: this.workingFilePath }
+        : {}),
       results: this.results,
       steps: this.steps,
     }),
@@ -399,6 +405,63 @@ suite("SubWorkflowLauncher", () => {
       "/tmp/root.ctrlyoke.yaml",
       "/tmp/child.ctrlyoke.yaml",
     ]);
+  });
+
+  test("projects the worktree from the child's run file, which the queue never holds in memory", async () => {
+    const directory = makeTempDir("ctrlyoke-launcher-worktree-");
+    try {
+      const factory = new FakeFactory();
+      factory.child.workingFilePath = path.join(
+        directory,
+        "workflow.ctrlyoke.json"
+      );
+      await fs.writeFile(
+        factory.child.workingFilePath,
+        JSON.stringify({
+          steps: [{ type: "script", script: "true" }],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+            worktree: {
+              schemaVersion: 1,
+              mode: WORKTREE_MODES.MANAGED,
+              origin: "created",
+              branchName: "ctrlyoke/lane/run-1",
+              worktreePath: "/tmp/worktree",
+              executionRoot: "/tmp/worktree",
+              executionCheckoutRoot: "/tmp/worktree",
+              sourceCheckoutRoot: "/tmp/source",
+              namedWorkspaceRoots: [],
+              baseCommit: "abc",
+              finalBranchTip: "def",
+              changedFileCount: 1,
+              landingOutcome: "landed",
+              lifecycleOwner: "ctrlyoke",
+              lifecycleState: "settled",
+              directoryState: "removed",
+              branchState: "present",
+              updatedAt: 1,
+            },
+          },
+        })
+      );
+      const launcher = new SubWorkflowLauncher(factory.create);
+
+      const result = await (await launcher.launch(request())).done;
+
+      assert.deepStrictEqual(result.worktree, {
+        mode: WORKTREE_MODES.MANAGED,
+        branchName: "ctrlyoke/lane/run-1",
+        baseCommit: "abc",
+        finalBranchTip: "def",
+        changedFileCount: 1,
+        landingOutcome: "landed",
+        mergeOutcome: undefined,
+        conflictFiles: undefined,
+      });
+    } finally {
+      removeTempDir(directory);
+    }
   });
 
   test("marks a child that fails mid-run as started", async () => {

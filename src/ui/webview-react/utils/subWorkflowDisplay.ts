@@ -2,7 +2,6 @@ import {
   OUTPUT_HISTORY_KINDS,
   SUB_WORKFLOW_DASHBOARD_LABELS,
   WORKTREE_MERGE_OUTCOMES,
-  WORKTREE_MODES,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
@@ -17,7 +16,6 @@ import type { WorkflowStep } from "@store/workflowStore";
 import {
   classifySubWorkflowWorktree,
   subWorkflowCreatesWorktree,
-  toWorktreeObjectConfig,
 } from "@root/utils/WorktreeConfigShape";
 
 /** A lane's merge that did not land cleanly (D4e): a badge label and its reason. */
@@ -113,13 +111,9 @@ export function hasInlineWorktree(step: SubWorkflowStep): boolean {
 export function getInlineWorktreeDefinedBranch(
   step: SubWorkflowStep
 ): string | undefined {
-  if (typeof step.workflow === "string") return undefined;
-  const config = toWorktreeObjectConfig(step.workflow.worktree);
-  if (config === false || config.mode !== WORKTREE_MODES.NAMED) {
-    return undefined;
-  }
-  const branch = config.branch.trim();
-  return branch && !branch.includes("{{") ? branch : undefined;
+  return typeof step.workflow === "string"
+    ? undefined
+    : classifySubWorkflowWorktree(step.workflow.worktree).namedBranch;
 }
 
 /**

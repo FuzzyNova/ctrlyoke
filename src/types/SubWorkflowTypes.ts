@@ -72,6 +72,13 @@ export interface SubWorkflowWorktreePlan {
   readonly placement: SubWorkflowWorktreePlacement;
   /** A managed worktree with `merge: true`: it merges into the parent's checkout (D4b). */
   readonly mergesIntoParent: boolean;
+  /**
+   * A named worktree's branch, normalized as `WorktreeManager` resolves it
+   * (`WORKTREE_COLLISION`). Absent for every other placement, and for a
+   * branch still holding a `{{var}}` placeholder: the child substitutes it at
+   * run start, so the authored text is not the branch it will use.
+   */
+  readonly namedBranch?: string;
 }
 
 /**

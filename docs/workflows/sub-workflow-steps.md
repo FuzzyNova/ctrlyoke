@@ -184,6 +184,19 @@ the group.
 Members whose children all have their own worktrees, with or without
 `merge`, can share a group.
 
+A member whose child sets a named worktree (`worktree: lane/docs` or
+`{ mode: named, branch: lane/docs }`) works in that worktree, creating it from
+its `base`, else the parent's `HEAD`, or reusing it when it already exists. A
+named worktree never merges, and ctrlyoke never commits to it: the child's own
+steps commit, and the branch stays for a later step to use. Only one run can
+hold a named worktree at a time, so two members whose children name the same
+branch cannot share a group. `refs/heads/lane/docs` and `lane/docs` are the
+same branch. The group fails before any member starts and names both members;
+give each member its own branch, or move one of them out of the group. A branch
+built from a `{{variable}}` is only known once the child starts, so a clash
+between those fails the later member at its start instead. A child that names
+the named worktree its own parent runs in fails to start, under its `onFail`.
+
 Members whose children have no `worktree` share the parent's checkout the way
 prompt and script members do, including the parent's own worktree. Several of
 them can run side by side in a managed or named parent's worktree, and they see
@@ -197,6 +210,50 @@ member branches from the same commit. If that check refuses a dirty checkout,
 only the members whose child creates a worktree fail. When the group runs one
 member at a time (`queue.maxParallelSteps: 1`), each worktree member is checked
 when it starts instead, because an earlier member may have changed the checkout.
+
+### Authored waves {#authored-waves}
+
+A long change can be run as waves: a group of lanes that each work in their
+own worktree, a step that merges their branches and fixes what breaks, then the
+next group, which starts from that merged result. Each lane is a workflow file
+of its own, with `worktree: { mode: managed }` and whatever steps it needs:
+
+```yaml
+name: editor-intelligence
+worktree: false
+steps:
+  - parallel:
+      - { type: workflow, workflow: waves/location.ctrlyoke.yaml }
+      - { type: workflow, workflow: waves/lint-rules.ctrlyoke.yaml }
+    failFast: false
+  - name: Merge wave 1 and fix
+    prompt: |
+      Merge every branch reported in $step:summary:1-2 into the current branch,
+      resolve conflicts, run the tests, fix failures, and commit the result.
+  - parallel:
+      - { type: workflow, workflow: waves/completions.ctrlyoke.yaml }
+      - { type: workflow, workflow: waves/diagnostics.ctrlyoke.yaml }
+    failFast: false
+```
+
+Both lanes of a wave branch from the same commit. A lane without `merge` keeps
+its branch when it settles, and the step's output reports it, so
+`$step:summary:1-2` gives the merge step every lane's branch at a bounded size.
+`failFast: false` keeps one failing lane from cancelling the others' work.
+
+The next wave branches from the parent's `HEAD` when it starts, so the merge
+step must commit. If it leaves the main checkout dirty, every worktree member
+of the next wave fails to start under its `onFail`, with the number of dirty
+files, before any of them runs. In a managed parent the leftover changes are
+checkpoint-committed instead, as described
+[above](#execution-directory-and-worktrees).
+
+A script merge step cannot read `$step:summary`. Give the lanes named
+worktrees instead, so the script knows each branch in advance, or read each
+lane's branch from the `subWorkflowSettled` events in the run's
+`events.jsonl`, which sits beside the file named by `CTRLYOKE_WORKING_FILE`.
+To have each lane merge as it settles instead, set `merge: true` in its file;
+a conflict is then reported in its step output for the merge step to resolve.
 
 `queue.maxParallelSteps` caps how many children run at once, and each child's
 own parallel groups apply their own limit on top. With `failFast: true` (the

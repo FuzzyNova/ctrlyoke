@@ -1589,6 +1589,7 @@ export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
   INTERACTIVE_MULTIPLEX: "parallelGroup.preflight.interactiveMultiplex",
   EFFECTIVE_WIDTH: "parallelGroup.preflight.effectiveWidth",
   MERGE_INTO_SHARED_ROOT: "parallelGroup.preflight.mergeIntoSharedRoot",
+  WORKTREE_COLLISION: "parallelGroup.preflight.worktreeCollision",
 } as const;
 
 export type ParallelGroupPreflightDiagnosticCode =

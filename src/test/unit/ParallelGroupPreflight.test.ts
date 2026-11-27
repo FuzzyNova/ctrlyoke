@@ -13,6 +13,7 @@ import {
 } from "../../types/DashboardConstants";
 import type {
   ParallelGroupDefinition,
+  WorktreeConfig,
   PromptFile,
   PromptStep,
   SubWorkflowStep,
@@ -30,6 +31,7 @@ import {
 } from "../../utils/McpToolDefinitions";
 import {
   MERGE_INTO_SHARED_ROOT_GUIDANCE,
+  WORKTREE_COLLISION_GUIDANCE,
   preflightParallelGroup,
   preflightParallelGroupMember,
   runsInMainCheckout,
@@ -690,6 +692,192 @@ suite("ParallelGroupPreflight MERGE_INTO_SHARED_ROOT", () => {
     assert.deepStrictEqual(
       claimed.issues.map((issue) => issue.code),
       [PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT]
+    );
+    assert.match(claimed.failureMessage, /Parallel step 2 failed preflight/);
+  });
+});
+
+suite("ParallelGroupPreflight WORKTREE_COLLISION", () => {
+  const namedInline = (
+    name: string,
+    worktree: WorktreeConfig
+  ): WorkflowStep => ({
+    type: STEP_TYPES.WORKFLOW,
+    name,
+    workflow: { prompt: `${name} work`, worktree },
+  });
+  /** A member whose preparation fails, as an invalid child file does. */
+  const FAILS_TO_PREPARE = "broken";
+  const fileMember = (name: string, file: string): WorkflowStep => ({
+    type: STEP_TYPES.WORKFLOW,
+    name,
+    workflow: file,
+  });
+
+  /**
+   * Preflight `steps` as one group. A file member's child is "parsed" to the
+   * `worktree` in `fileWorktrees`; an inline member is classified from its
+   * definition, as the executor prepares them.
+   */
+  async function preflight(
+    steps: WorkflowStep[],
+    fileWorktrees: Record<string, WorktreeConfig | undefined> = {}
+  ) {
+    const groupDefinition = {
+      ...group,
+      startIndex: 0,
+      endIndex: steps.length - 1,
+    };
+    return preflightParallelGroup({
+      workflow: {
+        steps: steps.map((step, index) => ({
+          ...step,
+          _runtime: { stepId: `member-${index}` },
+        })),
+        parallelGroups: [groupDefinition],
+      },
+      group: groupDefinition,
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      parentRunsInMainCheckout: true,
+      prepareSubWorkflowMember: async (step: SubWorkflowStep) =>
+        step.name === FAILS_TO_PREPARE
+          ? { ok: false as const, failureMessage: "invalid child" }
+          : {
+              ok: true as const,
+              source: {
+                kind: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+                resolvedPath: "/child.ctrlyoke.yaml",
+              },
+              worktreePlan: classifySubWorkflowWorktree(
+                typeof step.workflow === "string"
+                  ? fileWorktrees[step.workflow]
+                  : step.workflow.worktree
+              ),
+            },
+    });
+  }
+
+  const collisions = (
+    result: Awaited<ReturnType<typeof preflightParallelGroup>>
+  ) =>
+    result.issues.filter(
+      (issue) =>
+        issue.code ===
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION
+    );
+
+  test("two inline members naming one branch are an issue naming both", async () => {
+    const result = await preflight([
+      namedInline("docs", "ctrlyoke/docs"),
+      namedInline("site", {
+        mode: WORKTREE_MODES.NAMED,
+        branch: "ctrlyoke/docs",
+      }),
+    ]);
+
+    assert.deepStrictEqual(result.issues, collisions(result));
+    assert.strictEqual(result.issues.length, 1);
+    assert.deepStrictEqual(result.issues[0].memberIndices, [0, 1]);
+    assert.strictEqual(
+      result.issues[0].message,
+      `Step 1 ("docs"), Step 2 ("site") use the same named worktree "ctrlyoke/docs" in one parallel group. ${WORKTREE_COLLISION_GUIDANCE}`
+    );
+  });
+
+  test("normalizes the branch as WorktreeManager does", async () => {
+    const result = await preflight([
+      namedInline("a", " refs/heads/ctrlyoke/docs "),
+      namedInline("b", { mode: WORKTREE_MODES.NAMED, branch: "ctrlyoke/docs" }),
+    ]);
+
+    assert.deepStrictEqual(
+      collisions(result).map((issue) => issue.memberIndices),
+      [[0, 1]]
+    );
+  });
+
+  test("file children are compared after parsing, and with inline children", async () => {
+    const result = await preflight(
+      [
+        fileMember("first", "a.ctrlyoke.yaml"),
+        fileMember("second", "b.ctrlyoke.yaml"),
+        namedInline("third", "release"),
+      ],
+      {
+        "a.ctrlyoke.yaml": { mode: WORKTREE_MODES.NAMED, branch: "release" },
+        "b.ctrlyoke.yaml": "release",
+      }
+    );
+
+    assert.deepStrictEqual(
+      collisions(result).map((issue) => issue.memberIndices),
+      [
+        [0, 1],
+        [0, 1, 2],
+      ]
+    );
+  });
+
+  test("distinct branches, managed lanes and inheriting members are not an issue", async () => {
+    const result = await preflight([
+      namedInline("a", "ctrlyoke/a"),
+      namedInline("b", "ctrlyoke/b"),
+      namedInline("managed", { mode: WORKTREE_MODES.MANAGED }),
+      namedInline("managed 2", { mode: WORKTREE_MODES.MANAGED }),
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { type: STEP_TYPES.SCRIPT, script: "npm test" },
+      },
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a branch built from a {{var}} is left to the child's start", async () => {
+    const result = await preflight([
+      namedInline("a", "lane/{{topic}}"),
+      namedInline("b", "lane/{{topic}}"),
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a member that fails alone in preparation is not counted", async () => {
+    const result = await preflight([
+      namedInline(FAILS_TO_PREPARE, "release"),
+      namedInline("b", "release"),
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a member claimed beside a running holder of its branch fails its dispatch preflight", async () => {
+    const holder = namedInline("holder", "release");
+    const late = namedInline("late", "release");
+    const groupResult = await preflight([holder]);
+    const claimed = await preflightParallelGroupMember({
+      workflow: {
+        steps: [holder, late],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      step: late,
+      stepIndex: 1,
+      reservedMembers: groupResult.members,
+    });
+
+    assert.deepStrictEqual(
+      claimed.issues.map((issue) => issue.code),
+      [PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION]
     );
     assert.match(claimed.failureMessage, /Parallel step 2 failed preflight/);
   });

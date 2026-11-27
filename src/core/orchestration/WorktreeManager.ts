@@ -38,6 +38,7 @@ import {
   type GitWorkingTreeCounts,
   type GitWorktreeEntry,
 } from "../../utils/GitUtils";
+import { normalizeNamedWorktreeBranch } from "../../utils/BranchName";
 import {
   createManagedBranchName,
   createWorktreeDirectoryName,
@@ -2804,7 +2805,7 @@ export class WorktreeManager {
     options: ResolveNamedWorktreeOptions,
     pending: { directoryLease?: ExecutionLeaseHandle }
   ): Promise<ActiveWorktreeInfo> {
-    const branchName = normalizeBranchName(options.branchName.trim());
+    const branchName = normalizeNamedWorktreeBranch(options.branchName);
     if (!branchName) throw new Error("Named worktree mode requires a branch.");
 
     const {

@@ -6434,4 +6434,407 @@ suite("Sub-workflow host end to end", () => {
       removeTempDir(`${workspace}.worktrees`);
     }
   });
+
+  function git(cwd: string, ...args: string[]): string {
+    return execFileSync("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+    }).trim();
+  }
+
+  /** Run a fresh `definitionPath` run on a new parent instance to its end. */
+  async function runParent(
+    createInstance: () => WorkflowInstance,
+    instances: WorkflowInstance[],
+    definitionPath: string
+  ): Promise<WorkflowInstance> {
+    const parent = createInstance();
+    instances.push(parent);
+    assert.strictEqual(await parent.loadPromptFile(definitionPath), true);
+    await parent.executeLoadedPromptFile();
+    return parent;
+  }
+
+  /** A lane script that writes `<name>.txt` and commits it in the checkout it runs in. */
+  async function writeCommittingLaneScript(workspace: string): Promise<void> {
+    await fs.writeFile(
+      path.join(workspace, "commit-lane.js"),
+      [
+        "const fs = require('fs');",
+        "const { execFileSync } = require('child_process');",
+        "const name = process.argv[2];",
+        "fs.writeFileSync(name + '.txt', name + ' ' + Date.now());",
+        "execFileSync('git', ['add', name + '.txt']);",
+        "execFileSync('git', ['commit', '-m', 'lane ' + name]);",
+      ].join("\n")
+    );
+  }
+
+  test("named-worktree members branch from the parent's HEAD or their base, never merge, and are reused by the next run", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(240_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-named-members-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeCommittingLaneScript(workspace);
+      commitAll(workspace, "initial");
+      const initialCommit = git(workspace, "rev-parse", "HEAD");
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Named members",
+        steps: [
+          {
+            parallel: [
+              // The string shorthand and the object form name a branch alike.
+              inlineLane("Lane A", "node commit-lane.js a", {
+                worktree: "lane/a",
+              }),
+              inlineLane("Lane B", "node commit-lane.js b", {
+                worktree: {
+                  mode: "named",
+                  branch: "lane/b",
+                  base: initialCommit,
+                },
+              }),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parentHead = git(workspace, "rev-parse", "HEAD");
+
+      const first = await runParent(createInstance, instances, parentPath);
+      const firstState = first.promptQueue.getState();
+      assert.strictEqual(
+        firstState.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(firstState.results)
+      );
+      const laneA = await worktreeRuntimeOf(launchedChild(instances, first, 0));
+      const laneB = await worktreeRuntimeOf(launchedChild(instances, first, 1));
+      assert.deepStrictEqual(
+        [laneA.mode, laneA.branchName, laneA.origin],
+        ["named", "lane/a", "created"]
+      );
+      assert.deepStrictEqual(
+        [laneB.mode, laneB.branchName, laneB.origin],
+        ["named", "lane/b", "created"]
+      );
+      // D4b: no base branches from the parent's HEAD; `base` wins.
+      assert.strictEqual(laneA.baseCommit, parentHead);
+      assert.strictEqual(laneB.baseCommit, initialCommit);
+      assert.strictEqual(git(workspace, "rev-parse", "lane/a~1"), parentHead);
+      assert.strictEqual(
+        git(workspace, "rev-parse", "lane/b~1"),
+        initialCommit
+      );
+      // Named never merges, and is kept.
+      assert.strictEqual(laneA.mergeOutcome, undefined);
+      assert.strictEqual(laneB.mergeOutcome, undefined);
+      assert.strictEqual(
+        git(workspace, "rev-parse", "HEAD"),
+        parentHead,
+        "the parent's checkout gets no merge"
+      );
+      await fs.access(path.join(laneA.worktreePath, "a.txt"));
+      const laneATip = git(workspace, "rev-parse", "lane/a");
+
+      // A later run reuses the existing named worktree and its branch.
+      const second = await runParent(createInstance, instances, parentPath);
+      const secondState = second.promptQueue.getState();
+      assert.strictEqual(
+        secondState.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(secondState.results)
+      );
+      assert.notStrictEqual(secondState.runRef, firstState.runRef);
+      const reusedA = await worktreeRuntimeOf(
+        launchedChild(instances, second, 0)
+      );
+      assert.strictEqual(reusedA.origin, "discovered");
+      assert.strictEqual(reusedA.worktreePath, laneA.worktreePath);
+      assert.strictEqual(reusedA.baseCommit, laneATip);
+      assert.strictEqual(git(workspace, "rev-parse", "lane/a~1"), laneATip);
+      assert.strictEqual(git(workspace, "rev-parse", "HEAD"), parentHead);
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a child naming the named worktree its parent holds fails to start under its onFail", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-named-parent-collision-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Named parent",
+        worktree: "parent/work",
+        steps: [
+          {
+            ...inlineLane("Same worktree", "node --version", {
+              worktree: { mode: "named", branch: "refs/heads/parent/work" },
+            }),
+            onFail: "continue",
+          },
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').writeFileSync('after.txt','ran')\"",
+          },
+        ],
+      });
+      commitAll(workspace, "add parent");
+
+      const parent = await runParent(createInstance, instances, parentPath);
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+      assert.match(
+        state.steps[0]?._runtime?.failureMessage ?? "",
+        /Named branch "parent\/work" is already checked out in the initiating source checkout/
+      );
+      const parentWorktree = await worktreeRuntimeOf(parent);
+      assert.strictEqual(parentWorktree.branchName, "parent/work");
+      assert.strictEqual(
+        await fs.readFile(
+          path.join(parentWorktree.worktreePath, "after.txt"),
+          "utf8"
+        ),
+        "ran",
+        "onFail: continue moves on to the next step"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  /**
+   * The staging-plan pattern (spec "Parallel Sub-workflow Steps"): wave 1 of
+   * managed-worktree file children, a script step that merges the branches
+   * the lanes' D12a settlements report and commits, then wave 2. `mergeArgs`
+   * is passed to the merge script; `dirty` leaves its fix uncommitted.
+   */
+  async function writeStagingPlan(
+    workspace: string,
+    mergeArgs: string
+  ): Promise<string> {
+    await writeCommittingLaneScript(workspace);
+    await fs.writeFile(
+      path.join(workspace, "merge-wave.js"),
+      [
+        "const fs = require('fs');",
+        "const path = require('path');",
+        "const { execFileSync } = require('child_process');",
+        "const [first, last, mode] = process.argv.slice(2);",
+        "const events = fs",
+        "  .readFileSync(path.join(path.dirname(process.env.CTRLYOKE_WORKING_FILE), 'events.jsonl'), 'utf8')",
+        "  .split('\\n')",
+        "  .filter(Boolean)",
+        "  .map((line) => JSON.parse(line));",
+        "const branches = events",
+        "  .filter((event) => event.eventType === 'subWorkflowSettled' && event.target && event.target.kind === 'queue'",
+        "    && event.target.stepIndex >= Number(first) && event.target.stepIndex <= Number(last))",
+        "  .map((event) => event.payload.worktree.branchName);",
+        "if (branches.length === 0) process.exit(2);",
+        "for (const branch of branches) execFileSync('git', ['merge', '--no-edit', branch]);",
+        "fs.writeFileSync('fix.txt', branches.join('\\n'));",
+        "if (mode !== 'dirty') {",
+        "  execFileSync('git', ['add', 'fix.txt']);",
+        "  execFileSync('git', ['commit', '-m', 'merge wave and fix']);",
+        "}",
+      ].join("\n")
+    );
+    await fs.mkdir(path.join(workspace, "waves"));
+    for (const name of ["w1a", "w1b", "w2a", "w2b"]) {
+      await writeJson(path.join(workspace, "waves", `${name}.ctrlyoke.json`), {
+        name,
+        worktree: { mode: "managed" },
+        steps: [{ type: "script", script: `node commit-lane.js ${name}` }],
+      });
+    }
+    const parentPath = path.join(workspace, "staging.ctrlyoke.json");
+    await writeJson(parentPath, {
+      name: "Staging plan",
+      worktree: false,
+      steps: [
+        {
+          parallel: [
+            { type: "workflow", workflow: "waves/w1a.ctrlyoke.json" },
+            { type: "workflow", workflow: "waves/w1b.ctrlyoke.json" },
+          ],
+          failFast: false,
+        },
+        {
+          type: "script",
+          name: "Merge wave 1 and fix",
+          script: `node merge-wave.js 0 1 ${mergeArgs}`,
+        },
+        {
+          parallel: [
+            { type: "workflow", workflow: "waves/w2a.ctrlyoke.json" },
+            { type: "workflow", workflow: "waves/w2b.ctrlyoke.json" },
+          ],
+          failFast: false,
+        },
+      ],
+    });
+    commitAll(workspace, "add staging plan");
+    return parentPath;
+  }
+
+  test("authored waves: wave 2 branches from the merge step's commit of wave 1's branches", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(300_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-authored-waves-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      const parentPath = await writeStagingPlan(workspace, "commit");
+      const planCommit = git(workspace, "rev-parse", "HEAD");
+
+      const parent = await runParent(createInstance, instances, parentPath);
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+      assert.deepStrictEqual(
+        concurrentLaunches,
+        [true, true, true, true],
+        "each wave fans out"
+      );
+
+      const wave1 = await Promise.all(
+        [0, 1].map(async (index) =>
+          worktreeRuntimeOf(launchedChild(instances, parent, index))
+        )
+      );
+      for (const lane of wave1) {
+        assert.strictEqual(lane.mode, "managed");
+        assert.strictEqual(lane.baseCommit, planCommit, "wave 1 shares a base");
+        assert.strictEqual(
+          lane.mergeOutcome,
+          undefined,
+          "left to the merge step"
+        );
+      }
+      // The merge step merged both lanes' branches into main and committed.
+      const mergeCommit = git(workspace, "rev-parse", "HEAD");
+      assert.strictEqual(
+        git(workspace, "log", "-1", "--format=%s"),
+        "merge wave and fix"
+      );
+      assert.deepStrictEqual(
+        (await fs.readFile(path.join(workspace, "fix.txt"), "utf8")).split(
+          "\n"
+        ),
+        wave1.map((lane) => lane.branchName)
+      );
+      for (const name of ["w1a", "w1b"]) {
+        await fs.access(path.join(workspace, `${name}.txt`));
+      }
+      assert.strictEqual(git(workspace, "status", "--porcelain"), "");
+
+      const wave2 = await Promise.all(
+        [3, 4].map(async (index) =>
+          worktreeRuntimeOf(launchedChild(instances, parent, index))
+        )
+      );
+      for (const lane of wave2) {
+        assert.strictEqual(
+          lane.baseCommit,
+          mergeCommit,
+          "wave 2 branches from the merge step's commit"
+        );
+        assert.strictEqual(
+          git(workspace, "rev-parse", `${lane.branchName}~1`),
+          mergeCommit
+        );
+        assert.strictEqual(
+          git(workspace, "show", `${lane.branchName}:fix.txt`).split("\n")
+            .length,
+          2,
+          "wave 2 sees the merge step's fix"
+        );
+      }
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("authored waves: a merge step that leaves the main checkout dirty refuses wave 2 before any lane starts (D4c)", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(300_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-authored-waves-dirty-");
+    const { createInstance, instances, concurrentLaunches } =
+      makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      const parentPath = await writeStagingPlan(workspace, "dirty");
+
+      const parent = await runParent(createInstance, instances, parentPath);
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.ERROR,
+        JSON.stringify(state.results)
+      );
+      assert.deepStrictEqual(
+        concurrentLaunches,
+        [true, true],
+        "no wave 2 lane launched"
+      );
+      for (const index of [3, 4]) {
+        assert.match(
+          state.steps[index]?._runtime?.failureMessage ?? "",
+          /Commit or stash the parent's changes before starting worktree sub-workflows \(dirty: 1 file/
+        );
+        assert.strictEqual(childRunRefOf(state.steps[index]), undefined);
+      }
+      assert.strictEqual(
+        git(workspace, "log", "-1", "--format=%s"),
+        "Merge branch '" +
+          (await worktreeRuntimeOf(launchedChild(instances, parent, 1)))
+            .branchName +
+          "'",
+        "ctrlyoke commits nothing to the user's checkout"
+      );
+      assert.strictEqual(git(workspace, "status", "--porcelain"), "?? fix.txt");
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
 });

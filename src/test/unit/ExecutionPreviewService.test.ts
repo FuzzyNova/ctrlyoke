@@ -1545,6 +1545,58 @@ suite("ExecutionPreviewService", () => {
     );
   });
 
+  test("a step preview reports a collision between two other members of its group", async () => {
+    const namedLane = (name: string, branch: string) => ({
+      type: "workflow" as const,
+      name,
+      workflow: { prompt: `${name} work`, worktree: branch },
+    });
+    const preview = await createService().build({
+      workflow: {
+        steps: [
+          { name: "prompt member", prompt: "edit in place" },
+          namedLane("docs", "ctrlyoke/docs"),
+          namedLane("site", "refs/heads/ctrlyoke/docs"),
+        ],
+        parallelGroups: [
+          { id: "group", startIndex: 0, endIndex: 2, failFast: true },
+        ],
+      },
+      // Workflow steps have no step preview yet, so a previewed member's
+      // preview carries its group's issues on them.
+      scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 0 },
+    });
+
+    const collisions = preview.diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.code ===
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION
+    );
+    // Both members carry the same issue; the preview lists it once.
+    assert.strictEqual(
+      collisions.length,
+      1,
+      JSON.stringify(preview.diagnostics)
+    );
+    assert.strictEqual(
+      collisions[0].severity,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
+    assert.match(
+      collisions[0].message,
+      /^Step 2 \("docs"\), Step 3 \("site"\) use the same named worktree "ctrlyoke\/docs"/
+    );
+    // The prompt member's own preview is not blamed for it.
+    assert.deepStrictEqual(
+      preview.steps[0].diagnostics.filter(
+        (diagnostic) =>
+          diagnostic.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION
+      ),
+      []
+    );
+  });
+
   test("omits the worktree preview when the workflow is not configured to use one", async () => {
     const preview = await createService().build({
       workflow: { steps: [{ prompt: "no worktree here" }] },

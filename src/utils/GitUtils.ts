@@ -10,6 +10,7 @@ import {
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
+import { normalizeBranchName } from "./BranchName";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
 import { Log } from "./Log";
@@ -2120,11 +2121,7 @@ export interface AddWorktreeOptions {
   detached?: boolean;
 }
 
-export function normalizeBranchName(branchName: string): string {
-  return branchName.startsWith("refs/heads/")
-    ? branchName.slice("refs/heads/".length)
-    : branchName;
-}
+export { normalizeBranchName };
 
 /** Validate a local branch name using Git's own ref rules. */
 export async function validateBranchName(branchName: string): Promise<void> {
