@@ -25,8 +25,9 @@ export interface SubWorkflowLaunchRequest {
     executionCheckoutRoot: string;
   };
   delegationChain: readonly string[];
-  /** Reserved for child-run reattachment; ignored by this launcher round. */
+  /** Continue this exact child run instead of creating a new lineage. */
   resumeChildRun?: { workflowKey: WorkflowKey; runRef: RunRef };
+  stateRoot?: string;
   /** Reserved for cycle detection; ignored by this launcher round. */
   ancestorPaths?: readonly string[];
   /** Passed to the instance factory; host-specific capability behavior is deferred. */
@@ -92,6 +93,17 @@ export interface SubWorkflowInstance {
     }
   ): Promise<boolean>;
   executeLoadedPromptFile(): Promise<void>;
+  executeContinuationAtRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision: number,
+    onPrepared?: () => Promise<void>,
+    options?: {
+      parentRun: SubWorkflowParentLink;
+      parentExecution: SubWorkflowLaunchRequest["parentExecution"];
+      delegationChain: readonly string[];
+    }
+  ): Promise<void>;
   pause(): Promise<void>;
   cancelPause(): Promise<void>;
   stop(): Promise<void>;

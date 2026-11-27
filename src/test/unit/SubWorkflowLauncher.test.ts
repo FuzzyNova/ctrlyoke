@@ -104,6 +104,11 @@ class FakeChild implements SubWorkflowInstance {
     }
   }
 
+  async executeContinuationAtRun(): Promise<void> {
+    this.executeCalls += 1;
+    this.status = EXECUTION_STATES.RUNNING;
+  }
+
   nextScenario: Scenario = "completed";
   executionGate?: Promise<void>;
   releaseExecution?: () => void;

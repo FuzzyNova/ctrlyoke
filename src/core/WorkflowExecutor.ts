@@ -92,6 +92,9 @@ import {
   type EvaluationResult,
 } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
+import { manifestPath } from "../utils/WorkflowPaths";
+import { TimelineRecorder } from "./orchestration/TimelineRecorder";
+import { TIMELINE_EVENT_TYPES } from "../types/WorkflowTimelineTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import {
   SettingsPropertyResolver,
@@ -3185,34 +3188,84 @@ export class WorkflowExecutor {
     }
 
     let handle: SubWorkflowHandle | undefined;
+    let completedChild = false;
     try {
       try {
-        handle = await host.launch({
-          source: { kind: "file", resolvedPath },
-          parent: {
-            workflowKey: queueState.workflowKey,
-            runRef: queueState.runRef,
-            ...(target.kind === FINAL_STEP_PHASES.QUEUE
-              ? { phase: FINAL_STEP_PHASES.QUEUE, stepId: stepId! }
-              : {
-                  phase: FINAL_STEP_PHASES.FINAL_STEP,
-                  loopIndex: target.loopIndex,
-                }),
-          },
-          parentExecution: {
-            executionRoot: context.executionWorkspace.executionRoot,
-            executionCheckoutRoot:
-              context.executionWorkspace.executionCheckoutRoot ??
-              context.executionWorkspace.executionRoot,
-          },
-          delegationChain: [
-            ...(context.delegationChain ?? []),
-            ...(context.getExecutionLeaseOwnerToken?.()
-              ? [context.getExecutionLeaseOwnerToken()!]
-              : []),
-          ],
-          ancestorPaths: [...ancestors, resolvedPath],
-        });
+        const parent = {
+          workflowKey: queueState.workflowKey,
+          runRef: queueState.runRef,
+          ...(target.kind === FINAL_STEP_PHASES.QUEUE
+            ? { phase: FINAL_STEP_PHASES.QUEUE, stepId: stepId! }
+            : {
+                phase: FINAL_STEP_PHASES.FINAL_STEP,
+                loopIndex: target.loopIndex,
+              }),
+        } as const;
+        const childWorkflowKey = authoredStep._runtime?.childWorkflowKey;
+        const childRunRef = authoredStep._runtime?.childRunRef;
+        let resumeChildRun:
+          | {
+              workflowKey: typeof childWorkflowKey & string;
+              runRef: typeof childRunRef & string;
+            }
+          | undefined;
+        if (childWorkflowKey && childRunRef) {
+          try {
+            const manifest = await new TimelineRecorder().readManifest(
+              manifestPath(
+                context.executionWorkspace.stateRoot,
+                childWorkflowKey,
+                childRunRef
+              )
+            );
+            if (JSON.stringify(manifest.parentRun) === JSON.stringify(parent)) {
+              completedChild =
+                manifest.executionState === EXECUTION_STATES.COMPLETED;
+              if (!completedChild)
+                resumeChildRun = {
+                  workflowKey: childWorkflowKey,
+                  runRef: childRunRef,
+                };
+            } else {
+              Log.warn(
+                `[WorkflowExecutor] Recorded sub-workflow ${childWorkflowKey}/${childRunRef} has a different parent link; launching fresh`
+              );
+            }
+          } catch {
+            Log.warn(
+              `[WorkflowExecutor] Recorded sub-workflow ${childWorkflowKey}/${childRunRef} is missing or unreadable; launching fresh`
+            );
+          }
+        }
+        if (completedChild) {
+          handle = {
+            workflowKey: childWorkflowKey!,
+            runRef: childRunRef!,
+            done: Promise.resolve({ status: PROMPT_TERMINAL_STATUS.COMPLETED }),
+            pause: async () => undefined,
+            cancelPause: async () => undefined,
+            stop: async () => undefined,
+          };
+        } else
+          handle = await host.launch({
+            source: { kind: "file", resolvedPath },
+            parent,
+            ...(resumeChildRun ? { resumeChildRun } : {}),
+            stateRoot: context.executionWorkspace.stateRoot,
+            parentExecution: {
+              executionRoot: context.executionWorkspace.executionRoot,
+              executionCheckoutRoot:
+                context.executionWorkspace.executionCheckoutRoot ??
+                context.executionWorkspace.executionRoot,
+            },
+            delegationChain: [
+              ...(context.delegationChain ?? []),
+              ...(context.getExecutionLeaseOwnerToken?.()
+                ? [context.getExecutionLeaseOwnerToken()!]
+                : []),
+            ],
+            ancestorPaths: [...ancestors, resolvedPath],
+          });
       } catch (error) {
         // No child run exists yet (e.g. the file failed to load before the
         // child allocated its identity), so this is a start failure.
@@ -3233,7 +3286,21 @@ export class WorkflowExecutor {
         resolvedWorkflowPath: resolvedPath,
       });
       const result: SubWorkflowResult = await handle.done;
-      if (context.historyFilePath && context.outputHistoryManager) {
+      const settlementAlreadyRecorded = context.historyFilePath
+        ? (
+            await new TimelineRecorder().readEvents(context.historyFilePath)
+          ).some(
+            (event) =>
+              event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+              event.payload.childWorkflowKey === handle!.workflowKey &&
+              event.payload.childRunRef === handle!.runRef
+          )
+        : false;
+      if (
+        !settlementAlreadyRecorded &&
+        context.historyFilePath &&
+        context.outputHistoryManager
+      ) {
         await context.outputHistoryManager.recordSubWorkflowSettled(
           context.historyFilePath,
           this.toOutputExecutionTarget(target),

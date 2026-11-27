@@ -11,6 +11,8 @@ import {
   PROMPT_TERMINAL_STATUS,
   SUB_WORKFLOW_CANCELLATION_SOURCES,
 } from "../../types/DashboardConstants";
+import { manifestPath } from "../../utils/WorkflowPaths";
+import { TimelineRecorder } from "./TimelineRecorder";
 
 /** Launches child runs without coupling execution to a particular host. */
 export class SubWorkflowLauncher implements SubWorkflowHost {
@@ -26,6 +28,54 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
 
     let loaded: boolean;
     try {
+      if (request.resumeChildRun) {
+        const target = request.resumeChildRun;
+        const recordedManifest = await new TimelineRecorder().readManifest(
+          manifestPath(request.stateRoot!, target.workflowKey, target.runRef)
+        );
+        if (
+          JSON.stringify(recordedManifest.parentRun) !==
+          JSON.stringify(request.parent)
+        ) {
+          throw new Error(
+            "Recorded child run does not belong to this parent step"
+          );
+        }
+        const execution = instance.executeContinuationAtRun(
+          target.workflowKey,
+          target.runRef,
+          recordedManifest.definitionRevision,
+          undefined,
+          {
+            parentRun: request.parent,
+            parentExecution: request.parentExecution,
+            delegationChain: request.delegationChain,
+          }
+        );
+        const identity = await this.waitForRunIdentity(instance, execution);
+        if (!identity?.workflowKey || !identity.runRef) {
+          return this.createFailedToLoadHandle(
+            instance,
+            "Sub-workflow continuation did not bind to a run identity"
+          );
+        }
+        const done = this.collectExecution(
+          instance,
+          execution,
+          () => parentStopped
+        );
+        return {
+          workflowKey: identity.workflowKey,
+          runRef: identity.runRef,
+          done,
+          pause: () => instance.pause(),
+          cancelPause: () => instance.cancelPause(),
+          stop: async () => {
+            parentStopped = true;
+            await instance.stop();
+          },
+        };
+      }
       loaded = await instance.loadPromptFile(
         request.source.resolvedPath,
         undefined,

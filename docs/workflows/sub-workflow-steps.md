@@ -85,6 +85,12 @@ If a child tries to launch a workflow already active earlier in the same chain,
 the step fails with a cycle path. Reusing a workflow after an earlier child has
 finished is allowed.
 
+When a parent run resumes a step that already started a child, ctrlyoke reconnects
+to that child run. Completed children settle the parent step without running again;
+stopped, failed, or interrupted children continue from their saved run. Starting
+an explicit new run from the parent definition starts a fresh child. Each
+`finalStep` pass has its own child run.
+
 ## Using child output in later steps
 
 `$previous` and `$step:N` include the workflow step's metadata and the full

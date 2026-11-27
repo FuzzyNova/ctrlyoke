@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Resuming a parent workflow step reconnects to its recorded child run. A completed child is not run twice; an interrupted child continues from its saved run, while a new parent run starts a fresh child.
 - Claude Code's 5-hour and weekly quota now updates after headless steps too. Headless Claude Code never runs its status line, which was ctrlyoke's only source for the quota, so a run of headless Claude steps left **Stats & Usage** and the harness picker showing the value from your last interactive step. ctrlyoke now reads the quota that Claude Code includes in its headless output. This works with the Claude status line turned off.
 - After an interactive Claude Code step ends, ctrlyoke keeps reading its quota for as long as the step's terminal stays open. Messages you type into that terminal yourself now update **Stats & Usage** and the harness picker; before, anything Claude reported after the step ended was ignored.
 - Run bundle path rewriting now preserves JSON escape sequences immediately following workspace and home paths.

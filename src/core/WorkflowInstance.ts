@@ -2504,8 +2504,18 @@ export class WorkflowInstance
     workflowKey: WorkflowKey,
     runRef: RunRef,
     expectedDefinitionRevision: number,
-    onPrepared?: () => Promise<void>
+    onPrepared?: () => Promise<void>,
+    subWorkflowOptions?: {
+      parentRun: SubWorkflowParentLink;
+      parentExecution: { executionRoot: string; executionCheckoutRoot: string };
+      delegationChain: readonly string[];
+    }
   ): Promise<void> {
+    if (subWorkflowOptions) {
+      this.loadedParentRun = subWorkflowOptions.parentRun;
+      this.inheritedParentExecution = subWorkflowOptions.parentExecution;
+      this.loadedDelegationChain = subWorkflowOptions.delegationChain;
+    }
     const workspaceRoot = this.getStateRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
