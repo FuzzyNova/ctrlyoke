@@ -12,6 +12,11 @@ import type {
 } from "./DashboardConstants";
 import { FINAL_STEP_PHASES } from "./DashboardConstants";
 
+export const SUB_WORKFLOW_SOURCE_KINDS = {
+  FILE: "file",
+  INLINE: "inline",
+} as const;
+
 /** Host boundary used by the shared workflow executor to launch child runs. */
 export interface SubWorkflowHost {
   launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle>;
@@ -19,7 +24,16 @@ export interface SubWorkflowHost {
 
 /** Input needed to create or resume a child workflow run. */
 export interface SubWorkflowLaunchRequest {
-  source: { kind: "file"; resolvedPath: string };
+  source:
+    | {
+        kind: typeof SUB_WORKFLOW_SOURCE_KINDS.FILE;
+        resolvedPath: string;
+      }
+    | {
+        kind: typeof SUB_WORKFLOW_SOURCE_KINDS.INLINE;
+        definition: PromptFile;
+        displayName: string;
+      };
   parent: SubWorkflowParentLink;
   parentExecution: {
     executionRoot: string;
@@ -111,6 +125,15 @@ export interface SubWorkflowInstance {
       delegationChain?: readonly string[];
     }
   ): Promise<boolean>;
+  loadFromMemoryOrThrow(
+    promptFile: PromptFile,
+    displayName: string,
+    options?: {
+      parentRun?: SubWorkflowParentLink;
+      parentExecution?: SubWorkflowLaunchRequest["parentExecution"];
+      delegationChain?: readonly string[];
+    }
+  ): Promise<string | undefined>;
   executeLoadedPromptFile(): Promise<void>;
   executeContinuationAtRun(
     workflowKey: WorkflowKey,

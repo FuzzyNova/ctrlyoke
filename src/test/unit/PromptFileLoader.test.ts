@@ -51,6 +51,25 @@ suite("PromptFileLoader Tests", () => {
     }
   });
 
+  test("throwing in-memory load reports validation errors to its caller", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-inline-load-error-")
+    );
+    tempDirs.push(workspace);
+    const loader = new PromptFileLoader(
+      new PromptFileParser(),
+      new PromptQueue()
+    );
+    await assert.rejects(
+      loader.loadFromMemoryOrThrow(
+        { steps: [{ type: "script", script: "" } as WorkflowStep] },
+        "bad inline child",
+        workspace
+      ),
+      /Validation failed:[\s\S]*Empty script command/i
+    );
+  });
+
   suite("operational feedback", () => {
     test("forwards unknown-key warnings in FILE_SELECTED while loading the workflow", async () => {
       const tempDir = await fs.mkdtemp(

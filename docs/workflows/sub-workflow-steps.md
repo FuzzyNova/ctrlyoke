@@ -33,6 +33,33 @@ steps:
 | `color`    | Optional step color.                                                                                         |
 | `onFail`   | `stopWorkflow` (default) stops the parent when the child fails; `continue` records the failure and advances. |
 
+## Inline definitions
+
+Use an inline prompt or script when the child needs its own run or worktree but
+does not need a separate workflow file. The child inherits the parent's harness,
+model, permissions, and effective variables; values on the inline step take
+precedence. Host-provided `--var` values are available in the child prompt or
+script.
+
+```yaml
+vars:
+  target: src/core
+steps:
+  - type: workflow
+    name: check core
+    workflow:
+      type: script
+      script: "npm test -- --grep '{{target}}'"
+      worktree:
+        mode: managed
+```
+
+Inline definitions contain exactly one prompt or script step. Only `worktree`
+is accepted as a workflow-only key; `vars`, `trustedExternalRoots`, and other
+workflow defaults come from the parent. The child is materialized at launch and
+its run file is self-contained. It starts a new session, so inherited session
+resume and relative prior-context selectors are dropped.
+
 Sub-workflow steps can appear in `steps` or `finalStep`. A file can also consist
 of a single workflow step at its root:
 

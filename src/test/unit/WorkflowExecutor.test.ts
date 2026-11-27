@@ -6297,7 +6297,10 @@ suite("WorkflowExecutor sub-workflow steps", () => {
       queue.getState().results[0]?.status,
       STEP_STATUS.COMPLETED
     );
-    assert.strictEqual(request?.source.resolvedPath, childPath);
+    assert.deepStrictEqual(request?.source, {
+      kind: "file",
+      resolvedPath: childPath,
+    });
     assert.deepStrictEqual(request?.ancestorPaths, [
       context.currentPromptFilePath,
       childPath,
@@ -6490,35 +6493,31 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     );
   });
 
-  test("inline sub-workflows fail through onFail until child materialization is implemented", async () => {
-    const failed = await setupRun([
+  test("inline sub-workflows launch with the materialized child definition", async () => {
+    const succeeded = await setupRun([
       {
         type: STEP_TYPES.WORKFLOW,
         workflow: { prompt: "inline child" },
       },
     ]);
-    await failed.executor.execute(failed.integration, failed.context);
+    let request: SubWorkflowLaunchRequest | undefined;
+    succeeded.context.subWorkflowHost = fakeHost(completedResult(), (value) => {
+      request = value;
+    });
+    await succeeded.executor.execute(succeeded.integration, succeeded.context);
     assert.strictEqual(
-      failed.queue.getState().results[0]?.status,
-      STEP_STATUS.FAILED
-    );
-    assert.match(
-      failed.queue.getState().steps[0]?._runtime?.failureMessage ?? "",
-      /^Sub-workflow could not start: inline definitions are not executable/
-    );
-
-    const continued = await setupRun([
-      {
-        type: STEP_TYPES.WORKFLOW,
-        workflow: { prompt: "inline child" },
-        onFail: CONDITION_ACTIONS.CONTINUE,
-      },
-    ]);
-    await continued.executor.execute(continued.integration, continued.context);
-    assert.strictEqual(
-      continued.queue.getState().results[0]?.status,
+      succeeded.queue.getState().results[0]?.status,
       STEP_STATUS.COMPLETED
     );
+    assert.strictEqual(request?.source.kind, "inline");
+    if (request?.source.kind === "inline") {
+      assert.deepStrictEqual(request.source.definition.steps, [
+        { prompt: "inline child" },
+      ]);
+      assert.deepStrictEqual(request.ancestorPaths, [
+        succeeded.context.currentPromptFilePath,
+      ]);
+    }
   });
 
   test("a cancelled child stops the parent before its next step", async () => {

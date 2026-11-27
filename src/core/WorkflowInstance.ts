@@ -1773,6 +1773,37 @@ export class WorkflowInstance
     this.propagateWorkflowNameToIntegrations();
   }
 
+  async loadFromMemoryOrThrow(
+    promptFile: PromptFile,
+    displayName: string,
+    options?: {
+      parentRun?: SubWorkflowParentLink;
+      parentExecution?: {
+        executionRoot: string;
+        executionCheckoutRoot: string;
+      };
+      delegationChain?: readonly string[];
+    }
+  ): Promise<string | undefined> {
+    this.loadedParentRun = options?.parentRun;
+    this.inheritedParentExecution = options?.parentExecution;
+    this.loadedDelegationChain = options?.delegationChain ?? [];
+    this.promptQueue.clearQueue();
+    this.filePath = displayName;
+    this.sourceDefinitionPath = undefined;
+    const workingFilePath = await this.promptFileLoader.loadFromMemoryOrThrow(
+      promptFile,
+      displayName,
+      this.workspaceFolderPath
+    );
+    if (workingFilePath) {
+      this.currentPromptFile = { filePath: displayName, promptFile };
+      this.setupPromptFileWatcher(workingFilePath);
+    }
+    this.propagateWorkflowNameToIntegrations();
+    return workingFilePath;
+  }
+
   /**
    * Load an inline prompt string into the queue without a file.
    * Behaves like loading a single-prompt .prompt.md file.

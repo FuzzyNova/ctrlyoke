@@ -90,6 +90,11 @@ class FakeChild implements SubWorkflowInstance {
     return this.loadResult;
   }
 
+  async loadFromMemoryOrThrow(): Promise<string> {
+    if (this.loadError) throw this.loadError;
+    return "memory";
+  }
+
   async executeLoadedPromptFile(): Promise<void> {
     this.executeCalls += 1;
     if (this.executionGate) await this.executionGate;
@@ -289,8 +294,14 @@ suite("SubWorkflowLauncher", () => {
   test("settles a thrown load error without executing", async () => {
     const factory = new FakeFactory();
     factory.child.loadError = new Error("invalid child document");
+    const launchRequest = request();
+    launchRequest.source = {
+      kind: "inline",
+      definition: { steps: [] },
+      displayName: "inline child",
+    };
     const handle = await new SubWorkflowLauncher(factory.create).launch(
-      request()
+      launchRequest
     );
     const result = await handle.done;
     assert.equal(result.failedToStart, true);

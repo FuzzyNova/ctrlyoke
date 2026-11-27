@@ -6,7 +6,10 @@ import type {
   SubWorkflowLaunchRequest,
   SubWorkflowResult,
 } from "../../types/SubWorkflowTypes";
-import { isSameSubWorkflowParentLink } from "../../types/SubWorkflowTypes";
+import {
+  isSameSubWorkflowParentLink,
+  SUB_WORKFLOW_SOURCE_KINDS,
+} from "../../types/SubWorkflowTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
@@ -73,15 +76,28 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
           }
         );
       }
-      loaded = await instance.loadPromptFile(
-        request.source.resolvedPath,
-        undefined,
-        {
-          parentRun: request.parent,
-          parentExecution: request.parentExecution,
-          delegationChain: request.delegationChain,
-        }
-      );
+      if (request.source.kind === SUB_WORKFLOW_SOURCE_KINDS.FILE) {
+        loaded = await instance.loadPromptFile(
+          request.source.resolvedPath,
+          undefined,
+          {
+            parentRun: request.parent,
+            parentExecution: request.parentExecution,
+            delegationChain: request.delegationChain,
+          }
+        );
+      } else {
+        await instance.loadFromMemoryOrThrow(
+          request.source.definition,
+          request.source.displayName,
+          {
+            parentRun: request.parent,
+            parentExecution: request.parentExecution,
+            delegationChain: request.delegationChain,
+          }
+        );
+        loaded = !!instance.promptQueue.getWorkflowFile().steps?.length;
+      }
       if (!loaded) {
         return this.createFailedToLoadHandle(
           instance,

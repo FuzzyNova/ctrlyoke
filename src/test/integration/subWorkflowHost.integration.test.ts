@@ -996,4 +996,123 @@ suite("Sub-workflow host end to end", () => {
       removeTempDir(workspace);
     }
   });
+
+  test("runs and records a self-contained inline script child", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-subworkflow-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Inline parent",
+        vars: { value: "from-parent" },
+        steps: [
+          {
+            type: "workflow",
+            workflow: {
+              type: "script",
+              script:
+                "node -e \"require('fs').writeFileSync('inline-result.txt','{{value}}')\"",
+            },
+          },
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+      assert.strictEqual(parent.promptQueue.getState().status, "completed");
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "inline-result.txt"), "utf8"),
+        "from-parent"
+      );
+      const state = parent.promptQueue.getState();
+      const events = await new TimelineRecorder().readEvents(
+        parent.outputHistoryManager.getHistoryFilePath(
+          state.workflowKey!,
+          state.runRef!
+        )
+      );
+      assert.ok(
+        events.some(
+          (event) =>
+            event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+        )
+      );
+      assert.deepStrictEqual(
+        instances[1]!.promptQueue.getWorkflowFile().steps?.length,
+        1
+      );
+      assert.strictEqual(
+        instances[1]!.promptQueue.getWorkflowFile().vars?.value,
+        "from-parent"
+      );
+    } finally {
+      for (const instance of instances) {
+        await instance.outputHistoryManager.flushPendingIndexRefresh();
+        instance.dispose();
+      }
+      removeTempDir(workspace);
+    }
+  });
+
+  test("reattaches an inline child run without a source file", async () => {
+    const workspace = makeTempDir("ctrlyoke-inline-reattach-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      const waiting = path.join(workspace, "inline-waiting");
+      const sentinel = path.join(workspace, "inline-sentinel");
+      const script =
+        "node -e \"const fs=require('fs');fs.writeFileSync('inline-waiting','y');const t=setInterval(()=>{if(fs.existsSync('inline-sentinel')){clearInterval(t);process.exit(0)}},50)\"";
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: { type: "script", script } }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(waiting);
+      const child = instances[instances.length - 1]!;
+      const identity = child.promptQueue.getState();
+      await parent.stop();
+      await execution;
+      await fs.writeFile(sentinel, "go");
+      await parent.executeContinuationAtRun(
+        parent.promptQueue.getState().workflowKey!,
+        parent.promptQueue.getState().runRef!,
+        parent.promptQueue.getState().definitionRevision
+      );
+      assert.strictEqual(parent.promptQueue.getState().status, "completed");
+      const reattached = instances[instances.length - 1]!;
+      assert.notStrictEqual(reattached, child);
+      assert.strictEqual(
+        reattached.promptQueue.getState().workflowKey,
+        identity.workflowKey
+      );
+      assert.strictEqual(
+        reattached.promptQueue.getState().runRef,
+        identity.runRef
+      );
+      const childRunsDirectory = path.dirname(
+        path.dirname(
+          parent.outputHistoryManager.getHistoryFilePath(
+            identity.workflowKey!,
+            identity.runRef!
+          )
+        )
+      );
+      assert.strictEqual(
+        (await fs.readdir(childRunsDirectory)).filter((entry) =>
+          entry.startsWith("run-")
+        ).length,
+        1
+      );
+    } finally {
+      for (const instance of instances) {
+        await instance.outputHistoryManager.flushPendingIndexRefresh();
+        instance.dispose();
+      }
+      removeTempDir(workspace);
+    }
+  });
 });

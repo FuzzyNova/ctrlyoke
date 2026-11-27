@@ -146,9 +146,13 @@ import type {
   SubWorkflowHandle,
   SubWorkflowHost,
   SubWorkflowParentLink,
+  SubWorkflowLaunchRequest,
   SubWorkflowResult,
 } from "../types/SubWorkflowTypes";
-import { isSameSubWorkflowParentLink } from "../types/SubWorkflowTypes";
+import {
+  isSameSubWorkflowParentLink,
+  SUB_WORKFLOW_SOURCE_KINDS,
+} from "../types/SubWorkflowTypes";
 import {
   resolvePromptFileTextWithVariables,
   resolvePromptTextWithVariables,
@@ -212,6 +216,7 @@ import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
 import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { materializeInlineSubWorkflow } from "../utils/InlineSubWorkflowMaterializer";
 
 /** Live harness output of one attempt, with the target that produced it. */
 interface TargetStreamingOutput {
@@ -3162,33 +3167,52 @@ export class WorkflowExecutor {
     };
 
     const host = context.subWorkflowHost;
-    if (typeof resolvedStep.workflow !== "string") {
-      return settleFailure(
-        "Sub-workflow could not start: inline definitions are not executable until D13 materialization support is available"
-      );
-    }
     if (!host) {
       return settleFailure("Sub-workflow steps are not supported in this host");
     }
-    const { promptFileResolver, sourceDefinitionPath } =
-      this.getPromptFileResolutionOptions(context);
-    const resolution = await promptFileResolver.resolvePath(
-      resolvedStep.workflow,
-      sourceDefinitionPath
-    );
-    if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
-      return settleFailure(
-        `Sub-workflow could not resolve '${resolvedStep.workflow}'`
+    const inline = typeof resolvedStep.workflow !== "string";
+    let resolvedPath = "";
+    let source: SubWorkflowLaunchRequest["source"];
+    if (inline) {
+      const parent = this.getRunStartWorkflow(context);
+      const materialized = materializeInlineSubWorkflow(
+        parent,
+        this.getRunStartView(context).vars,
+        context.executionWorkspace.approvedExternalRoots,
+        authoredStep,
+        stepIndex >= 0
+          ? stepIndex + 1
+          : this.promptQueue.getState().steps.length + 1,
+        this.promptQueue.getState().workflowName
       );
+      resolvedPath = materialized.displayName;
+      source = { kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE, ...materialized };
+    } else {
+      const workflowPath = resolvedStep.workflow as string;
+      const { promptFileResolver, sourceDefinitionPath } =
+        this.getPromptFileResolutionOptions(context);
+      const resolution = await promptFileResolver.resolvePath(
+        workflowPath,
+        sourceDefinitionPath
+      );
+      if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+        return settleFailure(
+          `Sub-workflow could not resolve '${workflowPath}'`
+        );
+      }
+      resolvedPath = path.resolve(resolution.path);
+      source = { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath };
     }
-    const resolvedPath = path.resolve(resolution.path);
     const ancestors = context.ancestorPaths ?? [];
     const comparisonPath = (candidate: string) =>
       process.platform === "win32" ? candidate.toLowerCase() : candidate;
-    const cycleIndex = ancestors.findIndex(
-      (ancestor) =>
-        comparisonPath(path.resolve(ancestor)) === comparisonPath(resolvedPath)
-    );
+    const cycleIndex = inline
+      ? -1
+      : ancestors.findIndex(
+          (ancestor) =>
+            comparisonPath(path.resolve(ancestor)) ===
+            comparisonPath(resolvedPath)
+        );
     if (cycleIndex >= 0) {
       const chain = [...ancestors, resolvedPath]
         .map((candidate) => path.basename(candidate))
@@ -3239,7 +3263,7 @@ export class WorkflowExecutor {
           };
         } else
           handle = await host.launch({
-            source: { kind: "file", resolvedPath },
+            source,
             parent,
             ...(resumeChildRun ? { resumeChildRun } : {}),
             stateRoot: context.executionWorkspace.stateRoot,
@@ -3256,7 +3280,7 @@ export class WorkflowExecutor {
                 ? [context.getExecutionLeaseOwnerToken()!]
                 : []),
             ],
-            ancestorPaths: [...ancestors, resolvedPath],
+            ancestorPaths: inline ? ancestors : [...ancestors, resolvedPath],
           });
       } catch (error) {
         // No child run exists yet (e.g. the file failed to load before the
