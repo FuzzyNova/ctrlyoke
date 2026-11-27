@@ -51,6 +51,8 @@ import {
 } from "./PromptTextResolver";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { classifySubWorkflowWorktree } from "../utils/WorktreeConfigShape";
+import { pathsEqual } from "../utils/PathCasing";
+import * as path from "path";
 
 /**
  * What an author does about a `MERGE_INTO_SHARED_ROOT` issue. One constant,
@@ -261,6 +263,27 @@ function parentCheckoutUse(
     member.step,
     parentRunsInMainCheckout,
     launch?.worktreePlan
+  );
+}
+
+/**
+ * Whether a run executes in the workspace's main checkout, so that a
+ * `worktree: false` child of it edits its own checkout. Decided by where the
+ * run actually executes, never by whether it has a worktree record: an
+ * inherited child (D4a) has no worktree of its own yet runs in its parent's,
+ * and it is in the main checkout only when its execution root is the state
+ * root (the checkout the run was started from). An `executionRoot` of
+ * `undefined` is a worktree not placed yet (a preview of a worktree run).
+ * The single source for group preflight, its preview, and the live
+ * `parallelWithCurrent` join and group-member edit checks.
+ */
+export function runsInMainCheckout(
+  executionRoot: string | undefined,
+  stateRoot: string
+): boolean {
+  return (
+    executionRoot !== undefined &&
+    pathsEqual(path.resolve(executionRoot), path.resolve(stateRoot))
   );
 }
 

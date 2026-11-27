@@ -3803,7 +3803,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         ]) {
           await assert.rejects(
             server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, ...args }),
-            /step 2 is a workflow step the workflow author wrote, so it cannot be edited through MCP/
+            /step 2 is a workflow step without a lane's shape, so it cannot be edited through MCP\. edit_step edits prompt steps and lanes/
           );
         }
         assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
@@ -3889,6 +3889,20 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       );
       assert.strictEqual(joined.destination, "activeParallelGroup");
       assert.strictEqual((await readStep(run, 2)).type, STEP_TYPES.WORKFLOW);
+
+      // Switching the joined lane to a merging preset is refused like a join.
+      const afterJoin = await fs.readFile(run.runFilePath, "utf8");
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { worktree: { use: "lane" } },
+        }),
+        (error: Error) =>
+          error.message.includes(
+            `edit was rejected: Step 3 merges into the parent's checkout, which Step 2 edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`
+          )
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), afterJoin);
     } finally {
       await releaseActiveRun(run, ownerToken);
     }

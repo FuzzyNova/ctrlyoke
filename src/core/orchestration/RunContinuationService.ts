@@ -67,7 +67,9 @@ import {
 import { isActiveQueueWorkRunning } from "../ParallelGroupRuntime";
 import {
   mergeIntoSharedRootIssueAmong,
+  runsInMainCheckout,
   stepParentCheckoutUse,
+  type ParallelGroupPreflightIssue,
   type ParentCheckoutUser,
 } from "../ParallelGroupPreflight";
 import {
@@ -78,6 +80,7 @@ import {
 import {
   assertStartedStepPositionsPreserved,
   assertStepMutable,
+  carryQueueSlotRuntime,
   ensureStepIds,
   findStepIndexById,
   resetStepRuntimeForRewind,
@@ -619,7 +622,8 @@ export class RunContinuationService {
     globalMaxSteps: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     position: QueuePosition = QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-    configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
+    configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
+    executionRoot?: string
   ): Promise<RunParallelJoinMutationResult> {
     if (position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       throw new Error(
@@ -803,11 +807,17 @@ export class RunContinuationService {
             `Cannot join parallel group ${joinedGroupId}: group is missing after insertion`
           );
         }
-        assertJoinDoesNotMergeIntoSharedRoot(
+        const mergeIssue = mergeIntoSharedRootIssueInGroup(
           source,
           nextTopology.steps,
-          joinedGroup
+          joinedGroup,
+          runExecutesInMainCheckout(source, workspaceRoot, executionRoot)
         );
+        if (mergeIssue) {
+          throw new Error(
+            `${QUEUE_POSITION.PARALLEL_WITH_CURRENT} was rejected: ${mergeIssue.message}`
+          );
+        }
         const placement: ParallelGroupInsertPlacement = {
           requestedIndex: insertionIndex,
           insertedIndex: insertionIndex,
@@ -960,7 +970,8 @@ export class RunContinuationService {
     change: RunStepChange,
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    allowInterruptedRun = false
+    allowInterruptedRun = false,
+    executionRoot?: string
   ): Promise<RunContinuationMutationResult> {
     return this.mutateRunDefinition(
       workspaceRoot,
@@ -984,7 +995,7 @@ export class RunContinuationService {
               : (change.updates as WorkflowStep),
           ])[0]
         );
-        const mergedStep = keepStepIdAcrossKindChange(
+        const mergedStep = carryQueueSlotRuntime(
           topology.steps[index],
           mergeWorkflowStepUpdate(
             topology.steps[index],
@@ -999,6 +1010,13 @@ export class RunContinuationService {
           mergedStep
         );
         assertNoParallelSiblingReferences(nextTopology, source);
+        assertEditDoesNotMergeIntoSharedRoot(
+          source,
+          topology,
+          nextTopology.steps,
+          index,
+          runExecutesInMainCheckout(source, workspaceRoot, executionRoot)
+        );
         assertStartedStepPositionsPreserved(
           topology.steps,
           nextTopology.steps,
@@ -1393,22 +1411,41 @@ function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
 }
 
 /**
- * D14: a lane whose child merges into this run's checkout cannot join beside
- * a member that edits that checkout, and such a member cannot join beside a
- * merging lane. Members that already completed no longer edit it. Every other
- * member, running or still pending, would run beside the joined steps. A
- * workflow member with no `worktree` (an inheriting child) runs in this
- * run's root, so it counts as editing it, as in group preflight. A file child
- * is never parsed here and counts as neither.
+ * Whether this run executes in the workspace's main checkout. The caller
+ * passes the run's execution root when it knows it (the MCP server attached
+ * to the run does); otherwise the run's own worktree record names it, and a
+ * run without one runs where it was started. That fallback is wrong only for
+ * an inherited child (D4a), which has no record yet runs in its parent's
+ * worktree, so callers that serve a child must pass `executionRoot`.
  */
-function assertJoinDoesNotMergeIntoSharedRoot(
+function runExecutesInMainCheckout(
+  source: WorkingFile,
+  stateRoot: string,
+  executionRoot: string | undefined
+): boolean {
+  return runsInMainCheckout(
+    executionRoot ?? source._runtime?.worktree?.executionRoot ?? stateRoot,
+    stateRoot
+  );
+}
+
+/**
+ * D14: the `MERGE_INTO_SHARED_ROOT` issue among the members of a group that
+ * is running: a lane whose child merges into this run's checkout beside a
+ * member that edits that checkout. Members that already completed, and
+ * disabled ones, no longer edit it. Every other member, running or still
+ * pending, runs beside the rest. A workflow member with no `worktree` (an
+ * inheriting child) runs in this run's root, so it counts as editing it, as
+ * in group preflight. A file child is never parsed here and counts as
+ * neither. Shared by the `parallelWithCurrent` join and an edit of a running
+ * group's member, so both refuse with the preflight's text.
+ */
+function mergeIntoSharedRootIssueInGroup(
   source: WorkingFile,
   steps: readonly WorkflowStep[],
-  group: ParallelGroupDefinition
-): void {
-  // A `worktree: false` child edits this run's checkout only when this run
-  // has no worktree of its own.
-  const parentRunsInMainCheckout = source._runtime?.worktree === undefined;
+  group: ParallelGroupDefinition,
+  parentRunsInMainCheckout: boolean
+): ParallelGroupPreflightIssue | undefined {
   const users: ParentCheckoutUser[] = [];
   for (let index = group.startIndex; index <= group.endIndex; index += 1) {
     const step = steps[index];
@@ -1424,13 +1461,74 @@ function assertJoinDoesNotMergeIntoSharedRoot(
       use: stepParentCheckoutUse(step, parentRunsInMainCheckout),
     });
   }
-  const issue = mergeIntoSharedRootIssueAmong(
-    { ...source, steps: [...steps] },
-    users
+  return mergeIntoSharedRootIssueAmong({ ...source, steps: [...steps] }, users);
+}
+
+/**
+ * The parallel group whose members run now: the group holding the execution
+ * head while a step is in flight, or once any of its members has started
+ * (a run paused or interrupted inside it resumes those members together).
+ * A group the head has not reached, or that no member has entered, is
+ * decided by its own preflight when it is dispatched.
+ */
+function runningParallelGroup(
+  source: WorkingFile,
+  topology: ParallelGroupTopology
+): ParallelGroupDefinition | undefined {
+  if (!isExecutionActiveState(source._runtime?.executionState))
+    return undefined;
+  const currentIndex = source._runtime?.currentIndex ?? 0;
+  const group = topology.parallelGroups.find(
+    (candidate) =>
+      currentIndex >= candidate.startIndex && currentIndex <= candidate.endIndex
   );
-  if (issue) {
-    throw new Error(`parallelWithCurrent was rejected: ${issue.message}`);
-  }
+  if (!group) return undefined;
+  const underWay =
+    hasInFlightStep(
+      source._runtime?.executionState,
+      source._runtime?.finalStep?.phase
+    ) ||
+    source._runtime?.activeParallelGroup?.groupId === group.id ||
+    topology.steps
+      .slice(group.startIndex, group.endIndex + 1)
+      .some((step) => hasStarted(step));
+  return underWay ? group : undefined;
+}
+
+/**
+ * D14: an edit of a member of the running group is refused exactly as a
+ * `parallelWithCurrent` join would be, when it puts that member in a
+ * `MERGE_INTO_SHARED_ROOT` conflict: making it a merging lane beside a member
+ * that edits this run's checkout, or making it such a member beside a
+ * merging lane. An edit that leaves the member outside any conflict, or
+ * outside the running group, is not checked here.
+ */
+function assertEditDoesNotMergeIntoSharedRoot(
+  source: WorkingFile,
+  topology: ParallelGroupTopology,
+  nextSteps: readonly WorkflowStep[],
+  index: number,
+  parentRunsInMainCheckout: boolean
+): void {
+  const group = runningParallelGroup(source, topology);
+  if (!group || index < group.startIndex || index > group.endIndex) return;
+  const involves = (issue: ParallelGroupPreflightIssue | undefined) =>
+    issue?.memberIndices.includes(index) ?? false;
+  const after = mergeIntoSharedRootIssueInGroup(
+    source,
+    nextSteps,
+    group,
+    parentRunsInMainCheckout
+  );
+  if (!involves(after)) return;
+  const before = mergeIntoSharedRootIssueInGroup(
+    source,
+    topology.steps,
+    group,
+    parentRunsInMainCheckout
+  );
+  if (involves(before)) return;
+  throw new Error(`edit was rejected: ${after!.message}`);
 }
 
 /**
@@ -1562,23 +1660,6 @@ function assertClearablePropertiesAreEditable(
       `Cannot clear internal step ${rejected.length === 1 ? "property" : "properties"}: ${rejected.join(", ")}`
     );
   }
-}
-
-/**
- * An edit that changes a step's kind (an MCP lane wrap or unwrap, D14)
- * replaces the step wholesale, which drops its runtime. The edit is still the
- * same queue slot, so it keeps its step id: the executor and the queue's disk
- * merge identify pending steps by it.
- */
-function keepStepIdAcrossKindChange(
-  existing: WorkflowStep,
-  merged: WorkflowStep
-): WorkflowStep {
-  const stepId = existing._runtime?.stepId;
-  if (stepId === undefined || merged._runtime?.stepId !== undefined) {
-    return merged;
-  }
-  return { ...merged, _runtime: { ...merged._runtime, stepId } };
 }
 
 function assertStepHasRequiredContent(step: WorkflowStep): void {

@@ -155,6 +155,7 @@ import {
   PARALLEL_PREFLIGHT_DIAGNOSTIC_STATE,
   PARALLEL_PREFLIGHT_WIDTH_STATE,
   preflightParallelGroup,
+  runsInMainCheckout,
   type ParallelGroupPreflightMember,
 } from "./ParallelGroupPreflight";
 
@@ -376,10 +377,17 @@ export class ExecutionPreviewService {
         },
         finalStepSessionId: getExecutionRuntime(preparedWorkflow.finalStep)
           ?.sessionId as string | undefined,
-        parentRunsInMainCheckout: !resolveWorktreeSelection(
-          preparedWorkflow.worktree,
-          runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree()
-        ).config,
+        // Nothing runs yet: a worktree run will execute in its planned
+        // checkout (unknown until placed), any other in the workspace.
+        parentRunsInMainCheckout: runsInMainCheckout(
+          resolveWorktreeSelection(
+            preparedWorkflow.worktree,
+            runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree()
+          ).config
+            ? worktreeExecutionWorkspace?.executionRoot
+            : (this.options.workspaceRoot ?? ""),
+          this.options.workspaceRoot ?? ""
+        ),
       });
       parallelGroupPreflights.push({
         parallelGroupId: group.id,

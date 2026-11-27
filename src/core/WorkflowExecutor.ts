@@ -216,6 +216,7 @@ import {
 import {
   preflightParallelGroup,
   preflightParallelGroupMember,
+  runsInMainCheckout,
   throwIfParallelGroupPreflightFailed,
   type ParallelGroupMemberPreflightResult,
   type ParallelGroupPreflightMember,
@@ -1271,9 +1272,9 @@ export class WorkflowExecutor {
       workflowSessionIdFromOverride: context.workflowSessionIdFromOverride,
       // A `worktree: false` child runs in the workspace's main checkout,
       // which is this parent's checkout only when the parent runs there.
-      parentRunsInMainCheckout: pathsEqual(
-        path.resolve(context.executionWorkspace.executionRoot),
-        path.resolve(context.executionWorkspace.stateRoot)
+      parentRunsInMainCheckout: runsInMainCheckout(
+        context.executionWorkspace.executionRoot,
+        context.executionWorkspace.stateRoot
       ),
       prepareSubWorkflowMember: (memberStep, stepIndex) =>
         this.prepareParallelSubWorkflowMember(memberStep, stepIndex, context),

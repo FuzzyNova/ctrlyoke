@@ -960,9 +960,20 @@ export class CtrlYokeMCPServer {
     }
   }
 
-  private async resolveExecutionRoot(): Promise<string> {
+  /**
+   * The attached run's execution root, as ctrlyoke set it when it launched
+   * the harness, or undefined when it did not. Unlike
+   * `resolveExecutionRoot`, never guessed from the cwd: the merge-lane checks
+   * fall back to the run file instead.
+   */
+  private launchedExecutionRoot(): string | undefined {
     const configuredRoot = process.env.CTRLYOKE_EXECUTION_ROOT?.trim();
-    if (configuredRoot) return path.resolve(configuredRoot);
+    return configuredRoot ? path.resolve(configuredRoot) : undefined;
+  }
+
+  private async resolveExecutionRoot(): Promise<string> {
+    const configuredRoot = this.launchedExecutionRoot();
+    if (configuredRoot) return configuredRoot;
 
     const workingFilePath = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     if (workingFilePath) {
@@ -1823,7 +1834,8 @@ export class CtrlYokeMCPServer {
           globalMaxSteps,
           lineageRepository,
           position,
-          getMaxParallelSteps()
+          getMaxParallelSteps(),
+          this.launchedExecutionRoot()
         );
       updatedWorkingFile = joined.workingFile;
       response = {
@@ -2059,7 +2071,7 @@ export class CtrlYokeMCPServer {
       const lane = agentLaneParts(existingStep);
       if (isSubWorkflowStep(existingStep) && !lane) {
         throw new Error(
-          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} is a workflow step the workflow author wrote, so it cannot be edited through MCP; edit_step only edits prompt steps and lanes queued with worktree { use }.`
+          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} is a workflow step without a lane's shape, so it cannot be edited through MCP. ${MCP_EDIT_STEP_TOOL_NAME} edits prompt steps and lanes: a workflow step whose inline prompt step has a managed worktree and no onFail. A file reference, an inline script, a child with onFail or a child without a managed worktree cannot be edited here.`
         );
       }
       if (clearsWorktree && !lane) {
@@ -2106,7 +2118,8 @@ export class CtrlYokeMCPServer {
       },
       target.definitionRevision,
       lineageRepository,
-      target.allowInterruptedRun
+      target.allowInterruptedRun,
+      this.launchedExecutionRoot()
     );
     const editedStep = edited.workingFile.steps?.[index];
     const editedPromptStep = editedStep

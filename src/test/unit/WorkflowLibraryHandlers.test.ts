@@ -1487,6 +1487,9 @@ suite("WorkflowLibraryHandlers", () => {
                 operator: "isEmpty",
               },
             },
+            worktreePresets: {
+              lane: { mode: "managed", merge: true, setup: "npm ci" },
+            },
             steps: [
               { prompt: "before" },
               { prompt: "first member" },
@@ -1522,6 +1525,7 @@ suite("WorkflowLibraryHandlers", () => {
         const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as {
           schemaVersion: number;
           conditions: Record<string, unknown>;
+          worktreePresets: Record<string, unknown>;
           steps: Array<Record<string, unknown>>;
           parallelGroups?: unknown;
         };
@@ -1532,6 +1536,9 @@ suite("WorkflowLibraryHandlers", () => {
             compareSource: "stdout",
             operator: "isEmpty",
           },
+        });
+        assert.deepStrictEqual(saved.worktreePresets, {
+          lane: { mode: "managed", merge: true, setup: "npm ci" },
         });
         assert.strictEqual(saved.parallelGroups, undefined);
         assert.deepStrictEqual(saved.steps[1], {

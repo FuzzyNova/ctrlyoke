@@ -155,3 +155,36 @@ export function resetStepRuntimeForRewind(step: WorkflowStep): WorkflowStep {
     ? definition
     : { ...definition, _runtime: { stepId } };
 }
+
+/**
+ * Runtime fields that belong to a pending step's queue slot rather than to
+ * any attempt: its identity (`stepId`, which the executor and the queue's disk
+ * merge key on), and `rewoundFailure`, which keeps a rewound failed step's
+ * recorded attempts attached to its position (`getProtectedTerminalFailure`).
+ * Every other runtime field describes an attempt, and a pending step has none.
+ */
+const QUEUE_SLOT_RUNTIME_FIELDS = ["stepId", "rewoundFailure"] as const;
+
+/**
+ * Carry `existing`'s queue-slot runtime onto `replacement`, a step that took
+ * its slot through an edit that changed its kind (an MCP lane wrap or unwrap,
+ * D14). Such an edit replaces the step wholesale and drops its runtime, but it
+ * is still the same queue slot. Fields `replacement` already sets win.
+ */
+export function carryQueueSlotRuntime(
+  existing: WorkflowStep,
+  replacement: WorkflowStep
+): WorkflowStep {
+  const carried: Record<string, unknown> = {};
+  for (const field of QUEUE_SLOT_RUNTIME_FIELDS) {
+    const value = existing._runtime?.[field];
+    if (value !== undefined && replacement._runtime?.[field] === undefined) {
+      carried[field] = value;
+    }
+  }
+  if (Object.keys(carried).length === 0) return replacement;
+  return {
+    ...replacement,
+    _runtime: { ...replacement._runtime, ...carried },
+  } as WorkflowStep;
+}

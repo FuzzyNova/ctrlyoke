@@ -272,6 +272,9 @@ through `append_step`'s `parallelWithCurrent`: it is refused beside a running or
 pending prompt or script step, or beside a workflow step whose child has no
 worktree, because that member is editing the checkout the lane would merge
 into. A lane without `merge`, or one joining a group of lanes, is admitted.
+`edit_step` follows the same rule for a pending member of the running group:
+switching it to a merging preset, wrapping it into a merging lane, or turning
+it back into a prompt step beside a merging lane is refused the same way.
 
 ## Outcomes, Stop, and Pause
 

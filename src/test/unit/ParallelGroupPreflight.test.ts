@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   HARNESS_IDS,
@@ -30,6 +32,7 @@ import {
   MERGE_INTO_SHARED_ROOT_GUIDANCE,
   preflightParallelGroup,
   preflightParallelGroupMember,
+  runsInMainCheckout,
 } from "../../core/ParallelGroupPreflight";
 
 const group: ParallelGroupDefinition = {
@@ -77,6 +80,23 @@ async function run(
 }
 
 suite("ParallelGroupPreflight", () => {
+  test("a run is in the main checkout only when it executes at its state root", () => {
+    const stateRoot = path.join(os.tmpdir(), "ctrlyoke-main-checkout");
+    assert.strictEqual(runsInMainCheckout(stateRoot, stateRoot), true);
+    assert.strictEqual(
+      runsInMainCheckout(path.join(stateRoot, "."), stateRoot),
+      true
+    );
+    // An inherited child (D4a) has no worktree record of its own, but runs
+    // in its parent's worktree, so it is not in the main checkout.
+    assert.strictEqual(
+      runsInMainCheckout(`${stateRoot}.worktrees/parent`, stateRoot),
+      false
+    );
+    // A worktree that is not placed yet (a preview) is not the main checkout.
+    assert.strictEqual(runsInMainCheckout(undefined, stateRoot), false);
+  });
+
   test("prepares a sub-workflow member once and skips harness, session and interactive checks", async () => {
     const prepared: Array<{ stepIndex: number; workflow: unknown }> = [];
     const harnessChecks: HarnessId[] = [];
