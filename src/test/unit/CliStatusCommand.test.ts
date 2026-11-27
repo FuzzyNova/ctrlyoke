@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
-import { statusCommand } from "../../cli/CliStatusCommand";
+import { formatStepsHint, statusCommand } from "../../cli/CliStatusCommand";
 import type { CliWorkspaceBootstrap } from "../../cli/CliWorkspaceBootstrap";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import {
@@ -200,6 +200,36 @@ suite("CliStatusCommand", () => {
       /WORKFLOW.*RUN.*STATE.*STEP.*PID.*HEARTBEAT.*LIVENESS/
     );
     assert.match(output[0], /stale \(absent\)/);
+    assert.match(
+      output[0],
+      /\nPer-step view: ctrlyoke history steps --workflow status-workflow-2026-01-01T00-00-00 --run run-2026-01-01T00-00-00-000Z$/
+    );
+  });
+
+  test("steps hint names placeholders when several workflows are listed", () => {
+    assert.strictEqual(
+      formatStepsHint([
+        { workflowKey: "a" as WorkflowKey, runRef: "run-a" as RunRef },
+        { workflowKey: "b" as WorkflowKey, runRef: null },
+      ]),
+      "\nPer-step view: ctrlyoke history steps --workflow <workflow> --run <run>"
+    );
+    assert.strictEqual(
+      formatStepsHint([{ workflowKey: "a" as WorkflowKey, runRef: null }]),
+      "\nPer-step view: ctrlyoke history steps --workflow a"
+    );
+  });
+
+  test("JSON output carries no steps hint", async () => {
+    const workspace = await createWorkspace(false);
+    const output: string[] = [];
+    await statusCommand(
+      { json: true },
+      { writeOut: (message) => output.push(message) },
+      { bootstrapCliWorkspace: async () => workspace }
+    );
+    assert.doesNotMatch(output[0], /Per-step view/);
+    JSON.parse(output[0]);
   });
 
   test("keeps a dead-PID lock's evidence and names why it is stale", async () => {

@@ -113,6 +113,7 @@ export async function statusCommand(
     lines.push("No workflows are executing.");
   } else {
     lines.push(formatStatusTable(workflows));
+    lines.push(formatStepsHint(workflows));
   }
   if (result.omittedCount > 0) {
     lines.push(
@@ -221,6 +222,20 @@ function formatStatusTable(workflows: readonly CliStatusWorkflow[]): string {
       .join("  ")
       .trimEnd();
   return [render(columns), ...rows.map(render)].join("\n");
+}
+
+/**
+ * Points at `history steps`, which shows any workflow's steps (running or
+ * not) but is hard to find from `status`. With one row the command is ready to
+ * paste; with several it names the placeholders.
+ */
+export function formatStepsHint(
+  workflows: readonly Pick<CliStatusWorkflow, "workflowKey" | "runRef">[]
+): string {
+  const only = workflows.length === 1 ? workflows[0] : undefined;
+  const workflow = only?.workflowKey ?? "<workflow>";
+  const run = only ? (only.runRef ?? undefined) : "<run>";
+  return `\nPer-step view: ctrlyoke history steps --workflow ${workflow}${run ? ` --run ${run}` : ""}`;
 }
 
 function formatAge(milliseconds: number): string {

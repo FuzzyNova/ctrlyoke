@@ -29,5 +29,9 @@ export function registerStatusCommand(
       "Working directory (default: current directory)"
     )
     .option("--json", "Output as JSON")
+    .addHelpText(
+      "after",
+      "\nTo see each step of a workflow (running or finished), use `ctrlyoke history steps --workflow <key-or-name> [--run <ref>]`.\n"
+    )
     .action(async (options: StatusOptions) => handlers.status(options));
 }
