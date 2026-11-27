@@ -11,15 +11,20 @@ import {
   dirtyParentWorktreeChildMessage,
   prepareParentCheckoutForWorktreeChild,
   type WorktreeMergeOperations,
+  type WorktreeMergeResult,
   type WorktreeSetupRunner,
 } from "../../core/orchestration/WorktreeManager";
-import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
+import {
+  ExecutionRootLeaseManager,
+  type ExecutionLeaseHandle,
+} from "../../core/orchestration/ExecutionRootLeaseManager";
 import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionReporter";
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   gitCommonDir,
   listWorktrees,
+  mergeFastForward,
   switchBranch,
   setGitTimeoutOverridesForTests,
 } from "../../utils/GitUtils";
@@ -29,7 +34,9 @@ import {
   createWorktreeDirectoryName,
 } from "../../utils/WorktreeUtils";
 import {
+  EXECUTION_LEASE_PURPOSES,
   WORKTREE_IDENTITY_KINDS,
+  WORKTREE_MERGE_LEASE_WAIT_MS,
   WORKTREE_ROOT_TIERS,
 } from "../../types/DashboardConstants";
 import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
@@ -931,6 +938,353 @@ suite("WorktreeManager", function () {
       }
     } finally {
       await parentRun.lease.release();
+    }
+  });
+
+  /** D4d: a parent's shared lease on its main checkout and its two lanes. */
+  async function parentWithTwoLanes(name: string): Promise<{
+    parent: string;
+    repository: string;
+    parentLease: Awaited<ReturnType<typeof ExecutionRootLeaseManager.acquire>>;
+    laneA: Awaited<ReturnType<typeof ensureManaged>>;
+    laneB: Awaited<ReturnType<typeof ensureManaged>>;
+    release: () => Promise<void>;
+  }> {
+    const { parent, repository } = await makeRepository(name);
+    const parentLease = await ExecutionRootLeaseManager.acquire({
+      mode: "shared-native",
+      stateRoot: repository,
+      executionRoot: repository,
+      workflowKey: "parent" as WorkflowKey,
+      runRef: "parent-run" as RunRef,
+      runner: "vscode",
+      instanceId: "parent-instance",
+    });
+    const handles: Array<{ release(): Promise<void> }> = [parentLease];
+    const release = async () => {
+      for (const handle of handles.splice(0).reverse()) {
+        await handle.release().catch(() => undefined);
+      }
+    };
+    try {
+      const lanes = manager(parent);
+      const laneA = await ensureManaged(lanes, repository, {
+        runRef: "run-lane-a" as RunRef,
+        workflowName: "Lane A",
+        delegationChain: [parentLease.ownerToken],
+      });
+      handles.push(laneA.lease);
+      const laneB = await ensureManaged(lanes, repository, {
+        runRef: "run-lane-b" as RunRef,
+        workflowName: "Lane B",
+        delegationChain: [parentLease.ownerToken],
+      });
+      handles.push(laneB.lease);
+      return { parent, repository, parentLease, laneA, laneB, release };
+    } catch (error) {
+      await release();
+      throw error;
+    }
+  }
+
+  /** A sibling merge lease on `executionRoot`, as another lane's merge holds. */
+  function siblingMergeLease(
+    executionRoot: string,
+    delegationChain: string[] | undefined
+  ) {
+    return ExecutionRootLeaseManager.acquire({
+      mode: "exclusive-worktree",
+      purpose: EXECUTION_LEASE_PURPOSES.MERGE,
+      stateRoot: executionRoot,
+      executionRoot,
+      workflowKey: "sibling" as WorkflowKey,
+      runRef: "sibling-run" as RunRef,
+      runner: "vscode",
+      instanceId: "sibling-instance",
+      ...(delegationChain ? { delegationChain } : {}),
+    });
+  }
+
+  /**
+   * Merge lane A, then lane B while A still holds its merge lease: A's
+   * fast-forward waits on a gate that B's first backoff sleep opens, so B's
+   * wait is certain rather than a race.
+   */
+  async function mergeLanesOverlapping(
+    parent: string,
+    laneA: Awaited<ReturnType<typeof ensureManaged>>,
+    laneB: Awaited<ReturnType<typeof ensureManaged>>
+  ) {
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => (openGate = resolve));
+    let signalHolding!: () => void;
+    const holding = new Promise<void>((resolve) => (signalHolding = resolve));
+    const first = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async () => undefined,
+      mergeOperations: {
+        fastForward: async (dir, ref) => {
+          signalHolding();
+          await gate;
+          await mergeFastForward(dir, ref);
+        },
+      },
+    });
+    const sleeps: number[] = [];
+    let firstMerge: Promise<WorktreeMergeResult> | undefined;
+    const second = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async () => undefined,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        openGate();
+        await firstMerge;
+      },
+    });
+    firstMerge = first.mergeManagedWorktree(laneA);
+    await holding;
+    const secondResult = await second.mergeManagedWorktree(laneB);
+    return { firstResult: await firstMerge, secondResult, sleeps };
+  }
+
+  test("D4d: two lanes merging into their parent's checkout at once both land, the later on top of the earlier", async () => {
+    const { parent, repository, laneA, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-merge");
+    try {
+      await fs.writeFile(path.join(laneA.worktreePath, "a.txt"), "a\n");
+      commitFile(laneA.worktreePath, "a.txt", "lane a");
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+
+      const { firstResult, secondResult, sleeps } = await mergeLanesOverlapping(
+        parent,
+        laneA,
+        laneB
+      );
+
+      assert.strictEqual(firstResult.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        secondResult.mergeOutcome,
+        "merge-commit",
+        String(secondResult.message)
+      );
+      assert.deepStrictEqual(sleeps, [250], "the later lane waited once");
+      const laneACommit = gitOutput(laneA.worktreePath, "rev-parse", "HEAD");
+      execFileSync("git", [
+        "-C",
+        repository,
+        "merge-base",
+        "--is-ancestor",
+        laneACommit,
+        "HEAD",
+      ]);
+      assert.ok(
+        gitOutput(repository, "ls-files").split("\n").includes("a.txt")
+      );
+      assert.ok(
+        gitOutput(repository, "ls-files").split("\n").includes("b.txt")
+      );
+      assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
+    } finally {
+      await release();
+    }
+  });
+
+  test("D4d: a real conflict between two waiting lanes ends conflict for the later one", async () => {
+    const { parent, repository, laneA, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-conflict");
+    try {
+      await fs.writeFile(path.join(laneA.worktreePath, "shared.txt"), "a\n");
+      commitFile(laneA.worktreePath, "shared.txt", "lane a");
+      await fs.writeFile(path.join(laneB.worktreePath, "shared.txt"), "b\n");
+      commitFile(laneB.worktreePath, "shared.txt", "lane b");
+
+      const { firstResult, secondResult, sleeps } = await mergeLanesOverlapping(
+        parent,
+        laneA,
+        laneB
+      );
+
+      assert.strictEqual(firstResult.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        secondResult.mergeOutcome,
+        "conflict",
+        String(secondResult.message)
+      );
+      assert.deepStrictEqual(secondResult.conflictFiles, ["shared.txt"]);
+      assert.strictEqual(sleeps.length, 1);
+      assert.strictEqual(
+        (
+          await fs.readFile(path.join(repository, "shared.txt"), "utf8")
+        ).replace(/\r\n/g, "\n"),
+        "a\n"
+      );
+      assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
+    } finally {
+      await release();
+    }
+  });
+
+  test("D4d: a waiter whose sibling holds the merge lease past the budget ends blocked", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-budget");
+    const sibling = await siblingMergeLease(repository, [
+      parentLease.ownerToken,
+    ]);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      // A fake clock: each backoff sleep advances it, so the full default
+      // budget is spent without waiting for it.
+      let clock = Date.now();
+      const sleeps: number[] = [];
+      const waiter = new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        now: () => clock,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+          clock += ms;
+        },
+      });
+      const result = await waiter.mergeManagedWorktree(laneB);
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.match(result.message ?? "", /sibling lane's merge/);
+      assert.match(result.message ?? "", /sibling-run/);
+      assert.deepStrictEqual(sleeps.slice(0, 5), [250, 500, 1000, 2000, 2000]);
+      assert.ok(sleeps.every((ms) => ms > 0 && ms <= 2000));
+      assert.strictEqual(
+        sleeps.reduce((total, ms) => total + ms, 0),
+        WORKTREE_MERGE_LEASE_WAIT_MS
+      );
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await sibling.release();
+      await release();
+    }
+  });
+
+  test("D4d: an editing lease, another delegator's merge or a non-conflict error ends blocked at once", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-no-wait");
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const sleeps: number[] = [];
+      const options = {
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        sleep: async (ms: number) => {
+          sleeps.push(ms);
+        },
+      };
+      const waiter = new WorktreeManager(options);
+
+      // A sibling inheriting the parent's checkout is editing it (rule 2
+      // does not apply to merges, and its lease is not a merge lease).
+      const editing = await ExecutionRootLeaseManager.acquire({
+        mode: "shared-native",
+        stateRoot: repository,
+        executionRoot: repository,
+        workflowKey: "editing" as WorkflowKey,
+        runRef: "editing-run" as RunRef,
+        runner: "vscode",
+        instanceId: "editing-instance",
+        delegationChain: [parentLease.ownerToken],
+      });
+      try {
+        const result = await waiter.mergeManagedWorktree(laneB);
+        assert.strictEqual(result.mergeOutcome, "blocked");
+        assert.match(result.message ?? "", /editing-run/);
+      } finally {
+        await editing.release();
+      }
+
+      // A lane of a different parent (here a sibling lane's own child), so
+      // its immediate delegator is not lane B's.
+      const otherDelegator = await siblingMergeLease(repository, [
+        parentLease.ownerToken,
+        "another-parent",
+      ]);
+      try {
+        const result = await waiter.mergeManagedWorktree(laneB);
+        assert.strictEqual(result.mergeOutcome, "blocked");
+        assert.match(result.message ?? "", /sibling-run/);
+      } finally {
+        await otherDelegator.release();
+      }
+
+      class UnavailableLeaseManager extends ExecutionRootLeaseManager {
+        override async acquire(): Promise<ExecutionLeaseHandle> {
+          throw new Error("lease storage is unavailable");
+        }
+      }
+      const failing = new WorktreeManager({
+        ...options,
+        leaseManager: new UnavailableLeaseManager(),
+      });
+      const result = await failing.mergeManagedWorktree(laneB);
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.match(result.message ?? "", /lease storage is unavailable/);
+
+      assert.deepStrictEqual(sleeps, [], "none of them waited");
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await release();
+    }
+  });
+
+  test("D4d: a top-level managed run's merge keeps fail-fast against a merge lease", async () => {
+    const { parent, repository } = await makeRepository("d4d-chainless");
+    const worktrees = manager(parent);
+    const run = await ensureManaged(worktrees, repository);
+    const sibling = await siblingMergeLease(repository, undefined);
+    try {
+      await fs.writeFile(path.join(run.worktreePath, "run.txt"), "run\n");
+      commitFile(run.worktreePath, "run.txt", "run");
+      const sleeps: number[] = [];
+      const result = await new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      }).mergeManagedWorktree(run);
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.deepStrictEqual(sleeps, []);
+    } finally {
+      await sibling.release();
+      await run.lease.release();
+    }
+  });
+
+  test("D4d: two lanes settling with merge: true at the same moment both land", async () => {
+    const { parent, repository, laneA, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-settle");
+    try {
+      await fs.writeFile(path.join(laneA.worktreePath, "a.txt"), "a\n");
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      const settle = manager(parent);
+      const results = await Promise.all([
+        settle.completeManagedRun(laneA, { merge: true }),
+        settle.completeManagedRun(laneB, { merge: true }),
+      ]);
+      for (const result of results) {
+        assert.ok(
+          result.mergeOutcome === "fast-forward" ||
+            result.mergeOutcome === "merge-commit",
+          `${result.mergeOutcome}: ${result.message}`
+        );
+      }
+      assert.deepStrictEqual(
+        results.map((result) => result.mergeOutcome).sort(),
+        ["fast-forward", "merge-commit"]
+      );
+      const files = gitOutput(repository, "ls-files").split("\n");
+      assert.ok(files.includes("a.txt") && files.includes("b.txt"));
+      assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
+    } finally {
+      await release();
     }
   });
 

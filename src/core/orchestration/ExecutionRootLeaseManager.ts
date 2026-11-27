@@ -15,7 +15,11 @@ import {
   scopeStorageRoot,
   verifyScopeRecord as verifyExecutionRootScopeRecord,
 } from "./ExecutionRootScope";
-import { NODE_ERROR_CODES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_LEASE_PURPOSES,
+  NODE_ERROR_CODES,
+  type ExecutionLeasePurpose,
+} from "../../types/DashboardConstants";
 import { hasErrnoCode } from "../../utils/ErrorUtils";
 
 export const EXECUTION_LEASE_MODES = {
@@ -38,6 +42,12 @@ export interface ExecutionLease {
   startedAt: number;
   lastHeartbeat: number;
   delegationChain?: string[];
+  /**
+   * Set on a lease held only to merge into this root (D4d). Optional and
+   * unversioned: an older ctrlyoke ignores it and sees an ordinary
+   * conflicting lease, so it fails closed.
+   */
+  purpose?: ExecutionLeasePurpose;
 }
 
 export interface ExecutionLeaseRequest {
@@ -50,6 +60,7 @@ export interface ExecutionLeaseRequest {
   instanceId: string;
   pid?: number;
   delegationChain?: string[];
+  purpose?: ExecutionLeasePurpose;
 }
 
 export interface ExecutionLeaseHandle extends ExecutionLease {
@@ -75,10 +86,17 @@ export class ExecutionLeaseConflictError extends Error {
   readonly retryable = true;
   readonly retryAction = "retry" as const;
   readonly retry: () => Promise<ExecutionLeaseHandle>;
+  /**
+   * Every live lease that refused the request, `conflict.lease` first. A
+   * caller deciding whether to wait (D4d sibling merges) must see them all,
+   * not only the first.
+   */
+  readonly conflictingLeases: readonly ExecutionLease[];
 
   constructor(
     conflict: ExecutionLeaseConflict,
-    retry: () => Promise<ExecutionLeaseHandle>
+    retry: () => Promise<ExecutionLeaseHandle>,
+    conflictingLeases: readonly ExecutionLease[] = [conflict.lease]
   ) {
     const owner = conflict.lease;
     const ageSeconds = Math.max(0, Math.floor(conflict.ageMs / 1000));
@@ -91,7 +109,39 @@ export class ExecutionLeaseConflictError extends Error {
     this.name = "ExecutionLeaseConflictError";
     this.conflict = conflict;
     this.retry = retry;
+    this.conflictingLeases = conflictingLeases;
   }
+}
+
+/** A lease's immediate delegator: the last owner token of its chain. */
+function immediateDelegator(
+  chain: readonly string[] | undefined
+): string | undefined {
+  return chain?.length ? chain[chain.length - 1] : undefined;
+}
+
+/**
+ * D4d: whether a merge request refused by `conflictingLeases` should wait
+ * rather than fail. True only when the request carries a delegation chain and
+ * every conflicting lease is another merge lease delegated by the same
+ * immediate delegator: a sibling lane merging into the same checkout, which
+ * holds the lease only for its guard and `git merge`. An editing lease, a
+ * merge from another delegator, or a chainless merge never waits.
+ */
+export function isSiblingMergeLeaseConflict(
+  requestChain: readonly string[] | undefined,
+  conflictingLeases: readonly Pick<
+    ExecutionLease,
+    "purpose" | "delegationChain"
+  >[]
+): boolean {
+  const delegator = immediateDelegator(requestChain);
+  if (!delegator || conflictingLeases.length === 0) return false;
+  return conflictingLeases.every(
+    (lease) =>
+      lease.purpose === EXECUTION_LEASE_PURPOSES.MERGE &&
+      immediateDelegator(lease.delegationChain) === delegator
+  );
 }
 
 /** Where one execution root's leases and arbitration lock live. */
@@ -244,6 +294,7 @@ export class ExecutionRootLeaseManager {
       ...(request.delegationChain
         ? { delegationChain: [...request.delegationChain] }
         : {}),
+      ...(request.purpose ? { purpose: request.purpose } : {}),
     };
 
     await fs.mkdir(scope.leasesRoot, { recursive: true });
@@ -264,9 +315,10 @@ export class ExecutionRootLeaseManager {
         missingMessage: "Execution lease scope metadata is missing",
       });
       const liveLeases = await readLiveLeases(scope);
-      const conflict = liveLeases.find(
+      const conflicts = liveLeases.filter(
         (existing) => !isCompatible(request, existing)
       );
+      const conflict = conflicts[0];
       if (conflict) {
         throw new ExecutionLeaseConflictError(
           {
@@ -275,7 +327,8 @@ export class ExecutionRootLeaseManager {
             retryAction: "retry",
           },
           // A retry is a later operation, so it asks Git afresh.
-          () => ExecutionRootLeaseManager.acquireLease(request)
+          () => ExecutionRootLeaseManager.acquireLease(request),
+          conflicts
         );
       }
 

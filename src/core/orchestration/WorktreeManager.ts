@@ -70,6 +70,8 @@ import {
   type WorktreeManagementAction,
   NODE_ERROR_CODES,
   WORKTREE_MERGE_OUTCOMES,
+  WORKTREE_MERGE_LEASE_WAIT_MS,
+  EXECUTION_LEASE_PURPOSES,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -86,7 +88,9 @@ import {
   type ScriptProcessResult,
 } from "./ScriptProcessRunner";
 import {
+  ExecutionLeaseConflictError,
   ExecutionRootLeaseManager,
+  isSiblingMergeLeaseConflict,
   type ExecutionLeaseHandle,
   type ExecutionLeaseConflict,
   type ExecutionLeaseRequest,
@@ -386,6 +390,19 @@ export interface WorktreeManagerOptions {
   mergeOperations?: Partial<WorktreeMergeOperations>;
   /** Process-level seam for setup; reporters are supplied by workflow owners. */
   worktreeSetupRunner?: WorktreeSetupRunner;
+  /** Sibling merge-lease wait budget (D4d); tests shrink it. */
+  mergeLeaseWaitMs?: number;
+  /** Backoff sleep for the sibling merge-lease wait; tests may fake it. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/** First backoff delay of the D4d sibling merge-lease wait; it doubles. */
+const MERGE_LEASE_WAIT_INITIAL_DELAY_MS = 250;
+/** Largest backoff delay of the D4d sibling merge-lease wait. */
+const MERGE_LEASE_WAIT_MAX_DELAY_MS = 2_000;
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface WorktreeMergeOperations {
@@ -736,10 +753,15 @@ export class WorktreeManager {
   private readonly now: () => number;
   private readonly mergeOperations: WorktreeMergeOperations;
   private readonly worktreeSetupRunner: WorktreeSetupRunner;
+  private readonly mergeLeaseWaitMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   public constructor(private readonly options: WorktreeManagerOptions = {}) {
     this.leaseManager = options.leaseManager ?? new ExecutionRootLeaseManager();
     this.now = options.now ?? Date.now;
+    this.mergeLeaseWaitMs =
+      options.mergeLeaseWaitMs ?? WORKTREE_MERGE_LEASE_WAIT_MS;
+    this.sleep = options.sleep ?? defaultSleep;
     this.mergeOperations = {
       fastForward: mergeFastForward,
       noFastForward: mergeNoFastForward,
@@ -1021,163 +1043,182 @@ export class WorktreeManager {
       const { repositoryRoot, commonDirectory } =
         await this.resolveRepositoryContext(info.sourceCheckoutRoot, git);
       const recordPath = this.recordPath(commonDirectory, info.branchName);
+      // D4d: sibling lanes settle under this one repository-wide lock, so a
+      // lane whose `merge: true` lands seconds after another's queues here
+      // behind the whole settlement (landing, merge, removal), not only at
+      // the merge lease. A delegated merging lane waits the same budget as
+      // the merge-lease wait instead of the 5 s default.
+      const mutationLockOptions =
+        options.merge && info.delegationChain?.length
+          ? { timeoutMs: this.mergeLeaseWaitMs }
+          : undefined;
 
-      return await withWorktreeMutationLock(commonDirectory, async () => {
-        const record = await this.tryReadRecord(recordPath);
-        if (!record || record.branchName !== info.branchName) {
-          return blocked("Managed ownership record is missing or mismatched.");
-        }
-        assertWritableSchema(
-          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
-          record,
-          recordPath
-        );
-        if (
-          !(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))
-        ) {
-          return blocked(
-            "Managed branch ref is missing; refusing to finalize an unowned checkout.",
-            WORKTREE_BRANCH_STATES.MISSING
+      return await withWorktreeMutationLock(
+        commonDirectory,
+        async () => {
+          const record = await this.tryReadRecord(recordPath);
+          if (!record || record.branchName !== info.branchName) {
+            return blocked(
+              "Managed ownership record is missing or mismatched."
+            );
+          }
+          assertWritableSchema(
+            PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+            record,
+            recordPath
           );
-        }
-        const identity = await this.validateManagedCheckoutIdentity(
-          repositoryRoot,
-          info,
-          record,
-          MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
-        );
-        if (!identity.ok) return blocked(identity.message);
+          if (
+            !(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))
+          ) {
+            return blocked(
+              "Managed branch ref is missing; refusing to finalize an unowned checkout.",
+              WORKTREE_BRANCH_STATES.MISSING
+            );
+          }
+          const identity = await this.validateManagedCheckoutIdentity(
+            repositoryRoot,
+            info,
+            record,
+            MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
+          );
+          if (!identity.ok) return blocked(identity.message);
 
-        const [paths, untrackedPaths] = await Promise.all([
-          getGitTrackedAndUntrackedFiles(info.worktreePath),
-          getGitUntrackedFiles(info.worktreePath),
-        ]);
-        const untrackedPathSet = new Set(untrackedPaths);
-        const executionRootRelative = path.relative(
-          info.executionWorkspace.executionCheckoutRoot ?? info.worktreePath,
-          info.executionWorkspace.executionRoot
-        );
-        const blockedRuntimePaths = paths.filter(
-          (repositoryRelativePath) =>
-            (untrackedPathSet.has(repositoryRelativePath) &&
-              isWorkspaceInitializerRuntimePath(
+          const [paths, untrackedPaths] = await Promise.all([
+            getGitTrackedAndUntrackedFiles(info.worktreePath),
+            getGitUntrackedFiles(info.worktreePath),
+          ]);
+          const untrackedPathSet = new Set(untrackedPaths);
+          const executionRootRelative = path.relative(
+            info.executionWorkspace.executionCheckoutRoot ?? info.worktreePath,
+            info.executionWorkspace.executionRoot
+          );
+          const blockedRuntimePaths = paths.filter(
+            (repositoryRelativePath) =>
+              (untrackedPathSet.has(repositoryRelativePath) &&
+                isWorkspaceInitializerRuntimePath(
+                  repositoryRelativePath,
+                  executionRootRelative
+                )) ||
+              isWorkspaceInitializerUnsafePath(
                 repositoryRelativePath,
                 executionRootRelative
-              )) ||
-            isWorkspaceInitializerUnsafePath(
-              repositoryRelativePath,
-              executionRootRelative
-            )
-        );
-        if (blockedRuntimePaths.length > 0) {
-          return blocked(
-            `Managed landing is blocked by unsafe or non-ignored untracked runtime paths: ${blockedRuntimePaths.join(", ")}`
+              )
           );
-        }
+          if (blockedRuntimePaths.length > 0) {
+            return blocked(
+              `Managed landing is blocked by unsafe or non-ignored untracked runtime paths: ${blockedRuntimePaths.join(", ")}`
+            );
+          }
 
-        const changed = await hasUncommittedChanges(info.worktreePath);
-        if (changed) {
-          await commitAll(
-            info.worktreePath,
-            buildManagedAutoCommitMessage(info.workflowName ?? info.branchName)
-          );
-        }
+          const changed = await hasUncommittedChanges(info.worktreePath);
+          if (changed) {
+            await commitAll(
+              info.worktreePath,
+              buildManagedAutoCommitMessage(
+                info.workflowName ?? info.branchName
+              )
+            );
+          }
 
-        const committedHead = await resolveCommit(info.worktreePath, "HEAD");
-        const watermark = getManagedWorktreeWatermark(record);
-        if (committedHead === watermark) {
-          return this.completeManagedNoChange(
-            repositoryRoot,
-            recordPath,
-            record,
-            info,
-            keep
-          );
-        }
-
-        let changedFileCount: number | undefined;
-        try {
-          changedFileCount = (
-            await getDiffFilesBetweenRefs(
+          const committedHead = await resolveCommit(info.worktreePath, "HEAD");
+          const watermark = getManagedWorktreeWatermark(record);
+          if (committedHead === watermark) {
+            return this.completeManagedNoChange(
               repositoryRoot,
-              watermark,
-              committedHead
-            )
-          ).length;
-        } catch {
-          // A missing count must not turn an already-landed commit into a
-          // blocked settlement. The branch and base remain authoritative.
-        }
-        const landedIdentity = await this.validateManagedCheckoutIdentity(
-          repositoryRoot,
-          info,
-          { ...record, lastVerifiedBranchTip: committedHead },
-          MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
-        );
-        if (!landedIdentity.ok) return blocked(landedIdentity.message);
-        const finalTip = landedIdentity.headCommit;
-        const landedRecord: ManagedWorktreeOwnershipRecord = {
-          ...record,
-          lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
-          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-          branchState: WORKTREE_BRANCH_STATES.PRESENT,
-          lastVerifiedBranchTip: finalTip,
-          finalBranchTip: finalTip,
-        };
-        delete landedRecord.recoveryOutcome;
-        await this.writeRecord(recordPath, landedRecord);
-        await this.persistRuntime({
-          lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
-          landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
-          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-          branchState: WORKTREE_BRANCH_STATES.PRESENT,
-          finalBranchTip: finalTip,
-          ...(changedFileCount !== undefined ? { changedFileCount } : {}),
-          updatedAt: this.now(),
-        });
+              recordPath,
+              record,
+              info,
+              keep
+            );
+          }
 
-        const mergeResult = options.merge
-          ? await this.mergeManagedWorktree(info)
-          : undefined;
-        if (mergeResult) {
+          let changedFileCount: number | undefined;
+          try {
+            changedFileCount = (
+              await getDiffFilesBetweenRefs(
+                repositoryRoot,
+                watermark,
+                committedHead
+              )
+            ).length;
+          } catch {
+            // A missing count must not turn an already-landed commit into a
+            // blocked settlement. The branch and base remain authoritative.
+          }
+          const landedIdentity = await this.validateManagedCheckoutIdentity(
+            repositoryRoot,
+            info,
+            { ...record, lastVerifiedBranchTip: committedHead },
+            MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
+          );
+          if (!landedIdentity.ok) return blocked(landedIdentity.message);
+          const finalTip = landedIdentity.headCommit;
+          const landedRecord: ManagedWorktreeOwnershipRecord = {
+            ...record,
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+            branchState: WORKTREE_BRANCH_STATES.PRESENT,
+            lastVerifiedBranchTip: finalTip,
+            finalBranchTip: finalTip,
+          };
+          delete landedRecord.recoveryOutcome;
+          await this.writeRecord(recordPath, landedRecord);
           await this.persistRuntime({
-            mergeOutcome: mergeResult.mergeOutcome,
-            ...(mergeResult.conflictFiles
-              ? { conflictFiles: mergeResult.conflictFiles }
-              : {}),
-            ...(mergeResult.message ? { message: mergeResult.message } : {}),
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
+            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+            branchState: WORKTREE_BRANCH_STATES.PRESENT,
+            finalBranchTip: finalTip,
+            ...(changedFileCount !== undefined ? { changedFileCount } : {}),
             updatedAt: this.now(),
           });
-        }
 
-        if (keep) {
-          return {
-            landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
-            ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
-            directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
-            branchState: WORKTREE_BRANCH_STATES.PRESENT,
-            branchName: info.branchName,
-            ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
-            autoCommitted: changed,
-            ...(changedFileCount !== undefined ? { changedFileCount } : {}),
-            ...(mergeResult?.conflictFiles
-              ? { conflictFiles: mergeResult.conflictFiles }
-              : {}),
-            ...(mergeResult?.message ? { message: mergeResult.message } : {}),
-          };
-        }
+          const mergeResult = options.merge
+            ? await this.mergeManagedWorktree(info)
+            : undefined;
+          if (mergeResult) {
+            await this.persistRuntime({
+              mergeOutcome: mergeResult.mergeOutcome,
+              ...(mergeResult.conflictFiles
+                ? { conflictFiles: mergeResult.conflictFiles }
+                : {}),
+              ...(mergeResult.message ? { message: mergeResult.message } : {}),
+              updatedAt: this.now(),
+            });
+          }
 
-        return this.removeAfterLanding(
-          repositoryRoot,
-          recordPath,
-          landedRecord,
-          info,
-          WORKTREE_LANDING_OUTCOMES.LANDED,
-          changed,
-          changedFileCount,
-          mergeResult
-        );
-      });
+          if (keep) {
+            return {
+              landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
+              ...(mergeResult
+                ? { mergeOutcome: mergeResult.mergeOutcome }
+                : {}),
+              directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
+              branchState: WORKTREE_BRANCH_STATES.PRESENT,
+              branchName: info.branchName,
+              ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+              autoCommitted: changed,
+              ...(changedFileCount !== undefined ? { changedFileCount } : {}),
+              ...(mergeResult?.conflictFiles
+                ? { conflictFiles: mergeResult.conflictFiles }
+                : {}),
+              ...(mergeResult?.message ? { message: mergeResult.message } : {}),
+            };
+          }
+
+          return this.removeAfterLanding(
+            repositoryRoot,
+            recordPath,
+            landedRecord,
+            info,
+            WORKTREE_LANDING_OUTCOMES.LANDED,
+            changed,
+            changedFileCount,
+            mergeResult
+          );
+        },
+        mutationLockOptions
+      );
     } catch (error) {
       return blocked(getErrorMessage(error));
     } finally {
@@ -1210,18 +1251,29 @@ export class WorktreeManager {
       return undefined;
     };
 
-    const initialGuardFailure = await guard();
-    if (initialGuardFailure) {
-      return {
-        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
-        message: initialGuardFailure,
-      };
+    const delegationChain = info.delegationChain?.length
+      ? [...info.delegationChain]
+      : undefined;
+    // A delegated merge may be about to wait for a sibling lane that is
+    // merging into this checkout right now, so its checkout can look dirty
+    // or mid-merge until that sibling finishes. The guard after the lease is
+    // authoritative; checking first would end the waiter `blocked` on a
+    // state the wait exists to outlast.
+    if (!delegationChain) {
+      const initialGuardFailure = await guard();
+      if (initialGuardFailure) {
+        return {
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+          message: initialGuardFailure,
+        };
+      }
     }
 
-    let sourceLease: ExecutionLeaseHandle | undefined;
+    let sourceLease: ExecutionLeaseHandle;
     try {
-      sourceLease = await this.leaseManager.acquire({
+      sourceLease = await this.acquireMergeLease({
         mode: "exclusive-worktree",
+        purpose: EXECUTION_LEASE_PURPOSES.MERGE,
         stateRoot: info.lease?.stateRoot ?? info.executionWorkspace.stateRoot,
         executionRoot: info.sourceCheckoutRoot,
         workflowKey: info.workflowKey,
@@ -1232,9 +1284,7 @@ export class WorktreeManager {
         // merges into (its parent's) do not refuse the merge. Rule 2 does not
         // apply, so a sibling still editing that checkout does. No chain (a
         // top-level run) keeps the fail-fast conflict.
-        ...(info.delegationChain?.length
-          ? { delegationChain: [...info.delegationChain] }
-          : {}),
+        ...(delegationChain ? { delegationChain } : {}),
       });
     } catch (error) {
       return {
@@ -1257,6 +1307,47 @@ export class WorktreeManager {
       );
     } finally {
       await sourceLease.release().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Acquire a merge lease, waiting out sibling lanes' merges (D4d). Only a
+   * request with a delegation chain waits, and only while every conflicting
+   * live lease is another merge lease with the same immediate delegator; it
+   * retries with backoff (250 ms, doubling, capped at 2 s) for at most
+   * `mergeLeaseWaitMs`, then rethrows the last conflict. Any other conflict
+   * or error is thrown at once, so every other caller stays fail-fast.
+   */
+  private async acquireMergeLease(
+    request: ExecutionLeaseRequest
+  ): Promise<ExecutionLeaseHandle> {
+    let attempt: () => Promise<ExecutionLeaseHandle> = () =>
+      this.leaseManager.acquire(request);
+    const deadline = this.now() + this.mergeLeaseWaitMs;
+    let delay = MERGE_LEASE_WAIT_INITIAL_DELAY_MS;
+    for (;;) {
+      try {
+        return await attempt();
+      } catch (error) {
+        if (
+          !(error instanceof ExecutionLeaseConflictError) ||
+          !isSiblingMergeLeaseConflict(
+            request.delegationChain,
+            error.conflictingLeases
+          )
+        ) {
+          throw error;
+        }
+        const remaining = deadline - this.now();
+        if (remaining <= 0) {
+          throw new Error(
+            `waited ${this.mergeLeaseWaitMs / 1000}s for a sibling lane's merge. ${error.message}`
+          );
+        }
+        await this.sleep(Math.min(delay, remaining));
+        delay = Math.min(delay * 2, MERGE_LEASE_WAIT_MAX_DELAY_MS);
+        attempt = error.retry;
+      }
     }
   }
 
@@ -1364,6 +1455,7 @@ export class WorktreeManager {
       sourceLease = await this.leaseManager.acquire(
         {
           mode: "exclusive-worktree",
+          purpose: EXECUTION_LEASE_PURPOSES.MERGE,
           stateRoot: sourceCheckoutRoot,
           executionRoot: sourceCheckoutRoot,
           workflowKey: "worktree-sync" as WorkflowKey,

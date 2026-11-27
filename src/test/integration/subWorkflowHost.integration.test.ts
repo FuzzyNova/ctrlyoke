@@ -5110,4 +5110,80 @@ suite("Sub-workflow host end to end", () => {
       removeTempDir(`${workspace}.worktrees`);
     }
   });
+
+  test("two merge: true lanes of one group that finish together both merge into the parent's checkout", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-d4d-sibling-merge-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(
+        path.join(workspace, "named-lane.js"),
+        "require('fs').writeFileSync(process.argv[2] + '.txt', process.argv[2]);"
+      );
+      const mergeLane = { worktree: { mode: "managed", merge: true } };
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Merging lanes",
+        steps: [
+          {
+            parallel: [
+              inlineLane("Lane A", "node named-lane.js a", mergeLane),
+              inlineLane("Lane B", "node named-lane.js b", mergeLane),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      const outcomes: string[] = [];
+      for (const stepIndex of [0, 1]) {
+        const lane = laneChildOf(instances, parent, stepIndex);
+        assert.ok(lane, `lane ${stepIndex + 1} has a child instance`);
+        const laneWorktree = await worktreeRuntimeOf(lane);
+        outcomes.push(String(laneWorktree.mergeOutcome));
+        assert.ok(
+          laneWorktree.mergeOutcome === "fast-forward" ||
+            laneWorktree.mergeOutcome === "merge-commit",
+          `lane ${stepIndex + 1}: ${laneWorktree.mergeOutcome} ${String(laneWorktree.message)}`
+        );
+      }
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "a.txt"), "utf8"),
+        "a"
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "b.txt"), "utf8"),
+        "b"
+      );
+      assert.ok(
+        !outcomes.includes("blocked"),
+        `neither lane was blocked: ${outcomes.join(", ")}`
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
 });

@@ -206,9 +206,14 @@ member that was still running to its child run, in the worktree that child
 already has, so no lane starts over in a second worktree. Each reconnected
 child re-runs the step the reload interrupted.
 
-Two members with `merge: true` that finish at the same moment can leave the
-later merge reported as blocked. Leave the merge to a step after the group, as
-in the example, when lanes finish close together.
+Members with `merge: true` that finish close together merge one at a time.
+The later one waits up to two minutes for the earlier one's merge, then merges
+on top of it: a fast-forward or a merge commit, or `conflict` with the
+conflicting files when both changed the same lines. It is reported as
+`blocked` only if the earlier merge is still running after that wait, or if
+something other than a sibling's merge holds the parent's checkout. To resolve
+the lanes together in one place, drop `merge` and leave the merge to a step
+after the group, as in the example.
 
 ## Outcomes, Stop, and Pause
 

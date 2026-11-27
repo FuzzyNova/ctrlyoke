@@ -3210,6 +3210,24 @@ export const WORKTREE_MERGE_OUTCOMES = {
 export type WorktreeMergeOutcome =
   (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
 
+/**
+ * Why an execution lease is held, when it is not ordinary editing. A merge
+ * lease is an `exclusive-worktree` lease held only for the merge guard and
+ * `git merge` into a checkout, so a sibling lane's merge can wait it out.
+ */
+export const EXECUTION_LEASE_PURPOSES = {
+  MERGE: "merge",
+} as const;
+
+export type ExecutionLeasePurpose =
+  (typeof EXECUTION_LEASE_PURPOSES)[keyof typeof EXECUTION_LEASE_PURPOSES];
+
+/**
+ * How long a sub-workflow lane's `merge: true` waits for a sibling lane's
+ * merge lease on the same checkout before ending `blocked` (D4d).
+ */
+export const WORKTREE_MERGE_LEASE_WAIT_MS = 120_000;
+
 // ============================================================================
 // WORKFLOW VIEW ADDRESS KIND - Discriminant for WorkflowViewAddress
 // ============================================================================
