@@ -3438,7 +3438,12 @@ export class WorkflowExecutor {
                 ? formatFinalPassPhrase(target.loopIndex + 1)
                 : `step ${stepIndex + 1}`,
           },
-          this.promptQueue.getState().workflowName
+          this.promptQueue.getState().workflowName,
+          this.substituteStepLabel(
+            authoredStep,
+            this.getRunStartView(context).vars,
+            target.kind === FINAL_STEP_PHASES.FINAL_STEP ? -1 : stepIndex
+          ).name
         );
         return {
           ok: true,
@@ -3450,6 +3455,8 @@ export class WorkflowExecutor {
             parentDefinition: {
               sourceDefinitionPath: context.sourceDefinitionPath,
               sourceCheckoutRoot: context.executionWorkspace.sourceCheckoutRoot,
+              trustIdentityPath:
+                context.sourceDefinitionPath ?? context.currentPromptFilePath,
             },
           },
           createsWorktree: Boolean(materialized.definition.worktree),

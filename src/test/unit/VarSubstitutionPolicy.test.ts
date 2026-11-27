@@ -327,18 +327,26 @@ suite("VarSubstitutionPolicy documentation", () => {
       seen.set(key, field);
     }
     for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS) {
-      const excludedSegments = excluded.split(".");
       assert.ok(
-        !POLICY_ENTRIES.some(([, entry]) => {
-          const policyPath = entry.path.join(".").split(".");
-          return (
-            policyPath.length >= excludedSegments.length &&
-            excludedSegments.every(
-              (segment, index) => policyPath[index] === segment
-            )
-          );
-        }),
+        !POLICY_ENTRIES.some(
+          ([field]) => field === excluded || field.startsWith(`${excluded}.`)
+        ),
         `${excluded} is excluded but has a policy entry`
+      );
+    }
+  });
+
+  test("dotted exclusions match entries in authored workflow coordinates", () => {
+    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS.filter(
+      ({ path: candidate }) =>
+        candidate === "steps[].workflow" || candidate === "finalStep.workflow"
+    )) {
+      const entries = [`${excluded}.prompt`, `${excluded}.script`];
+      assert.ok(
+        entries.some(
+          (field) => field === excluded || field.startsWith(`${excluded}.`)
+        ),
+        `${excluded} should exclude at least one nested inline entry`
       );
     }
   });

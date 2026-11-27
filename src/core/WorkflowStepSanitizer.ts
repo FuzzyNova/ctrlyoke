@@ -976,6 +976,9 @@ export function buildWorkflowStepFromProperties(
         ...buildPromptStepProperties(properties),
       };
     case STEP_TYPES.WORKFLOW:
+      if (isRecord(props.workflow) && "_runtime" in props.workflow) {
+        throw new Error("Inline workflow definition cannot contain _runtime");
+      }
       return {
         type: STEP_TYPES.WORKFLOW,
         // An inline definition has no text form, so keep the object itself.

@@ -56,7 +56,8 @@ export function materializeInlineSubWorkflow(
   effectiveVars: Readonly<Record<string, string>>,
   step: SubWorkflowStep,
   position: InlineSubWorkflowPosition,
-  parentName?: string
+  parentName?: string,
+  displayNameOverride?: string
 ): { definition: PromptFile; displayName: string } {
   if (typeof step.workflow === "string") {
     throw new Error("Cannot materialize a file-backed sub-workflow");
@@ -89,7 +90,9 @@ export function materializeInlineSubWorkflow(
 
   const workflowName = parentName?.trim() || parent.name?.trim() || "Workflow";
   const displayName =
-    step.name?.trim() || `${workflowName} · ${position.label}`;
+    displayNameOverride?.trim() ||
+    step.name?.trim() ||
+    `${workflowName} · ${position.label}`;
   definition.name = displayName;
   return { definition, displayName };
 }

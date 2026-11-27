@@ -92,6 +92,8 @@ export interface InlineParentDefinition {
   sourceDefinitionPath?: string;
   /** The checkout that path lives in (the parent's source checkout). */
   sourceCheckoutRoot?: string;
+  /** Trust identity used by the parent when it has no authored source file. */
+  trustIdentityPath?: string;
 }
 
 /** Load-time inputs a parent hands to the child instance it launches. */

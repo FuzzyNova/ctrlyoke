@@ -160,7 +160,8 @@ export class PromptFileLoader {
     promptFile: PromptFile,
     displayName: string,
     workspaceFolderPath?: string,
-    lineageName?: string
+    lineageName?: string,
+    sourceDefinitionPath?: string
   ): Promise<string | undefined> {
     return this.loadParsedPromptFile(
       promptFile,
@@ -169,7 +170,8 @@ export class PromptFileLoader {
       undefined,
       [],
       lineageName,
-      true
+      true,
+      sourceDefinitionPath
     );
   }
 
@@ -189,7 +191,8 @@ export class PromptFileLoader {
     originalFilePath: string | undefined,
     schemaWarnings: WorkflowValidationWarning[],
     authoredName?: string,
-    throwOnFailure = false
+    throwOnFailure = false,
+    assetSourceDefinitionPath?: string
   ): Promise<string | undefined> {
     this.lastSchemaWarnings = [...schemaWarnings];
     if (!promptFile.steps) {
@@ -313,7 +316,7 @@ export class PromptFileLoader {
     await this.warnAboutMissingWorkflowAssets(
       promptFile,
       workspaceFolderPath,
-      originalFilePath
+      originalFilePath ?? assetSourceDefinitionPath
     );
 
     Log.debug(

@@ -167,4 +167,21 @@ suite("InlineSubWorkflowMaterializer", () => {
     );
     assert.strictEqual(unnamed.definition.name, unnamed.displayName);
   });
+
+  test("uses the dispatch-substituted display name without changing child fields", () => {
+    const result = materializeInlineSubWorkflow(
+      { vars: { name: "run-start" }, steps: [] },
+      { name: "dispatch" },
+      inlineStep({ prompt: "{{name}}", name: "{{name}}" }),
+      STEP_2,
+      "Parent",
+      "dispatch"
+    );
+    assert.strictEqual(result.displayName, "dispatch");
+    assert.strictEqual(result.definition.steps?.[0].name, "{{name}}");
+    assert.strictEqual(
+      (result.definition.steps?.[0] as { prompt?: string }).prompt,
+      "{{name}}"
+    );
+  });
 });

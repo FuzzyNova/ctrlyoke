@@ -70,6 +70,17 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
     assert.strictEqual(getSubWorkflowDisplayName(fileStep), "Lane");
   });
 
+  test("rejects runtime metadata rather than converting inline workflow to text", () => {
+    assert.throws(
+      () =>
+        buildWorkflowStepFromProperties("display text", {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: { prompt: "child", _runtime: { sessionId: "parent" } },
+        }),
+      /cannot contain _runtime/
+    );
+  });
+
   test("preserves sandbox booleans and leaves an absent override absent", () => {
     for (const sandbox of [true, false]) {
       assert.strictEqual(

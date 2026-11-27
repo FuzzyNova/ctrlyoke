@@ -1816,12 +1816,14 @@ export class WorkflowInstance
     this.promptQueue.clearQueue();
     this.filePath = displayName;
     this.sourceDefinitionPath =
+      this.inheritedParentDefinition?.trustIdentityPath ??
       this.inheritedParentDefinition?.sourceDefinitionPath;
     const workingFilePath = await this.promptFileLoader.loadFromMemoryOrThrow(
       promptFile,
       displayName,
       this.workspaceFolderPath,
-      displayName
+      displayName,
+      this.inheritedParentDefinition?.sourceDefinitionPath
     );
     if (workingFilePath) {
       this.inheritParentExecutionRoot(promptFile);
@@ -2619,6 +2621,7 @@ export class WorkflowInstance
       // cleared the parent definition it resolves against.
       if (this.inheritedParentDefinition) {
         this.sourceDefinitionPath =
+          this.inheritedParentDefinition.trustIdentityPath ??
           this.inheritedParentDefinition.sourceDefinitionPath;
       }
       this.inheritParentExecutionRoot(this.promptQueue.getWorkflowFile());

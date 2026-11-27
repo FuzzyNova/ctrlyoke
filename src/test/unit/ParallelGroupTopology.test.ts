@@ -111,6 +111,22 @@ suite("ParallelGroupTopology", () => {
         ]
       );
     });
+
+    test("checks retry prompt references", () => {
+      assert.match(
+        getParallelSiblingReferenceErrors(
+          [
+            {
+              prompt: "first",
+              endCondition: { script: "", retryPrompt: "Use $step:2" },
+            },
+            step("other"),
+          ],
+          groups
+        )[0],
+        /Inline priorContext reference 2/
+      );
+    });
   });
 
   test("clamps effective group width to one when fan-out is explicitly disabled", () => {
