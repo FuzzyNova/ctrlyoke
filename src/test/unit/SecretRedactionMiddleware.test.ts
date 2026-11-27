@@ -14,7 +14,12 @@ async function startTestServer(
   app: express.Express
 ): Promise<{ baseUrl: string; stop: () => Promise<void> }> {
   const server = http.createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, resolve));
+  // Bind the address the test dials. A wildcard bind shares its ephemeral
+  // port with any other process's 127.0.0.1 socket on macOS, which then
+  // answers the fetch (seen under `npm test` as an HTML body).
+  await new Promise<void>((resolve) =>
+    server.listen(0, "127.0.0.1", () => resolve())
+  );
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
   return {

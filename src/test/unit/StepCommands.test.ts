@@ -164,11 +164,20 @@ suite("CLI step command handlers", () => {
   const originalStateHome = process.env.CTRLYOKE_HOME;
 
   afterEach(async () => {
+    // The commands leave fire-and-forget history writes (index refresh) that
+    // can still be creating files under the state home here, so a single
+    // recursive rm can fail with ENOTEMPTY under load.
+    const removeOptions = {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 50,
+    };
     if (workspaceRoot) {
-      await fs.rm(workspaceRoot, { recursive: true, force: true });
+      await fs.rm(workspaceRoot, removeOptions);
     }
     if (stateHome) {
-      await fs.rm(stateHome, { recursive: true, force: true });
+      await fs.rm(stateHome, removeOptions);
     }
     if (originalStateHome === undefined) {
       delete process.env.CTRLYOKE_HOME;
