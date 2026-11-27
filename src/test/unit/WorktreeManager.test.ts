@@ -253,6 +253,132 @@ suite("WorktreeManager", function () {
     }
   });
 
+  test("D4c classification: a stale record whose path now holds a user worktree on another branch is not managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-stale-record");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    await managed.lease.release();
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "remove", "--force", managed.worktreePath],
+      { stdio: "ignore" }
+    );
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "user/reused-path",
+        managed.worktreePath,
+      ],
+      { stdio: "ignore" }
+    );
+    assert.ok(
+      await worktrees.readManagedWorktreeRecord(repository, managed.branchName),
+      "the stale ownership record must still exist for this case to mean anything"
+    );
+    assert.strictEqual(
+      await worktrees.findManagedWorktreeRecordForCheckout(
+        repository,
+        managed.worktreePath
+      ),
+      undefined
+    );
+  });
+
+  test("D4c classification: a prunable managed entry is not managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-prunable");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    await managed.lease.release();
+    // The directory stays (so realpath succeeds and the path still matches),
+    // but Git now lists the entry as prunable.
+    await fs.rm(path.join(managed.worktreePath, ".git"), { force: true });
+    const entry = (await listWorktrees(repository)).find(
+      (candidate) => candidate.branchName === managed.branchName
+    );
+    assert.strictEqual(entry?.prunable, true, "fixture must be prunable");
+    assert.strictEqual(
+      await worktrees.findManagedWorktreeRecordForCheckout(
+        repository,
+        managed.worktreePath
+      ),
+      undefined
+    );
+  });
+
+  test("D4c classification: the main checkout and a user-created named worktree are not managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-user-owned");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    try {
+      const named = path.join(parent, "named");
+      execFileSync(
+        "git",
+        ["-C", repository, "worktree", "add", "-b", "user/named", named],
+        { stdio: "ignore" }
+      );
+      assert.strictEqual(
+        await worktrees.findManagedWorktreeRecordForCheckout(
+          repository,
+          repository
+        ),
+        undefined
+      );
+      assert.strictEqual(
+        await worktrees.findManagedWorktreeRecordForCheckout(named, named),
+        undefined
+      );
+    } finally {
+      await managed.lease.release();
+    }
+  });
+
+  test("D4c classification: a managed worktree reached through a non-canonical path is managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-realpath");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    try {
+      const alias = path.join(parent, "alias-to-managed");
+      await fs.symlink(
+        managed.worktreePath,
+        alias,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+      assert.notStrictEqual(
+        alias,
+        await fs.realpath(alias),
+        "fixture must exercise a non-canonical path"
+      );
+      const owner = await worktrees.findManagedWorktreeRecordForCheckout(
+        alias,
+        alias
+      );
+      assert.strictEqual(owner?.branchName, managed.branchName);
+      // Unlink before the recursive teardown: Electron's recursive rm follows
+      // a Windows junction into its target.
+      await fs.unlink(alias);
+    } finally {
+      await managed.lease.release();
+    }
+  });
+
+  test("D4c classification: an unresolvable repository is not managed and does not throw", async () => {
+    const { parent } = await makeRepository("d4c-no-repository");
+    const outside = path.join(parent, "not-a-repository");
+    await fs.mkdir(outside);
+    assert.strictEqual(
+      await manager(parent).findManagedWorktreeRecordForCheckout(
+        outside,
+        outside
+      ),
+      undefined
+    );
+  });
+
   function localBranchExists(repository: string, branchName: string): boolean {
     try {
       execFileSync(

@@ -5,6 +5,7 @@ import { execFileSync } from "child_process";
 import { suite, test } from "mocha";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
+import { buildManagedAutoCommitMessage } from "../../core/orchestration/WorktreeManager";
 import {
   MockHarnessIntegration,
   MockIntegrationFactory,
@@ -2120,6 +2121,158 @@ suite("Sub-workflow host end to end", () => {
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a D4a child inside its parent's managed worktree checkpoints it before a worktree grandchild starts", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-d4a-checkpoint-");
+    const recordDir = makeTempDir("ctrlyoke-d4a-checkpoint-record-");
+    const childCheckoutRecord = path.join(recordDir, "child-checkout.txt");
+    const grandchildRecord = path.join(recordDir, "grandchild.json");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      // The child's own step leaves the shared checkout dirty, and records
+      // which checkout it ran in.
+      await fs.writeFile(
+        path.join(workspace, "dirty.js"),
+        "require('fs').writeFileSync('dirty.txt', 'unsaved');" +
+          "require('fs').writeFileSync(process.argv[2], process.cwd());"
+      );
+      // The grandchild records where it runs and the shared checkout's state
+      // at the moment it starts, which proves the checkpoint came first (the
+      // parent's own settlement commits with the same message, but only after
+      // the whole run).
+      await fs.writeFile(
+        path.join(workspace, "grandchild.js"),
+        "const fs = require('fs');" +
+          "const { execFileSync } = require('child_process');" +
+          "const shared = fs.readFileSync(process.argv[3], 'utf8');" +
+          "const git = (...args) => execFileSync('git', ['-C', shared, ...args], { encoding: 'utf8' }).trim();" +
+          "fs.writeFileSync(process.argv[2], JSON.stringify({" +
+          " cwd: process.cwd(), sharedHead: git('rev-parse', 'HEAD')," +
+          " sharedStatus: git('status', '--porcelain') }));"
+      );
+      // No `worktree` key: D4a, so the child shares its parent's checkout and
+      // has no managed worktree of its own.
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        name: "Inheriting child",
+        steps: [
+          { type: "script", script: `node dirty.js "${childCheckoutRecord}"` },
+          inlineLane(
+            "Grandchild",
+            `node grandchild.js "${grandchildRecord}" "${childCheckoutRecord}"`,
+            {
+              worktree: { mode: "managed", keep: true },
+            }
+          ),
+        ],
+      });
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Managed parent",
+        worktree: { mode: "managed", keep: true },
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        "completed",
+        JSON.stringify(state.results)
+      );
+      const child = launchedChild(instances, parent);
+      assert.strictEqual(
+        child.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(child.promptQueue.getState().results)
+      );
+
+      const sharedCheckout = await fs.realpath(
+        await fs.readFile(childCheckoutRecord, "utf8")
+      );
+      assert.notStrictEqual(
+        sharedCheckout,
+        await fs.realpath(workspace),
+        "the D4a child ran in its parent's managed worktree, not main"
+      );
+      // The checkpoint is the commit in the shared checkout that added the
+      // child's uncommitted file, with settlement's deterministic message.
+      const checkpoint = execFileSync(
+        "git",
+        [
+          "-C",
+          sharedCheckout,
+          "log",
+          "--diff-filter=A",
+          "--format=%H%x09%s",
+          "--",
+          "dirty.txt",
+        ],
+        { encoding: "utf8" }
+      )
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => {
+          const [hash, subject] = line.split("\t");
+          return { hash, subject };
+        });
+      assert.strictEqual(checkpoint.length, 1, JSON.stringify(checkpoint));
+      assert.strictEqual(
+        checkpoint[0]?.subject,
+        buildManagedAutoCommitMessage("Managed parent")
+      );
+
+      const grandchild = JSON.parse(
+        await fs.readFile(grandchildRecord, "utf8")
+      ) as { cwd: string; sharedHead: string; sharedStatus: string };
+      assert.notStrictEqual(
+        await fs.realpath(grandchild.cwd),
+        sharedCheckout,
+        "the grandchild ran in a worktree of its own"
+      );
+      assert.strictEqual(
+        grandchild.sharedStatus,
+        "",
+        "the shared checkout was clean when the grandchild started"
+      );
+      assert.strictEqual(
+        grandchild.sharedHead,
+        checkpoint[0]?.hash,
+        "the checkpoint was committed before the grandchild started"
+      );
+      // Not asserted: that the grandchild's branch starts at the checkpoint.
+      // That needs D4b (the parent's checkout as the child's source checkout),
+      // which is not implemented yet; until then a worktree child branches
+      // from the main checkout's HEAD, as a top-level run does.
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "log", "--format=%s"], {
+          encoding: "utf8",
+        }).trim(),
+        "add workflows",
+        "the user's main checkout gets no commit"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+      removeTempDir(recordDir);
     }
   });
 });

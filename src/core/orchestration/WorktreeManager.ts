@@ -171,6 +171,26 @@ const MANAGED_CHECKOUT_IDENTITY_MODES = {
 type ManagedCheckoutIdentityMode =
   (typeof MANAGED_CHECKOUT_IDENTITY_MODES)[keyof typeof MANAGED_CHECKOUT_IDENTITY_MODES];
 
+/**
+ * Whether a `git worktree list` entry is the checkout a managed ownership
+ * record describes: same branch, same path, and not prunable. Git reports
+ * canonical (realpath) worktree paths and records are written from Git's own
+ * repository root, so both sides compare canonically; a caller holding a
+ * user-supplied path must canonicalize it before comparing it to either.
+ * Path equality alone is not ownership: a stale record's path can later hold
+ * a user's worktree on another branch.
+ */
+function gitWorktreeEntryMatchesManagedRecord(
+  entry: GitWorktreeEntry,
+  record: Pick<ManagedWorktreeOwnershipRecord, "branchName" | "worktreePath">
+): boolean {
+  return (
+    !entry.prunable &&
+    entry.branchName === record.branchName &&
+    pathsEqual(entry.worktreePath, record.worktreePath)
+  );
+}
+
 function findGitWorktreeEntryForRecord(
   entries: readonly GitWorktreeEntry[],
   record: Pick<ManagedWorktreeOwnershipRecord, "worktreePath">
@@ -774,36 +794,32 @@ export class WorktreeManager {
     sourceCheckoutRoot: string,
     checkoutRoot: string
   ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
-    const { repositoryRoot, commonDirectory } =
-      await this.resolveRepositoryContext(sourceCheckoutRoot);
     let records: ManagedWorktreeOwnershipRecord[];
     let entries: GitWorktreeEntry[];
-    try {
-      [records, entries] = await Promise.all([
-        this.readRecords(commonDirectory),
-        listGitWorktrees(repositoryRoot),
-      ]);
-    } catch (error) {
-      Log.error("[WorktreeManager] Unable to classify managed checkout", error);
-      return undefined;
-    }
     let realCheckoutRoot: string;
     try {
-      realCheckoutRoot = await fs.realpath(checkoutRoot);
+      const { repositoryRoot, commonDirectory } =
+        await this.resolveRepositoryContext(sourceCheckoutRoot);
+      [records, entries, realCheckoutRoot] = await Promise.all([
+        this.readRecords(commonDirectory),
+        listGitWorktrees(repositoryRoot),
+        fs.realpath(checkoutRoot),
+      ]);
     } catch (error) {
-      Log.error("[WorktreeManager] Unable to resolve checkout path", error);
+      // Fail closed: an unclassifiable checkout is treated as user-owned, so
+      // the D4c rule refuses a dirty tree instead of committing to it.
+      Log.warn(
+        `[WorktreeManager] Cannot classify ${checkoutRoot} as a managed worktree; treating it as not managed: ${getErrorMessage(error)}`
+      );
       return undefined;
     }
-    return records.find((record) => {
-      const entry = findGitWorktreeEntryForRecord(entries, record);
-      return (
-        entry !== undefined &&
-        !entry.bare &&
-        !entry.prunable &&
-        entry.branchName === record.branchName &&
-        pathsEqual(entry.worktreePath, realCheckoutRoot)
-      );
-    });
+    const entry = entries.find((candidate) =>
+      pathsEqual(candidate.worktreePath, realCheckoutRoot)
+    );
+    if (!entry) return undefined;
+    return records.find((record) =>
+      gitWorktreeEntryMatchesManagedRecord(entry, record)
+    );
   }
 
   /** Remove a just-created imported worktree after its patch failed to apply. */
@@ -1872,10 +1888,8 @@ export class WorktreeManager {
         continue;
       if (options.runRef !== undefined && record.runRef !== options.runRef)
         continue;
-      const entry = entries.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
+      const entry = entries.find((candidate) =>
+        gitWorktreeEntryMatchesManagedRecord(candidate, record)
       );
       if (!entry || !(await this.pathExists(record.worktreePath))) continue;
       const lockInspection = await readWorkflowLockInspection(
@@ -1943,10 +1957,8 @@ export class WorktreeManager {
     }
 
     const staleManagedWorktrees = records.filter((record) => {
-      const entry = worktrees.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
+      const entry = worktrees.find((candidate) =>
+        gitWorktreeEntryMatchesManagedRecord(candidate, record)
       );
       return !entry || entry.stale;
     });

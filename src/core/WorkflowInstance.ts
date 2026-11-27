@@ -2311,9 +2311,14 @@ export class WorkflowInstance
         const checkoutRoot =
           this.executionWorkspace.executionCheckoutRoot ??
           this.executionWorkspace.executionRoot;
-        const managedOwner = await this.worktreeManager
-          .findManagedWorktreeRecordForCheckout(checkoutRoot, checkoutRoot)
-          .catch(() => undefined);
+        // Classifies the checkout this instance shares, not its own config: a
+        // D4a child inside its parent's managed worktree has no worktree of
+        // its own. Lookup failures are logged there and resolve "not managed".
+        const managedOwner =
+          await this.worktreeManager.findManagedWorktreeRecordForCheckout(
+            checkoutRoot,
+            checkoutRoot
+          );
         const ownerLabel = managedOwner
           ? await this.lineageRepository.readWorkflowDisplayName(
               managedOwner.stateRoot,
