@@ -80,10 +80,11 @@ records the failure and moves on. A stopped child always stops the parent,
 regardless of `onFail`.
 
 Stopping the parent stops its active child, and stopping the child directly
-stops the parent. Pausing the parent forwards the pause to the child. The parent
-remains in its pausing state until the child reaches its next step boundary and
-finishes. Pausing or resuming a child directly does not pause or resume the
-parent.
+stops the parent. Pausing the parent forwards the pause to the child, which
+pauses at its next step boundary. The parent stays in its pausing state for as
+long as the child is paused, because its current step is the child run.
+Resuming the parent resumes the child, which continues its own run. Pausing or
+resuming a child directly does not pause or resume the parent.
 
 ## In the dashboard
 

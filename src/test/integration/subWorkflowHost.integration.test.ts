@@ -11,11 +11,15 @@ import {
   MockPlatform,
 } from "../helpers/mockHarness";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { captureLog } from "../helpers/logCapture";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
+  SUB_WORKFLOW_CANCELLATION_SOURCES,
 } from "../../types/DashboardConstants";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { isSubWorkflowStep } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
@@ -68,11 +72,33 @@ suite("Sub-workflow host end to end", () => {
     assert.fail("Timed out waiting for " + filePath);
   }
 
+  const STOP_FALLBACK_WARNING = "Stop timeout: cancellation did not settle";
+
+  /**
+   * Run `action` (a stop or a resume that must settle on its own) and fail if
+   * any instance fell back to stop()'s 10 s timer. Elapsed time alone would
+   * still pass a fallback stop, so the guard reads the warning it logs.
+   */
+  async function withoutStopFallback(action: () => Promise<void>) {
+    const log = captureLog();
+    try {
+      await action();
+    } finally {
+      log.restore();
+    }
+    const fallbacks = log.lines.filter((line) =>
+      line.message.includes(STOP_FALLBACK_WARNING)
+    );
+    assert.deepStrictEqual(fallbacks, [], "stop settled without the fallback");
+  }
+
   function makeInstanceFactory(workspace: string) {
     const platform = new MockPlatform(workspace);
     const integrationFactory = new MockIntegrationFactory(platform);
     const detector = new MockHarnessIntegration(undefined, false);
     const instances: WorkflowInstance[] = [];
+    /** Child instances in launch order, keyed by depth (1 = child, 2 = grandchild). */
+    const childrenAtDepth = new Map<number, WorkflowInstance[]>();
     let launcher: SubWorkflowLauncher;
     const createInstance = (childOptions?: {
       ancestorPaths: readonly string[];
@@ -89,9 +115,20 @@ suite("Sub-workflow host end to end", () => {
     launcher = new SubWorkflowLauncher(({ ancestorPaths, delegationChain }) => {
       const child = createInstance({ ancestorPaths, delegationChain });
       instances.push(child);
+      // ancestorPaths lists the root and every workflow above the child.
+      const depth = ancestorPaths.length - 1;
+      childrenAtDepth.set(depth, [
+        ...(childrenAtDepth.get(depth) ?? []),
+        child,
+      ]);
       return child;
     });
-    return { createInstance, instances };
+    const childAt = (depth: number, launch = 0): WorkflowInstance => {
+      const child = childrenAtDepth.get(depth)?.[launch];
+      assert.ok(child, `no child launched at depth ${depth}`);
+      return child;
+    };
+    return { createInstance, instances, childAt };
   }
 
   test("stops a plain script promptly without waiting for the detector fallback", async () => {
@@ -114,8 +151,10 @@ suite("Sub-workflow host end to end", () => {
       const execution = instance.executeLoadedPromptFile();
       await waitForFile(marker);
       await new Promise((resolve) => setTimeout(resolve, 500));
-      await instance.stop();
-      await execution;
+      await withoutStopFallback(async () => {
+        await instance.stop();
+        await execution;
+      });
       assert.strictEqual(instance.promptQueue.getState().status, "stopped");
     } finally {
       for (const instance of instances) {
@@ -128,7 +167,8 @@ suite("Sub-workflow host end to end", () => {
 
   test("stopping a parent stops its live child script", async () => {
     const workspace = makeTempDir("ctrlyoke-subworkflow-stop-");
-    const { createInstance, instances } = makeInstanceFactory(workspace);
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
     try {
       const marker = path.join(workspace, "child-started");
       const childPath = path.join(workspace, "child.ctrlyoke.json");
@@ -153,10 +193,12 @@ suite("Sub-workflow host end to end", () => {
       const execution = parent.executeLoadedPromptFile();
       await waitForFile(marker);
       await new Promise((resolve) => setTimeout(resolve, 500));
-      await parent.stop();
-      await execution;
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        await execution;
+      });
       assert.strictEqual(parent.promptQueue.getState().status, "stopped");
-      assert.strictEqual(instances[0].promptQueue.getState().status, "stopped");
+      assert.strictEqual(childAt(1).promptQueue.getState().status, "stopped");
       assert.strictEqual(
         parent.promptQueue.getState().results[0].status,
         STEP_STATUS.CANCELLED
@@ -167,6 +209,323 @@ suite("Sub-workflow host end to end", () => {
         instance.dispose();
       }
       removeTempDir(workspace);
+    }
+  });
+
+  /** A child script that records each start and waits for `sentinel`. */
+  function sentinelScript(markerName: string, sentinelName: string): string {
+    return (
+      "node -e \"const fs=require('fs');fs.appendFileSync('" +
+      markerName +
+      "','ran\\n');const t=setInterval(()=>{if(fs.existsSync('" +
+      sentinelName +
+      "')){clearInterval(t);process.exit(0)}},50)\""
+    );
+  }
+
+  async function writeJson(filePath: string, value: unknown): Promise<void> {
+    await fs.writeFile(filePath, JSON.stringify(value));
+  }
+
+  async function waitFor(
+    description: string,
+    predicate: () => boolean
+  ): Promise<void> {
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+      if (predicate()) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.fail("Timed out waiting for " + description);
+  }
+
+  function countStoppedTransitions(instance: WorkflowInstance): () => number {
+    let count = 0;
+    let previous = instance.promptQueue.getState().status;
+    instance.promptQueue.onDidChangeState((state) => {
+      if (
+        state.status === EXECUTION_STATES.STOPPED &&
+        previous !== EXECUTION_STATES.STOPPED
+      ) {
+        count++;
+      }
+      previous = state.status;
+    });
+    return () => count;
+  }
+
+  async function readExecutionState(
+    instance: WorkflowInstance
+  ): Promise<string | undefined> {
+    const state = instance.promptQueue.getState();
+    const manifest = await new TimelineRecorder().readManifest(
+      instance.outputHistoryManager.getHistoryFilePath(
+        state.workflowKey!,
+        state.runRef!
+      )
+    );
+    return manifest.executionState;
+  }
+
+  async function disposeAll(
+    instances: readonly WorkflowInstance[],
+    workspace: string
+  ): Promise<void> {
+    for (const instance of instances) {
+      await instance.outputHistoryManager.flushPendingIndexRefresh();
+      instance.dispose();
+    }
+    removeTempDir(workspace);
+  }
+
+  test("stopping the child directly stops the parent through its outcome", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-child-stop-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    try {
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        steps: [{ type: "script", script: sentinelScript("marker", "never") }],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      const parentStops = countStoppedTransitions(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = childAt(1);
+
+      await withoutStopFallback(async () => {
+        await child.stop();
+        await execution;
+      });
+
+      assert.strictEqual(child.promptQueue.getState().status, "stopped");
+      const parentState = parent.promptQueue.getState();
+      assert.strictEqual(parentState.status, "stopped");
+      assert.strictEqual(parentStops(), 1, "parent confirmed STOPPED once");
+      assert.strictEqual(parentState.results[0].status, STEP_STATUS.CANCELLED);
+      assert.strictEqual(await readExecutionState(parent), "stopped");
+      const events = await new TimelineRecorder().readEvents(
+        parent.outputHistoryManager.getHistoryFilePath(
+          parentState.workflowKey!,
+          parentState.runRef!
+        )
+      );
+      assert.deepStrictEqual(
+        events.flatMap((event) =>
+          event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+            ? [event.payload.outcome]
+            : []
+        ),
+        [
+          {
+            status: PROMPT_TERMINAL_STATUS.CANCELLED,
+            cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+          },
+        ]
+      );
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("stopping the root of a three-level chain stops every run", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-chain-stop-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    try {
+      await writeJson(path.join(workspace, "grandchild.ctrlyoke.json"), {
+        steps: [{ type: "script", script: sentinelScript("marker", "never") }],
+      });
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        steps: [{ type: "workflow", workflow: "grandchild.ctrlyoke.json" }],
+      });
+      const rootPath = path.join(workspace, "root.ctrlyoke.json");
+      await writeJson(rootPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const root = createInstance();
+      instances.push(root);
+      const stopCounts = new Map<WorkflowInstance, () => number>([
+        [root, countStoppedTransitions(root)],
+      ]);
+      assert.strictEqual(await root.loadPromptFile(rootPath), true);
+      const execution = root.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = childAt(1);
+      const grandchild = childAt(2);
+      stopCounts.set(child, countStoppedTransitions(child));
+      stopCounts.set(grandchild, countStoppedTransitions(grandchild));
+
+      await withoutStopFallback(async () => {
+        await root.stop();
+        await execution;
+      });
+
+      for (const [label, instance] of [
+        ["root", root],
+        ["child", child],
+        ["grandchild", grandchild],
+      ] as const) {
+        assert.strictEqual(
+          instance.promptQueue.getState().status,
+          "stopped",
+          label
+        );
+        assert.strictEqual(
+          instance.promptQueue.getState().results[0].status,
+          STEP_STATUS.CANCELLED,
+          label
+        );
+        assert.strictEqual(
+          await readExecutionState(instance),
+          "stopped",
+          label
+        );
+        assert.strictEqual(stopCounts.get(instance)!(), 1, label);
+      }
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  async function countLines(filePath: string): Promise<number> {
+    return (await fs.readFile(filePath, "utf8")).split("\n").filter(Boolean)
+      .length;
+  }
+
+  /** Child workflow: a script held open by `sentinel`, then a second script. */
+  async function writePausableChild(workspace: string): Promise<void> {
+    await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+      steps: [
+        { type: "script", script: sentinelScript("marker", "sentinel") },
+        {
+          type: "script",
+          script: "node -e \"require('fs').appendFileSync('after','ran\\n')\"",
+        },
+      ],
+    });
+  }
+
+  /**
+   * Wait until the child has paused and its execution cycle has ended — the
+   * point at which a launcher that settles on the first cycle would fail the
+   * parent step — plus a macrotask for the parent to react.
+   */
+  async function waitForChildPausedCycle(
+    child: WorkflowInstance
+  ): Promise<void> {
+    await waitFor(
+      "the child to pause",
+      () => child.promptQueue.getState().status === "paused"
+    );
+    await child.whenExecutionSettled();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  function assertStepUnsettled(parent: WorkflowInstance): void {
+    const result = parent.promptQueue.getState().results[0];
+    assert.ok(
+      result.status !== STEP_STATUS.FAILED &&
+        result.status !== STEP_STATUS.COMPLETED &&
+        result.status !== STEP_STATUS.CANCELLED,
+      JSON.stringify(result)
+    );
+  }
+
+  test("pausing the parent pauses its child, and resuming the parent finishes both once", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-pause-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    try {
+      await writePausableChild(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = childAt(1);
+
+      await parent.pause();
+      assert.strictEqual(parent.promptQueue.getState().status, "pausing");
+      assert.strictEqual(child.promptQueue.getState().status, "pausing");
+
+      // The child pauses at its own step boundary once its script ends; the
+      // parent keeps waiting on the child run, so it stays PAUSING.
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await waitForChildPausedCycle(child);
+      assert.strictEqual(parent.promptQueue.getState().status, "pausing");
+      assertStepUnsettled(parent);
+
+      await withoutStopFallback(async () => {
+        await parent.resume();
+        await execution;
+      });
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(child.promptQueue.getState().status, "completed");
+      assert.strictEqual(instances.length, 2, "no second child instance");
+      assert.strictEqual(await countLines(path.join(workspace, "marker")), 1);
+      assert.strictEqual(await countLines(path.join(workspace, "after")), 1);
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
+  test("pausing the child directly leaves the parent running until the child resumes", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-child-pause-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    try {
+      await writePausableChild(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = childAt(1);
+
+      await child.pause();
+      assert.strictEqual(child.promptQueue.getState().status, "pausing");
+      assert.strictEqual(parent.promptQueue.getState().status, "running");
+
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await waitForChildPausedCycle(child);
+      assert.strictEqual(parent.promptQueue.getState().status, "running");
+      assertStepUnsettled(parent);
+
+      await withoutStopFallback(async () => {
+        await child.resume();
+        await execution;
+      });
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(child.promptQueue.getState().status, "completed");
+      assert.strictEqual(instances.length, 2, "no second child instance");
+      assert.strictEqual(await countLines(path.join(workspace, "marker")), 1);
+      assert.strictEqual(await countLines(path.join(workspace, "after")), 1);
+    } finally {
+      await disposeAll(instances, workspace);
     }
   });
 

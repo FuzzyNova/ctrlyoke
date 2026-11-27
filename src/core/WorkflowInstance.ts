@@ -2308,6 +2308,7 @@ export class WorkflowInstance
       registerTargetPtySession: (target, sessionId) =>
         this.registerTargetPtySession(target, sessionId),
       clearTargetPtySession: (target) => this.clearTargetPtySession(target),
+      clearTargetIntegration: (target) => this.clearTargetIntegration(target),
       unregisterActiveTarget: (target) => this.unregisterActiveTarget(target),
       markTargetIntegrationNotReusable: (target) => {
         const integration = this.activeTargetResources.get(
@@ -2679,6 +2680,11 @@ export class WorkflowInstance
     await this.forwardSubWorkflowControlToActiveTargets("pause");
 
     await this.promptQueue.commitRuntimeTransition();
+  }
+
+  /** Settles when the current execution cycle ends (`SubWorkflowInstance`). */
+  whenExecutionSettled(): Promise<void> {
+    return this.executionSettledPromise;
   }
 
   /**
@@ -4370,6 +4376,13 @@ export class WorkflowInstance
     const resource = this.activeTargetResources.get(targetKey) ?? { target };
     resource.integration = integration;
     this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private clearTargetIntegration(target: WorkflowAttemptTarget): void {
+    const resource = this.activeTargetResources.get(
+      this.getExecutionTargetRunKey(target)
+    );
+    if (resource) resource.integration = undefined;
   }
 
   private unregisterActiveTarget(target: WorkflowAttemptTarget): void {

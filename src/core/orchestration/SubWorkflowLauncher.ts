@@ -8,6 +8,7 @@ import type {
 } from "../../types/SubWorkflowTypes";
 import { isSameSubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   PROMPT_TERMINAL_STATUS,
   SUB_WORKFLOW_CANCELLATION_SOURCES,
@@ -138,7 +139,12 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       runRef: identity.runRef as SubWorkflowHandle["runRef"],
       done,
       pause: () => instance.pause(),
-      cancelPause: () => instance.cancelPause(),
+      // A child that already reached its step boundary is PAUSED, where
+      // cancelPause() is a no-op; resuming the parent must resume it.
+      cancelPause: () =>
+        instance.promptQueue.getState().status === EXECUTION_STATES.PAUSED
+          ? instance.resume()
+          : instance.cancelPause(),
       stop: async () => {
         markParentStopped();
         await instance.stop();
@@ -153,6 +159,11 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
   ): Promise<SubWorkflowResult> {
     try {
       await execution;
+      // Pausing ends the child's execution cycle at a step boundary without
+      // settling the run; its resume starts the next cycle.
+      if (instance.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
+        await this.waitForSettledRun(instance);
+      }
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
@@ -184,6 +195,28 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
+  }
+
+  /** Wait until the child no longer owns an executor and its cycle has ended. */
+  private async waitForSettledRun(
+    instance: SubWorkflowInstance
+  ): Promise<void> {
+    const isSettled = () =>
+      !ACTIVE_EXECUTION_STATES.has(instance.promptQueue.getState().status);
+    if (!isSettled()) {
+      await new Promise<void>((resolve) => {
+        const subscription = instance.promptQueue.onDidChangeState(() => {
+          if (!isSettled()) return;
+          subscription.dispose();
+          resolve();
+        });
+        if (isSettled()) {
+          subscription.dispose();
+          resolve();
+        }
+      });
+    }
+    await instance.whenExecutionSettled();
   }
 
   private async waitForRunIdentity(

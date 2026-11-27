@@ -297,6 +297,12 @@ export interface WorkflowExecutionContext {
     sessionId: string
   ) => void;
   clearTargetPtySession?: (target: ExecutionTarget) => void;
+  /**
+   * Drop the harness integration recorded for a target that dispatches no
+   * prompt (script and workflow steps). Startup records the run's initial
+   * integration on the first target before its step kind is known.
+   */
+  clearTargetIntegration?: (target: ExecutionTarget) => void;
   unregisterActiveTarget?: (target: ExecutionTarget) => void;
   /** Mark the target's interactive context unavailable for later terminal reuse. */
   markTargetIntegrationNotReusable?: (target: ExecutionTarget) => void;
@@ -2402,6 +2408,11 @@ export class WorkflowExecutor {
 
     // Route script steps directly — no AI harness interaction needed
     const authoredStepType = getStepType(authoredStep);
+    if (authoredStepType !== STEP_TYPES.PROMPT) {
+      // Otherwise stop() waits on an idle integration's response for its
+      // 10 s fallback instead of cancelling the step's own resource.
+      context.clearTargetIntegration?.(target);
+    }
     switch (authoredStepType) {
       case STEP_TYPES.SCRIPT:
         return this.executeScriptStep(

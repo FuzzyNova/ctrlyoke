@@ -123,6 +123,8 @@ class FakeChild implements SubWorkflowInstance {
   releaseExecution?: () => void;
   async pause(): Promise<void> {}
   async cancelPause(): Promise<void> {}
+  async resume(): Promise<void> {}
+  async whenExecutionSettled(): Promise<void> {}
   async stop(): Promise<void> {
     this.stopCalls += 1;
     this.status = EXECUTION_STATES.STOPPED;

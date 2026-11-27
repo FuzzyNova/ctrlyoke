@@ -125,7 +125,14 @@ export interface SubWorkflowInstance {
   ): Promise<void>;
   pause(): Promise<void>;
   cancelPause(): Promise<void>;
+  /** Resume a PAUSED run; starts a new execution cycle on the same run. */
+  resume(): Promise<void>;
   stop(): Promise<void>;
+  /**
+   * Settles when the current execution cycle ends. A run that pauses at a
+   * step boundary ends its cycle, and `resume()` starts the next one.
+   */
+  whenExecutionSettled(): Promise<void>;
 }
 
 export interface SubWorkflowInstanceOptions {
