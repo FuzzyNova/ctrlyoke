@@ -30,13 +30,13 @@ import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
  * shared mocks rather than from casts.
  */
 export class TestWorkflowInstanceRegistryHost implements WorkflowInstanceRegistryHost {
-  readonly platform = new MockPlatform();
+  readonly platform: MockPlatform;
   readonly dashboardBroadcast = new DashboardBroadcastHub();
   readonly dashboardSink = this.dashboardBroadcast;
-  readonly integrationFactory = new MockIntegrationFactory(this.platform);
+  readonly integrationFactory: MockIntegrationFactory;
   readonly compatibilityRegistry = new HarnessCapabilityRegistry();
   readonly userFeedbackSink = new CompositeUserFeedbackSink([]);
-  readonly currentWorkspaceFolderPath: string | undefined = undefined;
+  readonly currentWorkspaceFolderPath: string | undefined;
   readonly panelClientId = "panel";
   readonly runnerHostIdentity: RunnerHostIdentity = {
     runner: RUNNER_IDS.VSCODE,
@@ -52,6 +52,13 @@ export class TestWorkflowInstanceRegistryHost implements WorkflowInstanceRegistr
     workflowId: string | null;
     address: WorkflowViewAddress | null;
   }[] = [];
+
+  /** `workspace` roots the instances the registry builds, for tests that run them. */
+  constructor(workspace?: string) {
+    this.platform = new MockPlatform(workspace);
+    this.integrationFactory = new MockIntegrationFactory(this.platform);
+    this.currentWorkspaceFolderPath = workspace;
+  }
 
   resolveDetectorIntegration(_harnessOverride?: HarnessId): HarnessIntegration {
     return new MockHarnessIntegration(undefined, false);

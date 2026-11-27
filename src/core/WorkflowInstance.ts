@@ -539,6 +539,7 @@ export class WorkflowInstance
   // so callers (e.g. the standalone CLI) can subscribe once on the instance.
   // ─────────────────────────────────────────────────────────────────────────
   private readonly disposeEmitter = new TypedEmitter<void>();
+  private disposed = false;
   /** Fires once from `dispose()` (`SubWorkflowInstance`). */
   public readonly onDidDispose = this.disposeEmitter.event;
   private readonly executionCycleStartedEmitter = new TypedEmitter<void>();
@@ -1305,7 +1306,14 @@ export class WorkflowInstance
     ]);
   }
 
+  /** True once `dispose()` has run. */
+  get isDisposed(): boolean {
+    return this.disposed;
+  }
+
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles
     // releaseLock for normal termination; crash path is covered by staleness detection).
     this.runnerLockCoordinator.stopHeartbeat();
@@ -1346,7 +1354,8 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
       this.activeWorktree = undefined;
     }
-    this.executionCycleStartedEmitter.dispose();
+    // `executionCycleStartedEmitter` stays live: a launcher whose child is
+    // disposed before its cycle starts stops that cycle when it does start.
     // Last: a launcher waiting on this child settles its parent step.
     this.disposeEmitter.fire();
     this.disposeEmitter.dispose();
@@ -3111,6 +3120,14 @@ export class WorkflowInstance
           await runner.waitForProcessShutdown();
         })
       );
+      await confirmStopped();
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
+    }
+    if (integrations.size === 0 && !hasSubWorkflow && this.disposed) {
+      // dispose() already ended every step resource, so no response is left
+      // to wait for; the detector belongs to the host, not to this run.
       await confirmStopped();
       this.workflowExecutor.clearResponseWaitState();
       this.startPending = false;

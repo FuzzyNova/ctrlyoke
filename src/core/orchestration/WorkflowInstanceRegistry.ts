@@ -7,6 +7,7 @@ import {
   type WorkflowInstanceExecutionOptions,
 } from "../WorkflowInstance";
 import { SubWorkflowLauncher } from "./SubWorkflowLauncher";
+import type { SubWorkflowInstance } from "../../types/SubWorkflowTypes";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type {
   QueueState,
@@ -167,17 +168,44 @@ export class WorkflowInstanceRegistry
   >();
   private readonly externallyCreatedInstanceIds = new Set<string>();
   private readonly announcedExternalWorkflowIds = new Set<string>();
+  /**
+   * Sub-workflow children whose launcher still owns them (`done` has not
+   * settled). The registry never retires or disposes these on its own: a D6
+   * continuation emits the child's restored STOPPED/ERROR state while it
+   * loads, and disposing it then orphans the continuation. Host shutdown
+   * still disposes them.
+   */
+  private readonly launcherOwnedInstanceIds = new Set<string>();
 
   constructor(private readonly host: WorkflowInstanceRegistryHost) {
     this.viewerRegistry.set(this.host.panelClientId, null);
     this.subWorkflowLauncher = new SubWorkflowLauncher(
-      ({ ancestorPaths, delegationChain }) =>
-        this.createExternalWorkflowInstance({
+      ({ ancestorPaths, delegationChain }) => {
+        const instance = this.createExternalWorkflowInstance({
           subWorkflowHost: this.subWorkflowLauncher,
           ancestorPaths,
           delegationChain,
-        })
+        });
+        this.launcherOwnedInstanceIds.add(instance.id);
+        return instance;
+      },
+      (instance) => this.releaseLauncherOwnedInstance(instance)
     );
+  }
+
+  /** A sub-workflow launcher still owns this instance; see `launcherOwnedInstanceIds`. */
+  private isLauncherOwned(workflowId: string): boolean {
+    return this.launcherOwnedInstanceIds.has(workflowId);
+  }
+
+  /** The launcher is done with a child: retire it as any finished instance. */
+  private releaseLauncherOwnedInstance(child: SubWorkflowInstance): void {
+    if (!this.launcherOwnedInstanceIds.delete(child.id)) return;
+    const instance = this.instances.get(child.id);
+    if (!instance || instance.isDisposed) return;
+    if (isSpentExecutionOwnerState(instance.getQueueState().status)) {
+      this.retireWorkflow(instance.id);
+    }
   }
 
   private get panelClientId(): string {
@@ -273,7 +301,9 @@ export class WorkflowInstanceRegistry
       this.retiredInstances.delete(currentPanelId!);
     } else if (currentViewed) {
       const viewedStatus = currentViewed.getQueueState().status;
-      const isIdle = !isExecutionOwnerState(viewedStatus);
+      const isIdle =
+        !isExecutionOwnerState(viewedStatus) &&
+        !this.isLauncherOwned(currentViewed.id);
       if (isIdle) {
         Log.debug(
           `[WorkflowOrchestrator] createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
@@ -330,6 +360,12 @@ export class WorkflowInstanceRegistry
     if (!instance) {
       Log.debug(
         `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
+      );
+      return;
+    }
+    if (this.isLauncherOwned(workflowId)) {
+      Log.debug(
+        `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} is owned by a sub-workflow launcher; retiring once it releases it`
       );
       return;
     }
@@ -535,7 +571,7 @@ export class WorkflowInstanceRegistry
     this.viewerRegistry.delete(clientId);
     this.viewAddressRegistry.delete(clientId);
     this.viewMessageSinks.delete(clientId);
-    if (!workflowId) return;
+    if (!workflowId || this.isLauncherOwned(workflowId)) return;
     if (
       this.retiredInstances.has(workflowId) &&
       !this.isWorkflowViewedByAnyClient(workflowId)

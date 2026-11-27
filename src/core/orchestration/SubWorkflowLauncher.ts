@@ -81,9 +81,21 @@ class LaunchedChildWatch {
   }
 }
 
-/** Launches child runs without coupling execution to a particular host. */
+/**
+ * Launches child runs without coupling execution to a particular host.
+ *
+ * The launcher owns each child it creates from creation until the handle's
+ * `done` settles (or the launch fails), and then calls `releaseInstance`. A
+ * host whose own lifecycle retires or disposes instances must leave an owned
+ * child alone: a D6 continuation restores the child's STOPPED or ERROR state
+ * while it loads, and disposing it then would settle `done` at once while its
+ * execution carried on without a runner-lock heartbeat.
+ */
 export class SubWorkflowLauncher implements SubWorkflowHost {
-  constructor(private readonly createInstance: SubWorkflowInstanceFactory) {}
+  constructor(
+    private readonly createInstance: SubWorkflowInstanceFactory,
+    private readonly releaseInstance?: (instance: SubWorkflowInstance) => void
+  ) {}
 
   async launch(request: SubWorkflowLaunchRequest): Promise<SubWorkflowHandle> {
     const instance = this.createInstance({
@@ -106,7 +118,10 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         watch
       );
     } finally {
-      if (!handedOver) watch.dispose();
+      if (!handedOver) {
+        watch.dispose();
+        this.releaseInstance?.(instance);
+      }
     }
   }
 
@@ -270,7 +285,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
           ? SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
           : SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
       resumeFailure,
-      watch.disposed
+      watch
     )
       .catch((error): SubWorkflowResult => ({
         status: PROMPT_TERMINAL_STATUS.FAILED,
@@ -290,6 +305,7 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
       .finally(() => {
         settled = true;
         watch.dispose();
+        this.releaseInstance?.(instance);
       });
     return {
       workflowKey: identity.workflowKey as SubWorkflowHandle["workflowKey"],
@@ -344,8 +360,9 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     execution: Promise<void>,
     cancelledBy: () => SubWorkflowResult["cancelledBy"],
     resumeFailure: Promise<never>,
-    disposed: Promise<void>
+    watch: LaunchedChildWatch
   ): Promise<SubWorkflowResult> {
+    const disposed = watch.disposed;
     // Host shutdown is not a child failure: CANCELLED stops the parent
     // whatever its onFail (D9), and the child run stays continuable (D6).
     // A child that had already settled keeps its own outcome.
@@ -375,7 +392,15 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
         );
       }
       if (outcome === RUN_WAIT_OUTCOMES.DISPOSED) {
-        return this.settledResult(instance, cancelledBy) ?? cancelled();
+        // Before its cycle starts, a child still loading shows the state it
+        // restored (a continued run is STOPPED or ERROR), not an outcome.
+        const ownOutcome = watch.hasStarted
+          ? this.settledResult(instance, cancelledBy)
+          : undefined;
+        await this.endDisposedExecution(instance, execution, watch, {
+          stop: ownOutcome === undefined,
+        });
+        return ownOutcome ?? cancelled();
       }
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
@@ -392,6 +417,46 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
     } catch (error) {
       return this.failedResult(instance, errorMessage(error));
     }
+  }
+
+  /**
+   * After a dispose, end the child's execution and wait for it, so no
+   * executor outlives its instance (whose dispose has already stopped the
+   * runner-lock heartbeat). An in-flight cycle is stopped now; a cycle that
+   * has not started yet is stopped as soon as it starts. A PAUSED child has
+   * nothing in flight, and its pause survives the shutdown like any other
+   * paused run's.
+   */
+  private async endDisposedExecution(
+    instance: SubWorkflowInstance,
+    execution: Promise<void>,
+    watch: LaunchedChildWatch,
+    options: { stop: boolean }
+  ): Promise<void> {
+    if (options.stop) {
+      if (!watch.hasStarted) {
+        // Supersedes any held control: a stop replaces a held pause.
+        watch.onFirstStart(() => {
+          queueMicrotask(() => {
+            void forwardSubWorkflowControl(
+              instance,
+              HELD_CONTROLS.STOP,
+              LOG_SOURCE
+            );
+          });
+        });
+      } else if (
+        instance.promptQueue.getState().status !== EXECUTION_STATES.PAUSED
+      ) {
+        await forwardSubWorkflowControl(
+          instance,
+          HELD_CONTROLS.STOP,
+          LOG_SOURCE
+        );
+      }
+    }
+    await execution.catch(() => undefined);
+    await instance.whenExecutionSettled();
   }
 
   /** The outcome of a child in a terminal state; undefined otherwise. */

@@ -167,6 +167,8 @@ export interface SubWorkflowResult {
 
 /** Narrow instance surface needed by SubWorkflowLauncher. */
 export interface SubWorkflowInstance {
+  /** Identifies the instance to the host that created it. */
+  readonly id: string;
   readonly promptQueue: {
     getState(): QueueState;
     onDidChangeState(listener: (state: QueueState) => void): {

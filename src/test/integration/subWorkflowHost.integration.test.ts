@@ -34,6 +34,8 @@ import { HarnessAdapterUtils } from "../../core/harness/shared/HarnessAdapterUti
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 import { PromptFileResolver } from "../../core/PromptFileResolver";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInstanceRegistry";
+import { TestWorkflowInstanceRegistryHost } from "../helpers/workflowInstanceRegistryHost";
 
 suite("Sub-workflow host end to end", () => {
   function buildInstance(
@@ -797,13 +799,17 @@ suite("Sub-workflow host end to end", () => {
   /** Run `parent` until its one-step child is stopped mid-step by the parent. */
   async function stopParentMidChild(
     workspace: string,
-    parent: WorkflowInstance
+    parent: WorkflowInstance,
+    /** Workflow-level fields for both files. */
+    workflowFields: Record<string, unknown> = {}
   ): Promise<void> {
     await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+      ...workflowFields,
       steps: [{ type: "script", script: startFinishScript("sentinel") }],
     });
     const parentPath = path.join(workspace, "parent.ctrlyoke.json");
     await writeJson(parentPath, {
+      ...workflowFields,
       steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
     });
     assert.strictEqual(await parent.loadPromptFile(parentPath), true);
@@ -1142,6 +1148,219 @@ suite("Sub-workflow host end to end", () => {
     } finally {
       gate.release();
       await disposeAll(instances, workspace);
+    }
+  });
+
+  /**
+   * A registry wired like the VS Code host's: every child the launcher
+   * creates is a registry instance that no client views, so the registry's
+   * own lifecycle (retire on a terminal state, dispose when unviewed) applies
+   * to it. The parent is viewed by the panel, as a workflow a user continues.
+   */
+  /** A registry-built instance can host a PTY; these scripts run headless. */
+  const HEADLESS = { executionMode: "headless" } as const;
+
+  function makeRegistry(workspace: string) {
+    const host = new TestWorkflowInstanceRegistryHost(workspace);
+    const registry = new WorkflowInstanceRegistry(host);
+    const parent = registry.registerNewInstance(host.panelClientId);
+    const residents = () => [
+      ...registry.getInstances().values(),
+      ...registry.getRetiredInstances().values(),
+    ];
+    /** Dispose every instance, retired first, as the host's dispose does. */
+    const disposeHost = () => {
+      for (const instance of [
+        ...registry.getRetiredInstances().values(),
+        ...registry.getInstances().values(),
+      ]) {
+        instance.dispose();
+      }
+    };
+    return { registry, parent, residents, disposeHost };
+  }
+
+  async function disposeRegistry(
+    residents: () => WorkflowInstance[],
+    extra: readonly WorkflowInstance[],
+    workspace: string
+  ): Promise<void> {
+    await disposeAll([...new Set([...residents(), ...extra])], workspace);
+  }
+
+  /** Every instance the registry has built, including disposed ones. */
+  function trackBuiltInstances(registry: WorkflowInstanceRegistry) {
+    const built: WorkflowInstance[] = [];
+    const build = registry.buildWorkflowInstanceForHost.bind(registry);
+    registry.buildWorkflowInstanceForHost = (...args) => {
+      const instance = build(...args);
+      built.push(instance);
+      return instance;
+    };
+    return built;
+  }
+
+  test("through the registry, continuing a parent reattaches its unviewed STOPPED child and completes", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-registry-stopped-");
+    const { registry, parent, residents } = makeRegistry(workspace);
+    const built = trackBuiltInstances(registry);
+    try {
+      await stopParentMidChild(workspace, parent, HEADLESS);
+      const marker = path.join(workspace, "marker");
+
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await withoutStopFallback(() => continueParent(parent));
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(
+        await fs.readFile(marker, "utf8"),
+        "start\nstart\ndone\n"
+      );
+      const continued = built[built.length - 1];
+      assert.notStrictEqual(continued, parent);
+      assert.strictEqual(continued.promptQueue.getState().status, "completed");
+      // Released by its launcher, the finished child retires as usual.
+      assert.strictEqual(registry.getInstances().has(continued.id), false);
+    } finally {
+      await disposeRegistry(residents, built, workspace);
+    }
+  });
+
+  test("through the registry, continuing a parent reattaches its unviewed ERROR child and completes", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-registry-error-");
+    const { registry, parent, residents } = makeRegistry(workspace);
+    const built = trackBuiltInstances(registry);
+    try {
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        ...HEADLESS,
+        steps: [
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').appendFileSync('marker','ran\\n');process.exit(require('fs').existsSync('sentinel')?0:1)\"",
+          },
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').appendFileSync('after','ran\\n')\"",
+          },
+        ],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        ...HEADLESS,
+        steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+      });
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      await parent.executeLoadedPromptFile();
+      assert.strictEqual(parent.promptQueue.getState().status, "error");
+      const failed = built[built.length - 1];
+      assert.strictEqual(failed.promptQueue.getState().status, "error");
+
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await withoutStopFallback(() => continueParent(parent));
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      const continued = built[built.length - 1];
+      assert.notStrictEqual(continued, failed);
+      assert.strictEqual(continued.promptQueue.getState().status, "completed");
+      assert.strictEqual(
+        continued.promptQueue.getState().runRef,
+        failed.promptQueue.getState().runRef
+      );
+      assert.strictEqual(await countLines(path.join(workspace, "marker")), 2);
+      assert.strictEqual(await countLines(path.join(workspace, "after")), 1);
+    } finally {
+      await disposeRegistry(residents, built, workspace);
+    }
+  });
+
+  test("disposing the host while a child runs stops the child's execution and settles the parent step CANCELLED once", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-registry-dispose-");
+    const { registry, parent, residents, disposeHost } =
+      makeRegistry(workspace);
+    const built = trackBuiltInstances(registry);
+    try {
+      const next = path.join(workspace, "next-step");
+      await writeJson(path.join(workspace, "child.ctrlyoke.json"), {
+        ...HEADLESS,
+        steps: [
+          {
+            type: "script",
+            script: startFinishScript("sentinel"),
+            // A step torn down by the dispose must not be what ends the run.
+            errorBehavior: { onError: "continue" },
+            onFail: "continue",
+          },
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').writeFileSync('next-step','ran')\"",
+          },
+        ],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        ...HEADLESS,
+        steps: [
+          {
+            type: "workflow",
+            workflow: "child.ctrlyoke.json",
+            onFail: "continue",
+          },
+        ],
+      });
+      const parentStops = countStoppedTransitions(parent);
+      const settlements: unknown[] = [];
+      const record = parent.outputHistoryManager.recordSubWorkflowSettled.bind(
+        parent.outputHistoryManager
+      );
+      parent.outputHistoryManager.recordSubWorkflowSettled = async (
+        ...args
+      ) => {
+        settlements.push(args[4].outcome);
+        return record(...args);
+      };
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      const child = built[built.length - 1];
+      assert.notStrictEqual(child, parent);
+
+      await withoutStopFallback(async () => {
+        disposeHost();
+        await execution;
+      });
+
+      // `done` settled only once the child's execution had ended, so the
+      // sentinel can no longer let its first step finish into the next one.
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await child.whenExecutionSettled();
+      assert.strictEqual(child.promptQueue.getState().status, "stopped");
+      await assert.rejects(fs.access(next), "the child's next step never ran");
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(parentStops(), 1);
+      assert.strictEqual(
+        parent.promptQueue.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+      assert.deepStrictEqual(settlements, [
+        {
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+          cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+        },
+      ]);
+    } finally {
+      await fs.writeFile(path.join(workspace, "sentinel"), "go");
+      await disposeRegistry(residents, built, workspace);
     }
   });
 

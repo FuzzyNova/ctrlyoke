@@ -39,6 +39,7 @@ type Scenario =
   | "throw";
 
 class FakeChild implements SubWorkflowInstance {
+  readonly id = "child-instance";
   loadResult = true;
   loadError?: Error;
   executeCalls = 0;
@@ -692,7 +693,7 @@ suite("SubWorkflowLauncher", () => {
     assert.strictEqual(factory.child.disposeListeners, 0);
   });
 
-  test("a running child that is disposed settles done CANCELLED without waiting for its run", async () => {
+  test("a running child that is disposed is stopped, and done settles CANCELLED once its run ends", async () => {
     const factory = new FakeFactory();
     factory.child.executionGate = new Promise<void>((resolve) => {
       factory.child.releaseExecution = resolve;
@@ -702,14 +703,82 @@ suite("SubWorkflowLauncher", () => {
     );
     factory.child.setStatus(EXECUTION_STATES.RUNNING);
     factory.child.dispose();
-    assert.strictEqual(await settlesPromptly(handle.done), true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(factory.child.stopCalls, 1);
+    // No executor outlives its instance: `done` waits for the run to end.
+    assert.strictEqual(await settlesPromptly(handle.done), false);
+    factory.child.releaseExecution?.();
     assert.deepStrictEqual(await handle.done, {
       status: PROMPT_TERMINAL_STATUS.CANCELLED,
       cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
       worktree: undefined,
     });
     assert.strictEqual(factory.child.disposeListeners, 0);
+  });
+
+  test("a child disposed before its cycle starts is stopped when it starts", async () => {
+    const factory = new FakeFactory();
+    let startCycle!: () => void;
+    factory.child.cycleStartGate = new Promise<void>((resolve) => {
+      startCycle = resolve;
+    });
+    // A D6 continuation shows its restored STOPPED state while it loads.
+    factory.child.status = EXECUTION_STATES.STOPPED;
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    await handle.pause();
+    factory.child.dispose();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(factory.child.stopCalls, 0, "not before it starts");
+    assert.strictEqual(await settlesPromptly(handle.done), false);
+    startCycle();
+    const result = await handle.done;
+    assert.strictEqual(factory.child.stopCalls, 1);
+    assert.strictEqual(factory.child.pauseCalls, 0, "the stop supersedes");
+    assert.deepStrictEqual(result, {
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD,
+      worktree: undefined,
+    });
+  });
+
+  test("a paused child that is disposed is not stopped", async () => {
+    const factory = new FakeFactory();
+    factory.child.nextScenario = "paused";
+    const handle = await new SubWorkflowLauncher(factory.create).launch(
+      request()
+    );
+    factory.child.dispose();
+    const result = await handle.done;
+    assert.strictEqual(factory.child.stopCalls, 0);
+    assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.CANCELLED);
+    assert.strictEqual(factory.child.status, EXECUTION_STATES.PAUSED);
+  });
+
+  test("releases its child to the host once done settles, or when its launch fails", async () => {
+    const released: SubWorkflowInstance[] = [];
+    const factory = new FakeFactory();
+    factory.child.executionGate = new Promise<void>((resolve) => {
+      factory.child.releaseExecution = resolve;
+    });
+    const launcher = new SubWorkflowLauncher(factory.create, (child) =>
+      released.push(child)
+    );
+    const handle = await launcher.launch(request());
+    assert.deepStrictEqual(released, []);
     factory.child.releaseExecution?.();
+    await handle.done;
+    assert.deepStrictEqual(released, [factory.child]);
+
+    const failing = new FakeFactory();
+    failing.child.loadResult = false;
+    const failedReleases: SubWorkflowInstance[] = [];
+    const failed = await new SubWorkflowLauncher(failing.create, (child) =>
+      failedReleases.push(child)
+    ).launch(request());
+    assert.strictEqual((await failed.done).failedToStart, true);
+    assert.deepStrictEqual(failedReleases, [failing.child]);
   });
 
   test("a child that completes and is then disposed still settles COMPLETED", async () => {
