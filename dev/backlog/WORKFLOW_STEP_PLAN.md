@@ -530,7 +530,11 @@ editing lease. `acquire` itself never waits, so the loop lives in `mergeManagedW
 catches `ExecutionLeaseConflictError`, checks the conflict against the rule above, and calls its
 existing `retry()` with backoff. Any other acquire error still ends `blocked` at once, as today.
 Each waiter re-runs the merge guard after acquiring (the code already does this as
-`postLeaseGuardFailure`, `:1051-1056`). A sibling's merge commit
+`postLeaseGuardFailure`, `:1051-1056`). **As built (round 10):** a lane's settlement
+(`completeManagedRun`) already holds the repository-wide worktree mutation lock across landing,
+merge and removal, so siblings in fact queue on that lock, whose wait for a chained `merge: true`
+settlement is raised from 5 s to the same 120 s; the lease wait guards merges taken outside that
+lock. A sibling's merge commit
 leaves the target clean and on the right branch, so the later lane merges on top of it. Only a
 real git conflict ends `conflict`. A merge lease with no chain (an ordinary top-level managed run)
 keeps today's fail-fast behaviour. Both new lease fields (`delegationChain`, `purpose`) are
@@ -932,7 +936,10 @@ an arbitrary inline object. Instead:
 - **`edit_step`** on a pending lane edits the wrapped prompt fields, and accepts
   `worktree: { use }` to switch presets. Clearing `worktree` unwraps the lane back into a plain
   prompt step, and setting it on a pending prompt step wraps it. `remove_step` and
-  `reorder_steps` are unchanged.
+  `reorder_steps` are unchanged. A lane is recognized by shape (`agentLaneParts`: an inline
+  prompt step with a managed worktree object and no `onFail`), so an authored step of that exact
+  shape is editable too; every other workflow step is refused. The merge-lane join refusal
+  applies to any edit that makes a pending member of the running group a `merge: true` lane.
 
 The orchestrator guidance (`workflow-orchestrator.agent.md`, `<parallelSteps>`) and the
 `spec-driven-loop` template change with this:
@@ -2462,26 +2469,94 @@ summaries instead.
     - Nits: `MERGE_INTO_SHARED_ROOT` fires at `maxParallelSteps: 1` (spec gives no exemption;
       document it); a misplaced doc comment above `HEADLESS` in the integration test.
 
+- **Round 10 (reviewed 2026-11-27): round-9 gaps, the sibling merge wait, D14's MCP surface.**
+  All six `claude-cli`/`opus` steps did what they were asked, with tests; `npm test` green (8713
+  extension, 4926 UI, packaging). Three parallel reviewers read the diffs. Review fix
+  `e7301ccda`: the docs, tool description and CHANGELOG claimed author-written workflow steps
+  are never editable through `edit_step`, but the rule is by shape (Decision below); the
+  `mcp-tools#append_step` anchor (VitePress slug `append-step`); a stop-path comment.
+  - `33ac7cfc6`: an instance-lifetime abort signal on the top-level execution context, aborted
+    by `stop()` on a disposed instance, so a child disposed mid-prompt settles CANCELLED
+    (`cancelledBy: "child"`) and is released; each sequential step runs under its own abort
+    signal, which a group's `cancelTarget` aborts, so fail-fast settles an adopted _prompt_
+    anchor CANCELLED (it settled COMPLETED); join marks cleared on claim and pruned at cycle
+    start (`pruneStaleJoinMarks`, keeps marks whose step is still CANCELLED); rewind checks the
+    open group first; released IDLE/PAUSED unviewed children retired; ownership-guard tests;
+    `commitSequentialOutcome` confirms a stop when a promoted anchor settles with no group run
+    (it stuck in CANCELLING).
+  - `a94526ba5`: records looked up by `workflowKey` + `runRef`; the recorded source checkout,
+    base and target win on resume; a start fails naming a recorded source checkout that is gone
+    (`assertRecordedSourceCheckoutExists`); `managedRecordDescendsFromCheckout` lets reclaim and
+    failed-setup cleanup reach child records; real-git tests for a direct child continue, a
+    crash-resumed merge lane, `parentRunsInMainCheckout`, a linked user worktree and a subfolder
+    state root; CHANGELOG **Fixed** (released top-level runs continued from another checkout).
+  - `cacab7606`: `describeInvalidInlineSubWorkflowDefinition` is the one inline-shape rule
+    (type guard, parser, sanitizer, continuation; `workflow: null` no longer crashes the parser);
+    `resolveWorkflowTrustSourcePath` single-sources the trust fallback;
+    `WorkflowOrchestrator.getViewDefinitionSources` gives the preview a live inline child's
+    reference base and trust identity; `substituteInlineStepName`; a D6-continued inline child
+    re-runs its `./` prompt with the parent's base and trust identity.
+  - `eac1d3d09`: D4d sibling merge wait. `EXECUTION_LEASE_PURPOSES.MERGE`,
+    `WORKTREE_MERGE_LEASE_WAIT_MS`, `ExecutionLeaseConflictError.conflictingLeases`, bounded
+    backoff only for same-delegator merge leases; a chained merge skips the pre-lease guard (the
+    post-lease guard runs the same closure). The step found the real serialization point is
+    `completeManagedRun`'s repo-wide mutation lock, and raised its wait for chained `merge: true`
+    lanes from 5 s to 120 s (Decision below).
+  - `f82a1b473`: D14 part 1. `worktreePresets` (schema, `ManagedWorktreeConfig`/`WorktreePresets`
+    types, R10 exclusion, loader/parser/sanitizer), `McpNamedPresets.ts` shared by both preset
+    resolvers, `workflow_status` `metadata.worktreePresets`, `append_step` `worktree: { use }`
+    wrapping (flat and parallel; `inlineRunBoundaryErrors` checked at append time), real-MCP
+    real-git lane test, docs and CHANGELOG.
+  - `c79e59460`: D14 part 2. `edit_step` lane edit/switch/wrap/unwrap (`agentLaneParts`; the step
+    id survives a kind change), `parallelWithCurrent` merge-lane refusal in both directions
+    (`mergeIntoSharedRootIssueAmong`, pending members count), ungated-lane warning, running
+    children reported in `workflow_status` `childRun`.
+  - **Found in review, not yet fixed** (round 11 steps 1–3):
+    - Stop of a PAUSED run whose head is inside a parallel group sticks in CANCELLING
+      (pre-existing, affects released top-level runs): a paused group returns and no coordinator
+      remains, but `confirmStopped` in `WorkflowInstance.stop()` defers whenever
+      `getCurrentParallelGroup()` is set. No test covers it. A paused-then-disposed child
+      inside a group has the same shape.
+    - Missing tests: the new CANCELLING confirm in `commitSequentialOutcome`; retiring a released
+      PAUSED child (only IDLE is tested; the pause must stay on disk and continuable).
+    - `getViewDefinitionSources` matches the live instance on `workflowKey` alone; the code
+      beside it gates on `sameViewAddress` (run too), so an older run's preview can take the live
+      run's trust identity.
+    - D14: `edit_step` can turn a pending member of the running group into a `merge: true` lane
+      beside an editing member (the join refusal runs only in
+      `appendStepsToActiveParallelGroup`); a kind-change edit keeps `stepId` but drops
+      `rewoundFailure`, which protects a rewound failed step from remove/reorder; the join check
+      decides "parent runs in the main checkout" from `_runtime.worktree === undefined` while the
+      executor compares `executionRoot` with `stateRoot` (single-source it); no Save As/export
+      test with `worktreePresets`; the runtime refusal message still says "a workflow step the
+      workflow author wrote".
+    - Merge wait: the lease wait is effectively unreachable in production (every chained merge
+      runs inside the mutation lock), so its tests drive `mergeManagedWorktree` directly; the
+      lock-wait change has no test that a sibling holding the lock past 5 s still lands, or that
+      chainless and non-merge settlements keep 5 s; the 120 s lock wait takes no abort signal,
+      so stopping the parent while a lane waits stalls up to 120 s.
+    - Low, left: failed-setup cleanup treats a source checkout on an unmounted drive as gone
+      (only BLOCKED + FAILED records with no live lease, branch deleted only if untouched);
+      `substituteInlineStepName` drops an intact name when another field fails (cosmetic; the
+      step fails anyway); join marks keyed by index (no edit path moves settled steps); a file
+      child counts as neither editor nor merger at join time (as in preview).
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 10 (queued 2026-11-27): round-9 gaps, the sibling merge wait, and D14 MCP lanes.**
-  All on `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Dispose of a child mid-prompt settles; join marks cleared; open group first; registry
-     retire of released non-spent children; guard and adopted-prompt-anchor tests.
-  2. Worktree record is the source of truth on resume; child-record reclaim; D4b/preflight
-     tests.
-  3. D13 continued-child test, inline guard tightening, trust-rule and preview single-sourcing.
-  4. D4d sibling merge wait (`purpose: "merge"`, `WORKTREE_MERGE_LEASE_WAIT_MS`).
-  5. D14 part 1: `worktreePresets` schema/types/R10, `McpWorktreePresetResolver`,
-     `workflow_status` metadata, `append_step` `worktree: { use }` wrapping and its errors.
-  6. D14 part 2: `edit_step` wrap/unwrap, `parallelWithCurrent` merge-lane rejection, ungated
-     lane warning, docs.
-- **Round 11: lanes for agents and users.** Orchestrator agent `<parallelSteps>` lane guidance
-  and the `spec-driven-loop` template (`worktreePresets.lane`, `laneSetup`); dashboard lane row
-  (worktree badge, D4e merge-outcome warning badge, member output chips) and CLI JSON for
-  member children; a dev-host/Playwright check of a lane group.
+- **Round 11 (queued 2026-11-27): round-10 gaps, then lanes for agents and users.** All on
+  `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
+  1. Stop of a PAUSED run inside a group confirms; `commitSequentialOutcome` and PAUSED-retire
+     tests; `getViewDefinitionSources` gated on the run address.
+  2. D14 fixes: `edit_step` join refusal for running-group members, `rewoundFailure` across a
+     kind change, single-sourced main-checkout rule, Save As test, refusal wording.
+  3. Merge wait: lock-wait tests, abortable lock wait, and the docs' account of where siblings
+     queue.
+  4. Orchestrator agent `<parallelSteps>` lane guidance and the `spec-driven-loop` template
+     (`worktreePresets.lane`, `laneSetup`).
+  5. Dashboard lane row (worktree badge, D4e merge-outcome warning badge, member output chips),
+     CLI `--json` for member children, and a dev-host/Playwright check of a lane group.
 - **Round 12: landing steps 4–5.** D4d rule 2, nested fan-out, inheriting members,
   `WORKTREE_COLLISION`, named-worktree members.
 - **Round 13: landing steps 6–7.** Queue-next / run-alongside entry points (`appendMode`),
@@ -2639,3 +2714,16 @@ Coarse roadmap; re-planned every pass.
   would otherwise meet it only at run time. Documented.
 - **Lane surfaces (orchestrator agent, template, dashboard lane row) wait for round 11**, after
   D14's MCP surface lands, so the agent guidance is written against working tools.
+- **A lane is recognized by shape, not by who wrote it** (round 10 review). `edit_step` already
+  lets an agent edit any pending authored prompt step, so an authored inline prompt child with a
+  managed worktree and no `onFail` is no more protected than that step would be. Unwrapping can
+  only remove the author's `setup`, never add a script. Marking agent-created lanes would need a
+  persisted field for no safety gain. Docs and CHANGELOG say so (`e7301ccda`).
+- **Sibling lanes queue on the repository-wide worktree mutation lock** (round 10), whose wait
+  for a chained `merge: true` settlement is 120 s (`WORKTREE_MERGE_LEASE_WAIT_MS`); chainless
+  and non-merge mutations keep 5 s. The D4d lease wait stays as the guard for merges taken
+  outside that lock. Round 11 step 3 makes the lock wait abortable.
+- **The join refusal counts pending group members, and runs both ways** (round 10; the spec said
+  "a running prompt or script step"): a pending member will run beside the lane too, and the
+  preflight rule is symmetric, so a plain prompt cannot join a group holding a merging lane.
+  Neither case existed in 0.2.0 (no workflow steps), so nothing released is newly refused.
