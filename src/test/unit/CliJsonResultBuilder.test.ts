@@ -551,6 +551,7 @@ suite("CliJsonResultBuilder", () => {
         subWorkflowRuns: [
           {
             target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            timestampMs: 1,
             output: {
               childWorkflowKey: childKey,
               childRunRef: childRun,
@@ -593,10 +594,12 @@ suite("CliJsonResultBuilder", () => {
         subWorkflowRuns: [
           {
             target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+            timestampMs: 1,
             output: child1,
           },
           {
             target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
+            timestampMs: 1,
             output: child2,
           },
         ],
@@ -821,7 +824,8 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
     runIndex: number,
     childRunRef: string,
     status: SubWorkflowOutput["outcome"]["status"],
-    stepId?: string
+    stepId?: string,
+    childWorkflowKey: WorkflowKey = childKey
   ): Promise<void> {
     const identity = {
       target,
@@ -836,7 +840,7 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
         ...identity,
         ...(stepId !== undefined ? { stepId } : {}),
         payload: {
-          childWorkflowKey: childKey,
+          childWorkflowKey,
           childRunRef: childRunRef as RunRef,
           outcome: { status },
         },
@@ -901,9 +905,14 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
     }).subWorkflowRuns;
   }
 
-  const entry = (stepId: string, runRef: string, status: string | null) => ({
+  const entry = (
+    stepId: string,
+    runRef: string,
+    status: string | null,
+    workflowKey: WorkflowKey = childKey
+  ) => ({
     stepId,
-    workflowKey: childKey,
+    workflowKey,
     runRef,
     status,
   });
@@ -1011,6 +1020,105 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
     assert.deepStrictEqual(await subWorkflowRuns([step]), [
       entry("step-a", "child-1", "completed"),
     ]);
+  });
+
+  test("keeps two children that share a runRef apart by their workflowKey", async () => {
+    // RunRefs are unique only within one lineage: two lanes with different
+    // child workflows can start in the same millisecond.
+    const otherKey = "other-workflow" as WorkflowKey;
+    const first = workflowStep("step-a");
+    const second = workflowStep("step-b", { childWorkflowKey: otherKey });
+    await startRun([first, second]);
+    await settle(queue(0), 0, "same-run", "completed", "step-a");
+    first._runtime = {
+      ...first._runtime,
+      childRunRef: "same-run" as RunRef,
+      terminalStatus: "completed",
+      startedAt: 1,
+      completedAt: 15,
+    };
+    second._runtime = {
+      ...second._runtime,
+      childRunRef: "same-run" as RunRef,
+      startedAt: 1,
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([first, second]), [
+      entry("step-a", "same-run", "completed"),
+      entry("step-b", "same-run", null, otherKey),
+    ]);
+  });
+
+  test("attributes events recorded before stepId by workflowKey and runRef", async () => {
+    const otherKey = "other-workflow" as WorkflowKey;
+    const first = workflowStep("step-a");
+    const second = workflowStep("step-b", { childWorkflowKey: otherKey });
+    await startRun([first, second]);
+    await settle(queue(0), 0, "same-run", "completed");
+    await settle(queue(1), 0, "same-run", "failed", undefined, otherKey);
+    first._runtime = { ...first._runtime, childRunRef: "same-run" as RunRef };
+    second._runtime = { ...second._runtime, childRunRef: "same-run" as RunRef };
+
+    // Reordered, so the recorded indices point at the other step.
+    assert.deepStrictEqual(await subWorkflowRuns([second, first]), [
+      entry("step-a", "same-run", "completed"),
+      entry("step-b", "same-run", "failed", otherKey),
+    ]);
+  });
+
+  test("reports a continued child that is running again as in flight, then its new outcome", async () => {
+    const step = workflowStep("step-a");
+    await startRun([step]);
+    await settle(queue(0), 0, "child-1", "cancelled", "step-a");
+    // D6: the stopped step was rewound and claimed again; the same child run
+    // continues.
+    step._runtime = {
+      ...step._runtime,
+      childRunRef: "child-1" as RunRef,
+      startedAt: 100,
+    };
+    assert.deepStrictEqual(await subWorkflowRuns([step]), [
+      entry("step-a", "child-1", null),
+    ]);
+
+    // The continued execution settles before the step records completion.
+    timestampMs = 200;
+    await settle(queue(0), 1, "child-1", "completed", "step-a");
+    assert.deepStrictEqual(await subWorkflowRuns([step]), [
+      entry("step-a", "child-1", "completed"),
+    ]);
+  });
+
+  test("reports a continued finalStep child that is running again as in flight", async () => {
+    const finalStep = workflowStep("final");
+    delete finalStep._runtime?.stepId;
+    await startRun([], finalStep);
+    await settle(pass(0), 0, "child-1", "cancelled");
+    finalStep._runtime = {
+      ...finalStep._runtime,
+      childRunRef: "child-1" as RunRef,
+    };
+
+    assert.deepStrictEqual(
+      await subWorkflowRuns([], {
+        finalStep,
+        finalStepRuntime: {
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopCount: 0,
+          startedAt: 100,
+        },
+      }),
+      [{ pass: 1, workflowKey: childKey, runRef: "child-1", status: null }]
+    );
+  });
+
+  test("drops an event recorded before stepId whose index no longer holds a workflow step", async () => {
+    const prompt: WorkflowStep = { prompt: "p", _runtime: { stepId: "p" } };
+    const step = workflowStep("step-a");
+    await startRun([step]);
+    await settle(queue(0), 0, "child-gone", "completed");
+
+    assert.deepStrictEqual(await subWorkflowRuns([prompt, step]), []);
   });
 
   test("lists one child per finalStep pass", async () => {

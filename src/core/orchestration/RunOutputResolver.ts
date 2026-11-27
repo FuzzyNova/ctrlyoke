@@ -30,7 +30,10 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
-import type { SubWorkflowSettlement } from "./SubWorkflowSettlements";
+import {
+  toSubWorkflowSettlement,
+  type SubWorkflowSettlement,
+} from "./SubWorkflowSettlements";
 import {
   outputAttemptKey,
   outputTargetKey,
@@ -251,9 +254,7 @@ export type RunOutputResolverEvent =
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED;
       attempt: ResolvedRunAttempt;
-      subWorkflowOutput: SubWorkflowOutput;
-      /** The parent queue step's `stepId`, when the event recorded one. */
-      stepId?: string;
+      settlement: SubWorkflowSettlement;
     }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED;
@@ -559,8 +560,7 @@ export class RunOutputResolver {
               activeDefinition,
               event.phase
             ),
-            subWorkflowOutput: event.payload,
-            ...(event.stepId !== undefined ? { stepId: event.stepId } : {}),
+            settlement: toSubWorkflowSettlement(event),
           };
           break;
         case TIMELINE_EVENT_TYPES.RETRY_SCHEDULED:
@@ -692,7 +692,7 @@ export class RunOutputResolver {
           }
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED:
-          state.value.subWorkflowOutput = event.subWorkflowOutput;
+          state.value.subWorkflowOutput = event.settlement.output;
           state.terminated = true;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
@@ -890,11 +890,7 @@ export class RunOutputResolver {
         ) {
           // The definition snapshot has `_runtime` stripped, so a step's
           // identity comes from the event itself, never from that snapshot.
-          subWorkflowRuns.push({
-            target: event.attempt.target,
-            output: event.subWorkflowOutput,
-            ...(event.stepId !== undefined ? { stepId: event.stepId } : {}),
-          });
+          subWorkflowRuns.push(event.settlement);
         }
         if (
           event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||

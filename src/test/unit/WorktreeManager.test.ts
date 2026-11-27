@@ -34,6 +34,8 @@ import {
 } from "../../types/DashboardConstants";
 import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
+import { Log } from "../../utils/Log";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_LIFECYCLE_STATES,
@@ -366,17 +368,28 @@ suite("WorktreeManager", function () {
     }
   });
 
-  test("D4c classification: an unresolvable repository is not managed and does not throw", async () => {
+  test("D4c classification: an unresolvable repository is not managed, does not throw, and warns once", async () => {
     const { parent } = await makeRepository("d4c-no-repository");
     const outside = path.join(parent, "not-a-repository");
     await fs.mkdir(outside);
-    assert.strictEqual(
-      await manager(parent).findManagedWorktreeRecordForCheckout(
-        outside,
-        outside
-      ),
-      undefined
-    );
+    const warnings: string[] = [];
+    const restoreWarn = snapshotProperty(Log, "warn");
+    Log.warn = (message: string) => {
+      warnings.push(message);
+    };
+    try {
+      assert.strictEqual(
+        await manager(parent).findManagedWorktreeRecordForCheckout(
+          outside,
+          outside
+        ),
+        undefined
+      );
+    } finally {
+      restoreWarn();
+    }
+    assert.strictEqual(warnings.length, 1, JSON.stringify(warnings));
+    assert.ok(warnings[0].includes(outside), warnings[0]);
   });
 
   function localBranchExists(repository: string, branchName: string): boolean {

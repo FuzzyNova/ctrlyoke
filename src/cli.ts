@@ -16,6 +16,7 @@ import type { ResolvedCliConfig } from "./platform/NodePlatformAdapter";
 import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
 import { SubWorkflowLauncher } from "./core/orchestration/SubWorkflowLauncher";
+import type { SubWorkflowInstance } from "./types/SubWorkflowTypes";
 import {
   createCliSubWorkflowInstance,
   createCliWorkflowInstance,
@@ -1242,16 +1243,31 @@ async function runCommand(
     workflowSessionIdFromOverride: options.sessionId !== undefined,
   };
   let subWorkflowLauncher: SubWorkflowLauncher;
-  let registerChildProgressReporter = (_child: WorkflowInstance): void => {};
-  subWorkflowLauncher = new SubWorkflowLauncher((options) => {
-    const child = createCliSubWorkflowInstance(
-      instanceDependencies,
-      options,
-      subWorkflowLauncher
-    );
-    registerChildProgressReporter(child);
-    return child;
-  });
+  let registerChildProgressReporter = (
+    _child: WorkflowInstance
+  ): { dispose(): void } | undefined => undefined;
+  // A child's progress subscriptions end when the launcher releases it (its
+  // `done` settled), not when the root run ends.
+  const childProgressReports = new Map<
+    SubWorkflowInstance,
+    { dispose(): void }
+  >();
+  subWorkflowLauncher = new SubWorkflowLauncher(
+    (options) => {
+      const child = createCliSubWorkflowInstance(
+        instanceDependencies,
+        options,
+        subWorkflowLauncher
+      );
+      const report = registerChildProgressReporter(child);
+      if (report) childProgressReports.set(child, report);
+      return child;
+    },
+    (child) => {
+      childProgressReports.get(child)?.dispose();
+      childProgressReports.delete(child);
+    }
+  );
   const instance = createCliWorkflowInstance(instanceDependencies, {
     subWorkflowHost: subWorkflowLauncher,
   });

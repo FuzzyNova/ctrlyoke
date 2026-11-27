@@ -2067,6 +2067,62 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
   });
 
+  test("workflow_status finds a queue step's child by stepId after a reorder", async () => {
+    const server = await setup();
+    const run = await createRun("reordered", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+    });
+    const childKey = "reordered-child-2026-01-01T00-00-00" as WorkflowKey;
+    const parentFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const settled = (stepId: string, childRunRef?: string): WorkflowStep => ({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: `${stepId}.ctrlyoke.yaml`,
+      _runtime: {
+        stepId,
+        startedAt: 1,
+        completedAt: 3,
+        ...(childRunRef
+          ? { childWorkflowKey: childKey, childRunRef: childRunRef as RunRef }
+          : {}),
+      },
+    });
+    // step-a settled its child at index 0; the queue was reordered since.
+    parentFile.steps = [settled("step-b"), settled("step-a", "run-child-a")];
+    await writeTrustedRunFile(run.runFilePath, parentFile);
+    await new TimelineRecorder().appendEvents(
+      WorkflowPaths.manifestPath(workspaceRoot, run.workflowKey, run.runRef),
+      [
+        {
+          eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+          timestampMs: 2,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          stepId: "step-a",
+          payload: {
+            childWorkflowKey: childKey,
+            childRunRef: "run-child-a" as RunRef,
+            outcome: { status: "completed" },
+          },
+        },
+      ]
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(
+      await server.invokeTool("workflow_status", {})
+    ) as { steps: Array<{ childRun?: unknown }> };
+    assert.strictEqual(status.steps[0]?.childRun, undefined);
+    assert.deepStrictEqual(status.steps[1]?.childRun, {
+      workflowKey: childKey,
+      runRef: "run-child-a",
+      outcome: { status: "completed" },
+    });
+  });
+
   test("workflow_status reports each step's harness, model, and executionMode", async () => {
     const server = await setup();
     const run = await createRun("modes", "2026-01-01T00-00-00-000Z", {

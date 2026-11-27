@@ -10,7 +10,10 @@ import type {
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { outputTargetKey } from "../../utils/OutputTargetKeys";
-import type { SubWorkflowSettlement } from "./SubWorkflowSettlements";
+import {
+  toSubWorkflowSettlement,
+  type SubWorkflowSettlement,
+} from "./SubWorkflowSettlements";
 
 /**
  * Narrow, streaming reads of a run's timeline for bookkeeping checks that only
@@ -71,11 +74,7 @@ export class RunMetadataScanner {
       } else if (
         event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
       ) {
-        subWorkflowSettlements.push({
-          target: event.target,
-          output: event.payload,
-          ...(event.stepId !== undefined ? { stepId: event.stepId } : {}),
-        });
+        subWorkflowSettlements.push(toSubWorkflowSettlement(event));
       }
     }
     return { workspaceSnapshots, subWorkflowSettlements };
@@ -147,6 +146,18 @@ export class RunMetadataScanner {
       nextRunIndexByTarget.set(key, maxRunIndex + 1);
     }
     return nextRunIndexByTarget;
+  }
+
+  /** Every sub-workflow settlement the run recorded, in event order. */
+  async findSubWorkflowSettlements(
+    manifestPath: string
+  ): Promise<SubWorkflowSettlement[]> {
+    const settlements: SubWorkflowSettlement[] = [];
+    for await (const event of this.recorder.streamEvents(manifestPath)) {
+      if (event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED)
+        settlements.push(toSubWorkflowSettlement(event));
+    }
+    return settlements;
   }
 
   /** Whether the run already recorded the settlement of this exact child run. */

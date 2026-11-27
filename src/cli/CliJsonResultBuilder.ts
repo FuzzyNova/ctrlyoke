@@ -56,7 +56,8 @@ import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { selectTerminalFailure } from "./CliExitCode";
 import {
-  resolveSettlementStepId,
+  attributeSubWorkflowSettlements,
+  subWorkflowChildKey,
   type SubWorkflowSettlement,
 } from "../core/orchestration/SubWorkflowSettlements";
 
@@ -357,10 +358,12 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
 }
 
 /**
- * One entry per direct child run: the latest settlement for each queue
- * `stepId` or finalStep `pass` and `runRef` (its status is the child's own
- * outcome), then children whose address is in `_runtime` but that have not
- * settled yet, with `status: null`.
+ * One entry per direct child run: the latest current settlement for each
+ * queue `stepId` or finalStep `pass` and child (`workflowKey` + `runRef`; its
+ * status is the child's own outcome), then children whose address is in
+ * `_runtime` but that have no current settlement, with `status: null`. A
+ * continued child that is running again is one of those: its earlier
+ * settlement predates the execution in progress.
  */
 function buildSubWorkflowRuns(
   steps: readonly WorkflowStep[],
@@ -369,37 +372,46 @@ function buildSubWorkflowRuns(
   finalStepRuntime: FinalStepRuntimeState | undefined
 ): CliJsonSubWorkflowRun[] {
   const children = new Map<string, CliJsonSubWorkflowRun>();
-  const settledRunRefs = new Set<string>();
-  for (const settlement of settlements) {
-    const { target, output } = settlement;
-    settledRunRefs.add(output.childRunRef);
+  const settledChildren = new Set<string>();
+  for (const entry of attributeSubWorkflowSettlements(settlements, {
+    steps,
+    finalStep,
+    finalStepRuntime,
+  })) {
+    const { output } = entry.settlement;
+    const child = subWorkflowChildKey(output);
     const address = {
       workflowKey: output.childWorkflowKey,
       runRef: output.childRunRef,
       status: output.outcome.status,
     };
-    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      const pass = target.loopIndex + 1;
-      children.set(`final:${pass}:${output.childRunRef}`, {
-        pass,
+    if (entry.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      settledChildren.add(child);
+      children.set(`final:${entry.passNumber}:${child}`, {
+        pass: entry.passNumber,
         ...address,
       });
       continue;
     }
-    const stepId = resolveSettlementStepId(settlement, steps);
-    if (stepId)
-      children.set(`queue:${stepId}:${output.childRunRef}`, {
-        stepId,
-        ...address,
-      });
+    // The result addresses a queue child by its parent's stepId.
+    if (!entry.stepId) continue;
+    settledChildren.add(child);
+    children.set(`queue:${entry.stepId}:${child}`, {
+      stepId: entry.stepId,
+      ...address,
+    });
   }
   for (const step of steps) {
     if (!isSubWorkflowStep(step)) continue;
     const runtime = step._runtime;
     if (!runtime?.childWorkflowKey || !runtime.childRunRef || !runtime.stepId)
       continue;
-    const key = `queue:${runtime.stepId}:${runtime.childRunRef}`;
-    if (!children.has(key) && !settledRunRefs.has(runtime.childRunRef))
+    const child = subWorkflowChildKey({
+      childWorkflowKey: runtime.childWorkflowKey,
+      childRunRef: runtime.childRunRef,
+    });
+    const key = `queue:${runtime.stepId}:${child}`;
+    if (!children.has(key) && !settledChildren.has(child))
       children.set(key, {
         stepId: runtime.stepId,
         workflowKey: runtime.childWorkflowKey,
@@ -408,23 +420,27 @@ function buildSubWorkflowRuns(
       });
   }
   // The final step's `_runtime` holds only the latest pass's child. It is in
-  // flight only while a pass is running and it has no settlement; a child
-  // from an earlier pass is never reported under the current one.
+  // flight only while a pass is running and it has no current settlement; a
+  // child from an earlier pass is never reported under the current one.
   const finalRuntime =
     finalStep && isSubWorkflowStep(finalStep) ? finalStep._runtime : undefined;
   if (
     finalRuntime?.childWorkflowKey &&
     finalRuntime.childRunRef &&
-    !settledRunRefs.has(finalRuntime.childRunRef) &&
     finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP
   ) {
-    const pass = getFinalStepPassCount(finalStepRuntime);
-    children.set(`final:${pass}:${finalRuntime.childRunRef}`, {
-      pass,
-      workflowKey: finalRuntime.childWorkflowKey,
-      runRef: finalRuntime.childRunRef,
-      status: null,
+    const child = subWorkflowChildKey({
+      childWorkflowKey: finalRuntime.childWorkflowKey,
+      childRunRef: finalRuntime.childRunRef,
     });
+    const pass = getFinalStepPassCount(finalStepRuntime);
+    if (!settledChildren.has(child))
+      children.set(`final:${pass}:${child}`, {
+        pass,
+        workflowKey: finalRuntime.childWorkflowKey,
+        runRef: finalRuntime.childRunRef,
+        status: null,
+      });
   }
   return [...children.values()];
 }

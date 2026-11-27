@@ -184,8 +184,20 @@ function gitWorktreeEntryMatchesManagedRecord(
   entry: GitWorktreeEntry,
   record: Pick<ManagedWorktreeOwnershipRecord, "branchName" | "worktreePath">
 ): boolean {
+  return !entry.prunable && gitWorktreeEntryIsRecordCheckout(entry, record);
+}
+
+/**
+ * Whether a `git worktree list` entry is at a managed record's path on its
+ * branch, prunable or not. For callers that report or repair a managed
+ * checkout whatever state Git lists it in; ownership decisions use
+ * `gitWorktreeEntryMatchesManagedRecord`.
+ */
+function gitWorktreeEntryIsRecordCheckout(
+  entry: GitWorktreeEntry,
+  record: Pick<ManagedWorktreeOwnershipRecord, "branchName" | "worktreePath">
+): boolean {
   return (
-    !entry.prunable &&
     entry.branchName === record.branchName &&
     pathsEqual(entry.worktreePath, record.worktreePath)
   );
@@ -1932,10 +1944,8 @@ export class WorktreeManager {
 
     const worktrees: WorktreeDiscoveryEntry[] = [];
     for (const entry of entries) {
-      const ownership = records.find(
-        (record) =>
-          record.branchName === entry.branchName &&
-          pathsEqual(record.worktreePath, entry.worktreePath)
+      const ownership = records.find((record) =>
+        gitWorktreeEntryIsRecordCheckout(entry, record)
       );
       const inspections = await ExecutionRootLeaseManager.inspectLeases(
         entry.worktreePath
@@ -1969,8 +1979,7 @@ export class WorktreeManager {
     const currentOwnership = records.find(
       (record) =>
         currentEntry?.managed === true &&
-        pathsEqual(record.worktreePath, sourceCheckoutRoot) &&
-        record.branchName === currentEntry.branchName
+        gitWorktreeEntryIsRecordCheckout(currentEntry, record)
     );
 
     return {
@@ -3346,10 +3355,8 @@ export class WorktreeManager {
       ).some((inspection) => !inspection.stale);
       if (liveLease) continue;
 
-      const entry = entries.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
+      const entry = entries.find((candidate) =>
+        gitWorktreeEntryIsRecordCheckout(candidate, record)
       );
       const unexpectedEntry = entries.find(
         (candidate) => candidate.branchName === record.branchName

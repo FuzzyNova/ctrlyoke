@@ -1415,7 +1415,11 @@ export class CtrlYokeMCPServer {
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
     const { queue: subWorkflowOutputs, finalStep: finalStepSubWorkflow } =
-      selectLatestSubWorkflowSettlements(subWorkflowSettlements, allSteps);
+      selectLatestSubWorkflowSettlements(subWorkflowSettlements, {
+        steps: allSteps,
+        finalStep: queueData.finalStep,
+        finalStepRuntime: runtime.finalStep,
+      });
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
@@ -2226,24 +2230,18 @@ export class CtrlYokeMCPServer {
             .map((stepIndex) => ({ kind: "queue" as const, stepIndex }))
         )
       : new Map();
-    const workflowProjection = selected.runRef
-      ? await resolver.resolveAttemptProjection(
-          WorkflowPaths.manifestPath(
-            this.workspaceRoot,
-            selected.workflowKey,
-            selected.runRef
-          ),
-          allSteps.map((_step, stepIndex) => ({
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex,
-          })),
-          [],
-          { workspaceRoot: this.workspaceRoot }
-        )
-      : undefined;
+    // Settlements only: a streaming scan, not a second output projection.
     const subWorkflowOutputs = selectLatestSubWorkflowSettlements(
-      workflowProjection?.subWorkflowRuns ?? [],
-      allSteps
+      selected.runRef
+        ? await new RunMetadataScanner().findSubWorkflowSettlements(
+            WorkflowPaths.manifestPath(
+              this.workspaceRoot,
+              selected.workflowKey,
+              selected.runRef
+            )
+          )
+        : [],
+      { steps: allSteps }
     ).queue;
     const outputs = await Promise.all(
       requestedIndices

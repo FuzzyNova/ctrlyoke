@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as path from "path";
 import chalk from "chalk";
 import { setup, suite, teardown, test } from "mocha";
 import {
@@ -270,6 +271,35 @@ suite("CliRunProgressReporter", () => {
     ]);
   });
 
+  test("stops reporting a child once its subscription is disposed", () => {
+    const root = new FakeProgressSource(queueState(), WORKFLOW);
+    const child = new FakeProgressSource(queueState(), WORKFLOW);
+    child.workflowName = "Kid";
+    const gate = new CliTerminalOutputGate(
+      { isOwned: () => false, onDidChange: () => ({ dispose() {} }) },
+      () => {}
+    );
+    const reporter = new CliRunProgressReporter(gate);
+    reporter.subscribeRoot(root, { harness: HARNESS_IDS.CLAUDE_CLI });
+    const report = reporter.subscribeChild(child, {
+      harness: HARNESS_IDS.CLAUDE_CLI,
+    });
+    driveRun(child);
+
+    report.dispose();
+    lines.length = 0;
+    driveRun(child);
+    assert.strictEqual(lines.length, 0, lines.join("\n"));
+
+    // The settled child's retry tally is still printed once, with the root's.
+    driveRun(root);
+    reporter.release();
+    assert.deepStrictEqual(
+      lines.filter((line) => line.startsWith("↻ ")),
+      ["↻ [Kid] ask: 2 attempts · 4s total", "↻ ask: 2 attempts · 4s total"]
+    );
+  });
+
   test("labels a nameless file child from its lineage, never generically", () => {
     const nameless = new FakeProgressSource(
       queueState({
@@ -285,6 +315,33 @@ suite("CliRunProgressReporter", () => {
       "/work/flows/release.ctrlyoke.yml"
     );
     assert.strictEqual(getCliWorkflowLabel(keyless), "release");
+
+    // The file name wins over the lineage's key slug, as the docs say.
+    const fileAndKey = new FakeProgressSource(
+      queueState({
+        workflowKey: "deploy-prod-2026-11-27T08-00-00-000Z" as WorkflowKey,
+      }),
+      { steps: [] },
+      "/work/flows/Deploy Prod.ctrlyoke.yaml"
+    );
+    assert.strictEqual(getCliWorkflowLabel(fileAndKey), "Deploy Prod");
+
+    // A continued child is loaded from its run's working file, which names
+    // nothing; the lineage does.
+    const continued = new FakeProgressSource(
+      queueState({
+        workflowKey: "deploy-prod-2026-11-27T08-00-00-000Z" as WorkflowKey,
+      }),
+      { steps: [] },
+      path.join(
+        "/state",
+        ".runs",
+        "deploy-prod-2026-11-27T08-00-00-000Z",
+        "run-2026-11-27T08-00-01-000Z",
+        "workflow.ctrlyoke.json"
+      )
+    );
+    assert.strictEqual(getCliWorkflowLabel(continued), "deploy-prod");
 
     const named = new FakeProgressSource(
       queueState({ workflowName: "  Release  " }),

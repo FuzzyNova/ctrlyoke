@@ -15,7 +15,10 @@ import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 import { outputTargetKey } from "../utils/OutputTargetKeys";
-import { workflowNameFromKey } from "../utils/WorkflowPaths";
+import {
+  parseWorkingFileAddressFromPath,
+  workflowNameFromKey,
+} from "../utils/WorkflowPaths";
 import { extractWorkflowName } from "../utils/WorkflowName";
 import { CliAttemptTally } from "./CliAttemptTally";
 import { settleCliParallelGroupMember } from "./CliParallelGroupTally";
@@ -69,12 +72,14 @@ interface CliReportedRun {
   readonly keyNamespace: string | undefined;
   readonly parallelGroups: Map<string, CliParallelGroupState>;
   readonly renderedFinalStepLabels: Set<number>;
-  stateSubscription?: { dispose(): void };
+  readonly subscriptions: Array<{ dispose(): void }>;
 }
 
 /**
  * The label a child run's progress is prefixed with: its workflow name, else
- * its lineage name (the file name without its ctrlyoke extension).
+ * its file name without the ctrlyoke extension, else its lineage name (an
+ * inline child has no file, and a continued child is loaded from its run's
+ * working file, whose name says nothing about the workflow).
  */
 export function getCliWorkflowLabel(source: CliProgressSource): string {
   const state = source.promptQueue.getState();
@@ -83,8 +88,10 @@ export function getCliWorkflowLabel(source: CliProgressSource): string {
     source.workflowName?.trim() ||
     state.workflowName?.trim() ||
     source.promptQueue.getWorkflowFile().name?.trim() ||
+    (sourcePath && !parseWorkingFileAddressFromPath(sourcePath)
+      ? extractWorkflowName(sourcePath).trim()
+      : "") ||
     (state.workflowKey ? workflowNameFromKey(state.workflowKey) : "") ||
-    (sourcePath ? extractWorkflowName(sourcePath) : "") ||
     "workflow"
   );
 }
@@ -117,24 +124,45 @@ export class CliRunProgressReporter {
     });
   }
 
-  /** Report a sub-workflow child, prefixed with its own workflow label. */
+  /**
+   * Report a sub-workflow child, prefixed with its own workflow label, until
+   * the returned subscription is disposed (when the child settles) or
+   * `release`.
+   */
   subscribeChild(
     source: CliProgressSource,
     defaults: CliProgressDefaults
-  ): void {
+  ): { dispose(): void } {
     this.subscribe({
       source,
       defaults,
       prefix: () => getCliWorkflowLabel(source),
       keyNamespace: `child-${this.nextChildId++}`,
     });
+    return { dispose: () => this.unsubscribeChild(source) };
+  }
+
+  /**
+   * Stop reporting a settled child and drop its live state. Its retry tally
+   * stays, so `release` still prints it with the root's.
+   */
+  private unsubscribeChild(source: CliProgressSource): void {
+    const index = this.runs.findIndex(
+      (run) => run.source === source && run.keyNamespace !== undefined
+    );
+    if (index < 0) return;
+    const [run] = this.runs.splice(index, 1);
+    for (const subscription of run.subscriptions.splice(0))
+      subscription.dispose();
   }
 
   /** Flush retry tallies and drop live state; idempotent. */
   release(): void {
     if (this.released) return;
     this.released = true;
-    for (const run of this.runs) run.stateSubscription?.dispose();
+    for (const run of this.runs)
+      for (const subscription of run.subscriptions.splice(0))
+        subscription.dispose();
     this.outputGate.write(() => {
       for (const attempt of this.attempts.retriedGroups()) {
         CliTerminalFormatter.renderAttemptGroupSummary(
@@ -163,122 +191,142 @@ export class CliRunProgressReporter {
       ...options,
       parallelGroups: new Map(),
       renderedFinalStepLabels: new Set(),
+      subscriptions: [],
     };
     this.runs.push(run);
     const { source } = run;
     const write = (render: () => void) => this.outputGate.write(render);
+    const keep = (subscription: { dispose(): void }): void => {
+      run.subscriptions.push(subscription);
+    };
 
     // Every attempt, queue step or finalStep pass, streams into a fresh
     // stream; the stream outlives completion so follow-up activity pairs.
     // Retry tallies cover every target, keyed like its output stream.
-    source.onTargetAttemptStart(({ target, attemptIndex }) =>
-      write(() => {
-        const outputTarget = this.outputTarget(run, target);
-        CliTerminalFormatter.replaceEventStream(outputTarget);
-        this.attempts.start(
-          outputTarget.key,
-          outputTarget.stepName,
-          attemptIndex
-        );
-      })
-    );
-    source.onTargetAttemptComplete(({ target, stats }) =>
-      write(() => {
-        const outputTarget = this.outputTarget(run, target);
-        this.attempts.complete(outputTarget.key, stats);
-        CliTerminalFormatter.finishEventStream(outputTarget);
-        CliTerminalFormatter.renderStats(stats);
-      })
-    );
-    source.onPromptStart((data) =>
-      write(() => {
-        const prefixed = {
-          ...data,
-          stepName: applyCliLinePrefix(run.prefix(), data.stepName),
-        };
-        if (data.cliCommand !== undefined) {
-          CliTerminalFormatter.renderPromptHeader(prefixed);
-          return;
-        }
-        const header = {
-          ...prefixed,
-          ...this.promptExecutionDetails(run, data.stepIndex),
-        };
-        const state = this.parallelGroup(run, data.parallelGroupId);
-        if (!state) {
-          CliTerminalFormatter.renderPromptHeader(header);
-          return;
-        }
-        if (!state.started.has(data.stepIndex)) {
-          state.started.add(data.stepIndex);
-          CliTerminalFormatter.renderParallelGroupHeader(
-            state.group,
-            state.memberCount,
-            run.prefix()
+    keep(
+      source.onTargetAttemptStart(({ target, attemptIndex }) =>
+        write(() => {
+          const outputTarget = this.outputTarget(run, target);
+          CliTerminalFormatter.replaceEventStream(outputTarget);
+          this.attempts.start(
+            outputTarget.key,
+            outputTarget.stepName,
+            attemptIndex
           );
-        }
-        // A retry re-opens a branch that was tentatively settled by its prior
-        // attempt. The tally therefore remains truthful while branches stream
-        // concurrently into one linear terminal.
-        state.completed.delete(data.stepIndex);
-        state.failed.delete(data.stepIndex);
-        this.renderParallelGroupProgress(run, state);
-        CliTerminalFormatter.renderPromptHeader(header);
-      })
+        })
+      )
     );
-    run.stateSubscription = source.promptQueue.onDidChangeState((queueState) =>
-      write(() => {
-        for (const state of run.parallelGroups.values()) {
-          for (const stepIndex of state.started) {
-            if (
-              settleCliParallelGroupMember(
-                state,
-                stepIndex,
-                queueState.results[stepIndex]?.status
-              )
-            ) {
-              this.renderParallelGroupProgress(run, state);
+    keep(
+      source.onTargetAttemptComplete(({ target, stats }) =>
+        write(() => {
+          const outputTarget = this.outputTarget(run, target);
+          this.attempts.complete(outputTarget.key, stats);
+          CliTerminalFormatter.finishEventStream(outputTarget);
+          CliTerminalFormatter.renderStats(stats);
+        })
+      )
+    );
+    keep(
+      source.onPromptStart((data) =>
+        write(() => {
+          const prefixed = {
+            ...data,
+            stepName: applyCliLinePrefix(run.prefix(), data.stepName),
+          };
+          if (data.cliCommand !== undefined) {
+            CliTerminalFormatter.renderPromptHeader(prefixed);
+            return;
+          }
+          const header = {
+            ...prefixed,
+            ...this.promptExecutionDetails(run, data.stepIndex),
+          };
+          const state = this.parallelGroup(run, data.parallelGroupId);
+          if (!state) {
+            CliTerminalFormatter.renderPromptHeader(header);
+            return;
+          }
+          if (!state.started.has(data.stepIndex)) {
+            state.started.add(data.stepIndex);
+            CliTerminalFormatter.renderParallelGroupHeader(
+              state.group,
+              state.memberCount,
+              run.prefix()
+            );
+          }
+          // A retry re-opens a branch that was tentatively settled by its prior
+          // attempt. The tally therefore remains truthful while branches stream
+          // concurrently into one linear terminal.
+          state.completed.delete(data.stepIndex);
+          state.failed.delete(data.stepIndex);
+          this.renderParallelGroupProgress(run, state);
+          CliTerminalFormatter.renderPromptHeader(header);
+        })
+      )
+    );
+    keep(
+      source.promptQueue.onDidChangeState((queueState) =>
+        write(() => {
+          for (const state of run.parallelGroups.values()) {
+            for (const stepIndex of state.started) {
+              if (
+                settleCliParallelGroupMember(
+                  state,
+                  stepIndex,
+                  queueState.results[stepIndex]?.status
+                )
+              ) {
+                this.renderParallelGroupProgress(run, state);
+              }
             }
           }
-        }
+        })
+      )
+    );
+    keep(
+      source.onTargetScriptOutput((data) =>
+        write(() => {
+          this.renderFinalStepLabel(run, data.target);
+          CliTerminalFormatter.renderScriptOutput(
+            data.output,
+            this.outputTarget(run, data.target),
+            data.output.scriptOutput
+          );
+        })
+      )
+    );
+    keep(
+      source.onTargetStreamingEvents((data) => {
+        if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
+        write(() => {
+          this.renderFinalStepLabel(run, data.target);
+          CliTerminalFormatter.renderEvents(
+            data.events,
+            this.outputTarget(run, data.target, data.stepName)
+          );
+        });
       })
     );
-    source.onTargetScriptOutput((data) =>
-      write(() => {
-        this.renderFinalStepLabel(run, data.target);
-        CliTerminalFormatter.renderScriptOutput(
-          data.output,
-          this.outputTarget(run, data.target),
-          data.output.scriptOutput
-        );
+    keep(
+      source.onTargetStreamingChunk((data) => {
+        if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
+        write(() => {
+          this.renderFinalStepLabel(run, data.target);
+          CliTerminalFormatter.renderStreamingChunk(
+            data.chunk,
+            this.outputTarget(run, data.target, data.stepName)
+          );
+        });
       })
     );
-    source.onTargetStreamingEvents((data) => {
-      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
-      write(() => {
-        this.renderFinalStepLabel(run, data.target);
-        CliTerminalFormatter.renderEvents(
-          data.events,
-          this.outputTarget(run, data.target, data.stepName)
-        );
-      });
-    });
-    source.onTargetStreamingChunk((data) => {
-      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) return;
-      write(() => {
-        this.renderFinalStepLabel(run, data.target);
-        CliTerminalFormatter.renderStreamingChunk(
-          data.chunk,
-          this.outputTarget(run, data.target, data.stepName)
-        );
-      });
-    });
-    source.onWorkflowStatusMessage((data) =>
-      write(() =>
-        CliTerminalFormatter.renderStatusMessage(
-          data.message,
-          data.severity,
-          run.prefix()
+    keep(
+      source.onWorkflowStatusMessage((data) =>
+        write(() =>
+          CliTerminalFormatter.renderStatusMessage(
+            data.message,
+            data.severity,
+            run.prefix()
+          )
         )
       )
     );
