@@ -1793,6 +1793,71 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("a stopped run rewinds its cancelled workflow step for continuation, never a cancelled prompt", async () => {
+      const workflowStep = {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "child.ctrlyoke.yaml",
+        _runtime: {
+          childWorkflowKey: "child-key",
+          childRunRef: "run-2026-11-26T12-00-00-000Z",
+        },
+      } as unknown as NonNullable<PromptFile["steps"]>[number];
+      const stopAtFirstStep = async (
+        steps: NonNullable<PromptFile["steps"]>
+      ) => {
+        const stopped = new PromptQueue();
+        stopped.loadPrompts({ steps });
+        await startQueueExecution(stopped);
+        stopped.getRuntimeStateMachine().requestStop();
+        await stopped.commitStepOutcomeAndAdvance({
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+        });
+        stopped.getRuntimeStateMachine().confirmStopped();
+        await stopped.commitRuntimeTransition({ persist: false });
+        return stopped;
+      };
+
+      const subWorkflow = await stopAtFirstStep([
+        workflowStep,
+        { prompt: "after" },
+      ]);
+      // The cancellation is recorded on the workflow step itself, or a reload
+      // reads it back as PENDING behind an advanced head.
+      assert.strictEqual(
+        subWorkflow.getState().steps[0]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.CANCELLED
+      );
+      assert.strictEqual(subWorkflow.getState().currentIndex, 1);
+      assert.strictEqual(
+        await subWorkflow.rewindCancelledSubWorkflowStepForContinuation(),
+        true
+      );
+      const rewound = subWorkflow.getState();
+      assert.strictEqual(rewound.currentIndex, 0);
+      assert.strictEqual(rewound.results[0].status, STEP_STATUS.PENDING);
+      assert.strictEqual(rewound.steps[0]._runtime?.terminalStatus, undefined);
+      assert.strictEqual(rewound.steps[0]._runtime?.rewoundFailure, undefined);
+      assert.strictEqual(
+        (rewound.steps[0]._runtime as { childRunRef?: string })?.childRunRef,
+        "run-2026-11-26T12-00-00-000Z"
+      );
+
+      const prompt = await stopAtFirstStep([
+        { prompt: "stopped" },
+        { prompt: "after" },
+      ]);
+      assert.strictEqual(
+        await prompt.rewindCancelledSubWorkflowStepForContinuation(),
+        false
+      );
+      assert.strictEqual(prompt.getState().currentIndex, 1);
+      assert.strictEqual(
+        prompt.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+    });
+
     test("reordering only the steps after a terminal failure keeps the failure in place", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);

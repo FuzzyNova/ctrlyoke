@@ -16,6 +16,7 @@ import {
   EXECUTION_STATES,
   WorkflowStep,
   isScriptStep,
+  isSubWorkflowStep,
   isExecutionStep,
   getExecutionRuntime,
   PromptRuntimeMetadata,
@@ -955,10 +956,41 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
+   * Return a stopped run's cancelled sequential workflow step to pending, so
+   * continuing the run re-executes it and reattaches to its recorded child run
+   * (D6). A cancelled prompt or script step stays settled and continuation
+   * resumes after it, but a stopped child is still mid-run: skipping its
+   * parent step would orphan the rest of the child's work.
+   */
+  public async rewindCancelledSubWorkflowStepForContinuation(): Promise<boolean> {
+    if (this.stateMachine.status !== EXECUTION_STATES.STOPPED) {
+      return false;
+    }
+    const index = this.state.currentIndex - 1;
+    const step = this.state.steps[index];
+    if (
+      !step ||
+      !isSubWorkflowStep(step) ||
+      !step._runtime?.childRunRef ||
+      this.state.results[index]?.status !== STEP_STATUS.CANCELLED ||
+      this.state.parallelGroups.some(
+        (group) => index >= group.startIndex && index <= group.endIndex
+      )
+    ) {
+      return false;
+    }
+    this.state.currentIndex = index;
+    this.resetStepForRetry(index, false);
+    this.emitStateChange();
+    await this.updateWorkingFile();
+    return true;
+  }
+
+  /**
    * Return one settled step to pending for a retry, keeping its identity and
    * attempt history. Its next dispatch records a new attempt.
    */
-  private resetStepForRetry(index: number): void {
+  private resetStepForRetry(index: number, markRewoundFailure = true): void {
     this.state.completedIndices.delete(String(index));
     const result = this.state.results[index];
     if (result) {
@@ -981,7 +1013,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...remainingRuntime
       } = step._runtime;
       step._runtime = remainingRuntime;
-      if (hadAttempts) {
+      if (hadAttempts && markRewoundFailure) {
         step._runtime.rewoundFailure = true;
       }
     }
@@ -1466,22 +1498,26 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     metadata?: Partial<PromptRuntimeMetadata>
   ): void {
     const prompt = this.state.steps[index];
-    if (prompt && isExecutionStep(prompt)) {
-      const now = Date.now();
-      const startedAt =
-        prompt._runtime?.startedAt ?? metadata?.startedAt ?? now;
-      const outcome: PromptTerminalStatus =
-        terminalStatus ??
-        metadata?.terminalStatus ??
-        PROMPT_TERMINAL_STATUS.COMPLETED;
-      prompt._runtime = {
-        ...prompt._runtime,
-        ...metadata,
-        startedAt,
-        completedAt: now,
-        terminalStatus: outcome,
-      };
-
+    if (!prompt) {
+      this.state.completedIndices.add(String(index));
+      return;
+    }
+    const now = Date.now();
+    const startedAt = prompt._runtime?.startedAt ?? metadata?.startedAt ?? now;
+    const outcome: PromptTerminalStatus =
+      terminalStatus ??
+      metadata?.terminalStatus ??
+      PROMPT_TERMINAL_STATUS.COMPLETED;
+    // Every step kind records its terminal lifecycle. A workflow step that
+    // kept only `startedAt` reloaded as PENDING behind an advanced head.
+    prompt._runtime = {
+      ...prompt._runtime,
+      ...metadata,
+      startedAt,
+      completedAt: now,
+      terminalStatus: outcome,
+    };
+    if (isExecutionStep(prompt)) {
       const workflowFile = this.getWorkflowFile();
       const isScript = isScriptStep(prompt);
       reportPromptCompleted({

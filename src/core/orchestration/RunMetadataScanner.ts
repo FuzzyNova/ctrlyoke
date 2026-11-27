@@ -130,4 +130,22 @@ export class RunMetadataScanner {
     }
     return nextRunIndexByTarget;
   }
+
+  /** Whether the run already recorded the settlement of this exact child run. */
+  async hasSubWorkflowSettlement(
+    manifestPath: string,
+    childWorkflowKey: string,
+    childRunRef: string
+  ): Promise<boolean> {
+    for await (const event of this.recorder.streamEvents(manifestPath)) {
+      if (
+        event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+        event.payload.childWorkflowKey === childWorkflowKey &&
+        event.payload.childRunRef === childRunRef
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

@@ -11,7 +11,12 @@ import {
   MockPlatform,
 } from "../helpers/mockHarness";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
-import { FINAL_STEP_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  STEP_STATUS,
+} from "../../types/DashboardConstants";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { isSubWorkflowStep } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 
@@ -156,6 +161,172 @@ suite("Sub-workflow host end to end", () => {
         parent.promptQueue.getState().results[0].status,
         STEP_STATUS.CANCELLED
       );
+    } finally {
+      for (const instance of instances) {
+        await instance.outputHistoryManager.flushPendingIndexRefresh();
+        instance.dispose();
+      }
+      removeTempDir(workspace);
+    }
+  });
+
+  test("continuing a parent stopped mid-child reattaches to the recorded child run", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-resume-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      const marker = path.join(workspace, "marker.txt");
+      const waiting = path.join(workspace, "child-waiting");
+      const sentinel = path.join(workspace, "sentinel");
+      const childPath = path.join(workspace, "child.ctrlyoke.json");
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await fs.writeFile(
+        childPath,
+        JSON.stringify({
+          steps: [
+            {
+              type: "script",
+              script:
+                "node -e \"require('fs').appendFileSync('marker.txt','ran\\n')\"",
+            },
+            {
+              type: "script",
+              script:
+                "node -e \"const fs=require('fs');fs.writeFileSync('child-waiting','y');const t=setInterval(()=>{if(fs.existsSync('sentinel')){clearInterval(t);process.exit(0)}},50)\"",
+            },
+          ],
+        })
+      );
+      await fs.writeFile(
+        parentPath,
+        JSON.stringify({
+          steps: [{ type: "workflow", workflow: "child.ctrlyoke.json" }],
+        })
+      );
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(waiting);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await parent.stop();
+      await execution;
+
+      const child = instances[instances.length - 1];
+      assert.notStrictEqual(child, parent);
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      assert.strictEqual(child.promptQueue.getState().status, "stopped");
+      const stoppedStep = parent.promptQueue.getState().steps[0];
+      assert.ok(isSubWorkflowStep(stoppedStep));
+      const childWorkflowKey = stoppedStep._runtime?.childWorkflowKey;
+      const childRunRef = stoppedStep._runtime?.childRunRef;
+      assert.ok(childWorkflowKey && childRunRef);
+      const parentState = parent.promptQueue.getState();
+      const childLineageDir = path.dirname(
+        path.dirname(
+          parent.outputHistoryManager.getHistoryFilePath(
+            childWorkflowKey,
+            childRunRef
+          )
+        )
+      );
+      const runsRoot = path.dirname(childLineageDir);
+      const listRuns = async () =>
+        (await fs.readdir(childLineageDir)).filter((entry) =>
+          entry.startsWith("run-")
+        );
+      const lineagesBefore = (await fs.readdir(runsRoot)).sort();
+      const childRunsBefore = await listRuns();
+      assert.deepStrictEqual(childRunsBefore, [childRunRef]);
+
+      await fs.writeFile(sentinel, "go");
+      await parent.executeContinuationAtRun(
+        parentState.workflowKey!,
+        parentState.runRef!,
+        parentState.definitionRevision
+      );
+
+      const resumedState = parent.promptQueue.getState();
+      assert.strictEqual(
+        resumedState.status,
+        "completed",
+        JSON.stringify(resumedState.results)
+      );
+      const resumedStep = resumedState.steps[0];
+      assert.ok(isSubWorkflowStep(resumedStep));
+      assert.strictEqual(
+        resumedStep._runtime?.childWorkflowKey,
+        childWorkflowKey
+      );
+      assert.strictEqual(resumedStep._runtime?.childRunRef, childRunRef);
+      assert.deepStrictEqual(await listRuns(), childRunsBefore);
+      assert.deepStrictEqual(
+        (await fs.readdir(runsRoot)).sort(),
+        lineagesBefore
+      );
+      assert.strictEqual(await fs.readFile(marker, "utf8"), "ran\n");
+      const continuedChild = instances[instances.length - 1];
+      assert.notStrictEqual(continuedChild, child);
+      assert.strictEqual(
+        continuedChild.promptQueue.getState().status,
+        "completed"
+      );
+      assert.strictEqual(
+        continuedChild.promptQueue.getState().runRef,
+        childRunRef
+      );
+      // The child follows the ordinary stopped-run rule: its cancelled script
+      // step stays settled and continuation resumes after it. The sentinel
+      // only keeps the script from hanging if that rule ever changes.
+      assert.strictEqual(
+        continuedChild.promptQueue.getState().results[1]?.status,
+        STEP_STATUS.CANCELLED
+      );
+      const childManifest = await new TimelineRecorder().readManifest(
+        parent.outputHistoryManager.getHistoryFilePath(
+          childWorkflowKey,
+          childRunRef
+        )
+      );
+      assert.strictEqual(childManifest.executionState, "completed");
+
+      // An explicit re-run seeds a new parent run with clean step runtime, so
+      // its workflow step launches a fresh child instead of reattaching.
+      const seeded = await WorkingFileManager.seedNewRun(
+        workspace,
+        parentState.workflowKey!,
+        parentState.runRef!,
+        {},
+        undefined,
+        undefined,
+        EXECUTION_STATES.RUNNING
+      );
+      await parent.executeSeededRun(seeded, parentState.workflowKey!);
+      const rerunState = parent.promptQueue.getState();
+      assert.strictEqual(rerunState.runRef, seeded.runRef);
+      assert.strictEqual(
+        rerunState.status,
+        "completed",
+        JSON.stringify(rerunState.results)
+      );
+      const rerunStep = rerunState.steps[0];
+      assert.ok(isSubWorkflowStep(rerunStep));
+      const rerunChildKey = rerunStep._runtime?.childWorkflowKey;
+      const rerunChildRunRef = rerunStep._runtime?.childRunRef;
+      assert.ok(rerunChildKey && rerunChildRunRef);
+      assert.notStrictEqual(rerunChildRunRef, childRunRef);
+      const rerunChildManifest = await new TimelineRecorder().readManifest(
+        parent.outputHistoryManager.getHistoryFilePath(
+          rerunChildKey,
+          rerunChildRunRef
+        )
+      );
+      assert.deepStrictEqual(rerunChildManifest.parentRun, {
+        workflowKey: parentState.workflowKey,
+        runRef: seeded.runRef,
+        phase: FINAL_STEP_PHASES.QUEUE,
+        stepId: rerunStep._runtime?.stepId,
+      });
+      assert.strictEqual(await fs.readFile(marker, "utf8"), "ran\nran\n");
     } finally {
       for (const instance of instances) {
         await instance.outputHistoryManager.flushPendingIndexRefresh();

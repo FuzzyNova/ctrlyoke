@@ -2550,6 +2550,7 @@ export class WorkflowInstance
     await onPrepared?.();
 
     await this.promptQueue.rewindTerminalFailureForContinuation();
+    await this.promptQueue.rewindCancelledSubWorkflowStepForContinuation();
 
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
       workflowKey,
@@ -2725,6 +2726,8 @@ export class WorkflowInstance
     ) {
       if (this.workflowRuntime.status === EXECUTION_STATES.ERROR) {
         await this.promptQueue.rewindTerminalFailureForContinuation();
+      } else {
+        await this.promptQueue.rewindCancelledSubWorkflowStepForContinuation();
       }
       await this.executeLoadedPromptFile(undefined, true);
       return;

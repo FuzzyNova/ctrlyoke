@@ -70,6 +70,7 @@ import {
   type WorkflowTimelineEventDraft,
   type WorkflowDefinitionSnapshot,
   type RunSummary,
+  type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { WorkingFileManager } from "../WorkingFileManager";
@@ -368,6 +369,30 @@ export class OutputHistoryManager {
       this._workspaceFolderPath,
       workflowKey,
       runRef
+    );
+  }
+
+  /** Read the manifest of an already-known run; throws when it is missing. */
+  async readRunManifest(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<WorkflowRunManifest> {
+    return this.timelineRecorder.readManifest(
+      this.getHistoryFilePath(workflowKey, runRef)
+    );
+  }
+
+  /** Whether `historyFilePath` already records the settlement of this child run. */
+  async hasSubWorkflowSettlement(
+    historyFilePath: string,
+    childWorkflowKey: WorkflowKey,
+    childRunRef: RunRef
+  ): Promise<boolean> {
+    if (!historyFilePath) return false;
+    return this.runMetadataScanner.hasSubWorkflowSettlement(
+      historyFilePath,
+      childWorkflowKey,
+      childRunRef
     );
   }
 

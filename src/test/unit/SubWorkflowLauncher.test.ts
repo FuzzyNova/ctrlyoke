@@ -1,5 +1,10 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as path from "path";
 import { suite, test } from "mocha";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
 import type {
   SubWorkflowInstance,
@@ -105,9 +110,12 @@ class FakeChild implements SubWorkflowInstance {
     }
   }
 
+  continuationError?: Error;
   async executeContinuationAtRun(): Promise<void> {
     this.executeCalls += 1;
     this.status = EXECUTION_STATES.RUNNING;
+    await Promise.resolve();
+    if (this.continuationError) throw this.continuationError;
   }
 
   nextScenario: Scenario = "completed";
@@ -312,6 +320,49 @@ suite("SubWorkflowLauncher", () => {
     );
     const result = await handle.done;
     assert.equal(result.cancelledBy, SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD);
+  });
+
+  test("settles a continuation whose execution rejects as FAILED with the error", async () => {
+    const stateRoot = makeTempDir("ctrlyoke-launcher-resume-");
+    try {
+      const childRunRef = WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 26));
+      const launchRequest = { ...request(), stateRoot };
+      const childRunDir = WorkflowPaths.runDir(
+        stateRoot,
+        "child-key" as WorkflowKey,
+        childRunRef
+      );
+      await fs.mkdir(childRunDir, { recursive: true });
+      await new TimelineRecorder().initializeRunAt(
+        childRunDir,
+        "child-key",
+        1,
+        Date.now(),
+        EXECUTION_STATES.STOPPED,
+        1,
+        undefined,
+        launchRequest.parent
+      );
+      const factory = new FakeFactory();
+      factory.child.continuationError = new Error("continuation exploded");
+      const handle = await new SubWorkflowLauncher(factory.create).launch({
+        ...launchRequest,
+        resumeChildRun: {
+          workflowKey: "child-key" as WorkflowKey,
+          runRef: childRunRef,
+        },
+      });
+      const result = await handle.done;
+      assert.strictEqual(result.status, PROMPT_TERMINAL_STATUS.FAILED);
+      assert.strictEqual(result.failureMessage, "continuation exploded");
+      assert.strictEqual(factory.child.executeCalls, 1);
+    } finally {
+      await fs.rm(path.dirname(WorkflowPaths.runsRoot(stateRoot)), {
+        recursive: true,
+        force: true,
+      });
+      removeTempDir(stateRoot);
+    }
   });
 
   test("never rejects done when execution unexpectedly throws", async () => {

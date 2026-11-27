@@ -92,9 +92,8 @@ import {
   type EvaluationResult,
 } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
-import { manifestPath } from "../utils/WorkflowPaths";
-import { TimelineRecorder } from "./orchestration/TimelineRecorder";
-import { TIMELINE_EVENT_TYPES } from "../types/WorkflowTimelineTypes";
+import type { WorkflowRunManifest } from "../types/WorkflowTimelineTypes";
+import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import {
   SettingsPropertyResolver,
@@ -145,6 +144,7 @@ import { PromptFileResolver } from "./PromptFileResolver";
 import type {
   SubWorkflowHandle,
   SubWorkflowHost,
+  SubWorkflowParentLink,
   SubWorkflowResult,
 } from "../types/SubWorkflowTypes";
 import { isSameSubWorkflowParentLink } from "../types/SubWorkflowTypes";
@@ -3203,46 +3203,18 @@ export class WorkflowExecutor {
                 loopIndex: target.loopIndex,
               }),
         } as const;
-        const childWorkflowKey = authoredStep._runtime?.childWorkflowKey;
-        const childRunRef = authoredStep._runtime?.childRunRef;
-        let resumeChildRun:
-          | {
-              workflowKey: typeof childWorkflowKey & string;
-              runRef: typeof childRunRef & string;
-            }
-          | undefined;
-        if (childWorkflowKey && childRunRef) {
-          try {
-            const manifest = await new TimelineRecorder().readManifest(
-              manifestPath(
-                context.executionWorkspace.stateRoot,
-                childWorkflowKey,
-                childRunRef
-              )
-            );
-            if (isSameSubWorkflowParentLink(manifest.parentRun, parent)) {
-              completedChild =
-                manifest.executionState === EXECUTION_STATES.COMPLETED;
-              if (!completedChild)
-                resumeChildRun = {
-                  workflowKey: childWorkflowKey,
-                  runRef: childRunRef,
-                };
-            } else {
-              Log.warn(
-                `[WorkflowExecutor] Recorded sub-workflow ${childWorkflowKey}/${childRunRef} has a different parent link; launching fresh`
-              );
-            }
-          } catch {
-            Log.warn(
-              `[WorkflowExecutor] Recorded sub-workflow ${childWorkflowKey}/${childRunRef} is missing or unreadable; launching fresh`
-            );
-          }
-        }
-        if (completedChild) {
+        const recorded = await this.resolveRecordedChildRun(
+          authoredStep,
+          parent,
+          context
+        );
+        completedChild = recorded?.completed === true;
+        const resumeChildRun =
+          recorded && !recorded.completed ? recorded.run : undefined;
+        if (recorded?.completed) {
           handle = {
-            workflowKey: childWorkflowKey!,
-            runRef: childRunRef!,
+            workflowKey: recorded.run.workflowKey,
+            runRef: recorded.run.runRef,
             done: Promise.resolve({ status: PROMPT_TERMINAL_STATUS.COMPLETED }),
             pause: async () => undefined,
             cancelPause: async () => undefined,
@@ -3291,13 +3263,10 @@ export class WorkflowExecutor {
       const result: SubWorkflowResult = await handle.done;
       const settlementAlreadyRecorded =
         completedChild && context.historyFilePath
-          ? (
-              await new TimelineRecorder().readEvents(context.historyFilePath)
-            ).some(
-              (event) =>
-                event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
-                event.payload.childWorkflowKey === handle!.workflowKey &&
-                event.payload.childRunRef === handle!.runRef
+          ? await context.outputHistoryManager?.hasSubWorkflowSettlement(
+              context.historyFilePath,
+              handle.workflowKey,
+              handle.runRef
             )
           : false;
       if (
@@ -3375,6 +3344,45 @@ export class WorkflowExecutor {
     } finally {
       if (handle) context.registerActiveTarget?.(target, attemptIndex, null);
     }
+  }
+
+  /**
+   * D6: the child run this step recorded on an earlier attempt, when it still
+   * belongs to this exact parent step (run, phase and step or pass). A
+   * completed child settles the step without a launch; any other state is
+   * continued. A missing, unreadable or foreign child launches fresh.
+   */
+  private async resolveRecordedChildRun(
+    authoredStep: SubWorkflowStep,
+    parent: SubWorkflowParentLink,
+    context: WorkflowExecutionContext
+  ): Promise<
+    | { completed: boolean; run: { workflowKey: WorkflowKey; runRef: RunRef } }
+    | undefined
+  > {
+    const workflowKey = authoredStep._runtime?.childWorkflowKey;
+    const runRef = authoredStep._runtime?.childRunRef;
+    const history = context.outputHistoryManager;
+    if (!workflowKey || !runRef || !history) return undefined;
+    let manifest: WorkflowRunManifest;
+    try {
+      manifest = await history.readRunManifest(workflowKey, runRef);
+    } catch {
+      Log.warn(
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} is missing or unreadable; launching fresh`
+      );
+      return undefined;
+    }
+    if (!isSameSubWorkflowParentLink(manifest.parentRun, parent)) {
+      Log.warn(
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} has a different parent link; launching fresh`
+      );
+      return undefined;
+    }
+    return {
+      completed: manifest.executionState === EXECUTION_STATES.COMPLETED,
+      run: { workflowKey, runRef },
+    };
   }
 
   /**
