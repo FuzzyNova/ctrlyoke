@@ -39,6 +39,7 @@ import { Icon } from "../shared/Icon";
 import { detectPlatform } from "@utils/platform";
 import { UI_PLATFORMS } from "@root/types/DashboardConstants";
 import { truncateNormalized } from "@utils/string";
+import type { SubWorkflowMergeWarning } from "@utils/subWorkflowDisplay";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
   type WorkflowStepDragHandleProps,
@@ -125,6 +126,15 @@ interface WorkflowStepProps {
   workflowRun?: WorkflowRunLink;
   childExecutionState?: string;
   showFailureWarning?: boolean;
+  /** Workflow steps: true when `workflow` is an inline definition (D13), not a file path. */
+  workflowIsInline?: boolean;
+  /**
+   * Workflow steps: shown when the inline definition runs in its own worktree
+   * (a lane). `branchName` appears once the child has created its branch.
+   */
+  worktreeBadge?: { branchName?: string };
+  /** Workflow steps: a COMPLETED lane whose `merge: true` did not land cleanly (D4e). */
+  mergeWarning?: SubWorkflowMergeWarning;
   /**
    * When true, applies completed-section styling with slight dimming. The
    * parent panel renders the 2px left rail, whose color identifies the step.
@@ -188,6 +198,9 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   workflowRun,
   childExecutionState,
   showFailureWarning = false,
+  workflowIsInline = false,
+  worktreeBadge,
+  mergeWarning,
   onContextMenu,
   dragHandleProps,
 }) => {
@@ -339,11 +352,30 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               <span
                 className={`text-xs leading-relaxed truncate ${titleTextClass}`}
               >
-                {name || SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+                {name ||
+                  (workflowIsInline ? text : undefined) ||
+                  SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
               </span>
               <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
                 {SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
               </span>
+              {worktreeBadge && (
+                <span
+                  className="inline-flex min-w-0 items-center gap-0.5 px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg"
+                  title={
+                    worktreeBadge.branchName
+                      ? `${SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle}\n${SUB_WORKFLOW_DASHBOARD_LABELS.branch}: ${worktreeBadge.branchName}`
+                      : SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle
+                  }
+                  data-testid="workflow-step-worktree-badge"
+                >
+                  <Icon name="worktree-compact" className="shrink-0" />
+                  <span className="truncate">
+                    {worktreeBadge.branchName ??
+                      SUB_WORKFLOW_DASHBOARD_LABELS.worktree}
+                  </span>
+                </span>
+              )}
               {isDisabled && (
                 <span className="px-1 py-px rounded-sm text-xxs bg-badge-bg text-badge-fg shrink-0">
                   Disabled
@@ -357,12 +389,34 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   {SUB_WORKFLOW_DASHBOARD_LABELS.warning}
                 </span>
               )}
+              {mergeWarning && (
+                <span
+                  className="px-1 py-px rounded-sm text-xxs bg-warning-bg text-warning-fg shrink-0"
+                  title={mergeWarning.reason}
+                  aria-label={`${mergeWarning.label}: ${mergeWarning.reason}`}
+                >
+                  {mergeWarning.label}
+                </span>
+              )}
             </div>
-            <div
-              className="mt-0.5 text-xxs opacity-60 font-mono truncate text-description-fg"
-              title={text}
-            >
-              {truncateNormalized(text, 60)}
+            {(!workflowIsInline || name) && text && (
+              <div
+                className={`mt-0.5 text-xxs opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+                title={text}
+              >
+                {truncateNormalized(text, 60)}
+              </div>
+            )}
+            <div className={detailsClass}>
+              <StepDetailRows
+                status={status}
+                harnessId={harnessId}
+                harnessLabel={harnessLabel}
+                harnessIsDefault={harnessIsDefault}
+                modelLabel={modelLabel}
+                modelIsDefault={modelIsDefault}
+                isSelected={isSelected}
+              />
             </div>
             {childExecutionState && (
               <ExecutionStateBadge

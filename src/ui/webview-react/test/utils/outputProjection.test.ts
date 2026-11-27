@@ -8,6 +8,10 @@ import {
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
 } from "@/types/messages";
+import {
+  WORKTREE_MERGE_OUTCOMES,
+  WORKTREE_MODES,
+} from "@root/types/DashboardConstants";
 
 describe("outputProjection", () => {
   it("renders sub-workflow settlement metadata as the parent step output", () => {
@@ -36,6 +40,102 @@ describe("outputProjection", () => {
       message: "Outcome: completed · Branch: feature/child · Merge: merged",
       severity: "info",
     });
+  });
+
+  it("warns about a lane whose merge conflicted and lists its files", () => {
+    const messages = mapOrderedHistoryEntriesToMessages([
+      {
+        kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        timestampMs: 1200,
+        sequence: 4,
+        subWorkflowOutput: {
+          childWorkflowKey: "lane" as never,
+          childRunRef: "run-lane" as never,
+          outcome: { status: "completed" },
+          worktree: {
+            mode: WORKTREE_MODES.MANAGED,
+            branchName: "ctrlyoke/lane",
+            baseCommit: "base",
+            mergeOutcome: WORKTREE_MERGE_OUTCOMES.CONFLICT,
+            conflictFiles: ["src/a.ts", "src/b.ts"],
+          },
+        },
+      },
+    ]);
+
+    expect(messages[0]?.data).toMatchObject({
+      message:
+        "Outcome: completed · Branch: ctrlyoke/lane · Merge: conflict · Conflicts: src/a.ts, src/b.ts",
+      severity: "warning",
+    });
+  });
+
+  it.each([
+    [WORKTREE_MERGE_OUTCOMES.BLOCKED, "warning"],
+    [WORKTREE_MERGE_OUTCOMES.FAST_FORWARD, "info"],
+    [WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT, "info"],
+  ])("reports a %s lane merge as %s", (mergeOutcome, severity) => {
+    const messages = mapOrderedHistoryEntriesToMessages([
+      {
+        kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        timestampMs: 1200,
+        sequence: 4,
+        subWorkflowOutput: {
+          childWorkflowKey: "lane" as never,
+          childRunRef: "run-lane" as never,
+          outcome: { status: "completed" },
+          worktree: {
+            mode: WORKTREE_MODES.MANAGED,
+            branchName: "ctrlyoke/lane",
+            baseCommit: "base",
+            mergeOutcome,
+          },
+        },
+      },
+    ]);
+
+    expect(messages[0]?.data).toMatchObject({ severity });
+  });
+
+  // The settlement is the workflow step's own output, not a status-history
+  // aggregate, so a status activity at the same step (a recorded status
+  // message) must not stand in for it the way it does for a status aggregate.
+  it("keeps a settlement beside a status activity at the same step", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [
+        {
+          kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+          target,
+          timestampMs: 1200,
+          sequence: 4,
+          subWorkflowOutput: {
+            childWorkflowKey: "lane" as never,
+            childRunRef: "run-lane" as never,
+            outcome: { status: "completed" },
+          },
+        },
+      ],
+      [
+        {
+          timestampMs: 1100,
+          sequence: 3,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+          text: "Lane started",
+        },
+      ]
+    );
+
+    expect(messages.map((message) => message.data)).toEqual([
+      expect.objectContaining({ message: "Lane started" }),
+      expect.objectContaining({ message: "Outcome: completed" }),
+    ]);
+    expect(messages[1]?.isSubWorkflowSettlement).toBe(true);
   });
 
   it("maps canonical ordered entries with sequence-preserved chronology", () => {

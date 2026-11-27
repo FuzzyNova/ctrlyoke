@@ -4,7 +4,6 @@ import { useSortable } from "@dnd-kit/sortable";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
-  OUTPUT_HISTORY_KINDS,
   PROMPT_TERMINAL_STATUS,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
@@ -17,6 +16,7 @@ import {
   getSubWorkflowDisplayName,
   type PromptStep,
   type ScriptStep,
+  type SubWorkflowOutput,
 } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 import type { ExecutionState, StepStatus } from "../../types/messages";
@@ -40,6 +40,11 @@ import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
+import {
+  findLatestSubWorkflowSettlement,
+  getSubWorkflowMergeWarning,
+  hasInlineWorktree,
+} from "@utils/subWorkflowDisplay";
 import {
   IN_OUTPUT_VIEW_TITLE,
   InOutputViewBar,
@@ -168,31 +173,18 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         : undefined
     );
     const isViewingHistory = useUiStore((state) => state.isViewingHistory);
-    const childSettledStatus = useWorkflowStore((state) => {
-      if (!isSubWorkflowStep(step) || !step._runtime?.childRunRef) {
-        return undefined;
-      }
+    const childRunRef = isSubWorkflowStep(step)
+      ? step._runtime?.childRunRef
+      : undefined;
+    const childSettlement = useWorkflowStore((state) => {
+      if (!childRunRef) return undefined;
       const entries =
         isViewingHistory && state.historyOutputs
           ? state.historyOutputs.orderedEntries
           : state.liveOrderedEntries;
-      const entry = entries.find(
-        (candidate) =>
-          candidate.kind === OUTPUT_HISTORY_KINDS.SUB_WORKFLOW &&
-          candidate.subWorkflowOutput.childRunRef === step._runtime?.childRunRef
-      );
-      if (entry?.kind !== OUTPUT_HISTORY_KINDS.SUB_WORKFLOW) return undefined;
-      switch (entry.subWorkflowOutput.outcome.status) {
-        case PROMPT_TERMINAL_STATUS.COMPLETED:
-          return EXECUTION_STATES.COMPLETED;
-        case PROMPT_TERMINAL_STATUS.FAILED:
-          return EXECUTION_STATES.ERROR;
-        case PROMPT_TERMINAL_STATUS.CANCELLED:
-          return EXECUTION_STATES.STOPPED;
-        default:
-          return undefined;
-      }
+      return findLatestSubWorkflowSettlement(entries, childRunRef);
     });
+    const childSettledStatus = settledChildExecutionState(childSettlement);
     const storedVars = useSettingsStore(
       (state) => state.workflowProperties.vars
     );
@@ -317,12 +309,45 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
           status === STEP_STATUS.COMPLETED &&
           !!step._runtime?.failureMessage
         }
+        workflowIsInline={
+          isSubWorkflowStep(step) && typeof step.workflow !== "string"
+        }
+        worktreeBadge={
+          isSubWorkflowStep(step) && hasInlineWorktree(step)
+            ? {
+                branchName:
+                  childWorkflow?.worktree?.branchName ??
+                  childSettlement?.worktree?.branchName,
+              }
+            : undefined
+        }
+        mergeWarning={
+          status === STEP_STATUS.COMPLETED
+            ? getSubWorkflowMergeWarning(childSettlement?.worktree)
+            : undefined
+        }
       />
     );
   }
 );
 
 const EMPTY_WORKFLOW_VARS: Readonly<Record<string, string>> = {};
+
+/** The child's own state, from its settlement, once it is no longer tracked live. */
+function settledChildExecutionState(
+  settlement: SubWorkflowOutput | undefined
+): ExecutionState | undefined {
+  switch (settlement?.outcome.status) {
+    case PROMPT_TERMINAL_STATUS.COMPLETED:
+      return EXECUTION_STATES.COMPLETED;
+    case PROMPT_TERMINAL_STATUS.FAILED:
+      return EXECUTION_STATES.ERROR;
+    case PROMPT_TERMINAL_STATUS.CANCELLED:
+      return EXECUTION_STATES.STOPPED;
+    default:
+      return undefined;
+  }
+}
 
 WorkflowStepRow.displayName = "WorkflowStepRow";
 

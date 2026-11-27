@@ -23,6 +23,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { normalizeCliEventsWithSource } from "@root/utils/CliEventNormalizer";
 import { formatTime } from "./outputUtils";
+import { getSubWorkflowMergeWarning } from "./subWorkflowDisplay";
 
 export interface OutputMessageTarget {
   kind: FinalStepPhase;
@@ -42,6 +43,12 @@ export interface OutputMessage {
   phase?: ExecutionPhase;
   /** True when this is a semantic activity projection rather than an attempt aggregate. */
   isActivity?: boolean;
+  /**
+   * True for a sub-workflow step's settlement block (D12a). It is the step's
+   * own output, not a status-history aggregate, so no status activity at the
+   * same target ever stands in for it.
+   */
+  isSubWorkflowSettlement?: boolean;
   activityKey?: string;
   activityKind?: OutputActivityEntry["kind"];
   activityText?: string;
@@ -257,16 +264,23 @@ export function mapOrderedHistoryEntriesToMessages(
           output.worktree?.mergeOutcome
             ? `${SUB_WORKFLOW_DASHBOARD_LABELS.merge}: ${output.worktree.mergeOutcome}`
             : undefined,
+          output.worktree?.conflictFiles?.length
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.conflictFiles}: ${output.worktree.conflictFiles.join(", ")}`
+            : undefined,
         ].filter((value): value is string => value !== undefined);
         aggregateMessages.push({
           type: OUTPUT_MESSAGE_TYPES.STATUS,
           target: toOutputMessageTarget(entry.target),
           timestamp: entry.timestampMs,
           sequence: entry.sequence,
+          isSubWorkflowSettlement: true,
           data: {
             message: details.join(" · "),
+            // A clean merge is reported quietly; a merge that did not land
+            // is a warning even though the step completed (D4e).
             severity:
-              output.outcome.status === PROMPT_TERMINAL_STATUS.FAILED
+              output.outcome.status === PROMPT_TERMINAL_STATUS.FAILED ||
+              getSubWorkflowMergeWarning(output.worktree)
                 ? STATUS_MESSAGE_SEVERITY.WARNING
                 : STATUS_MESSAGE_SEVERITY.INFO,
             timestamp: formatTime(entry.timestampMs),
@@ -406,6 +420,7 @@ export function mapOrderedHistoryEntriesToMessages(
     }
     if (
       aggregate.type === OUTPUT_MESSAGE_TYPES.STATUS &&
+      !aggregate.isSubWorkflowSettlement &&
       statusActivityTargets.has(getTargetKey(aggregate.target))
     ) {
       continue;

@@ -5457,6 +5457,18 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
   outcome: "Outcome",
   branch: "Branch",
   merge: "Merge",
+  conflictFiles: "Conflicts",
+  worktree: "Worktree",
+  worktreeTitle: "Runs in its own worktree",
+  mergeConflict: "Merge conflict",
+  mergeConflictReason:
+    "The lane's branch conflicts with the parent's checkout. Its branch is kept for a later step to merge.",
+  mergeBlocked: "Merge blocked",
+  mergeBlockedReason:
+    "The parent's checkout was busy, so the lane did not merge. Its branch and worktree are kept.",
+  mergeAbortFailed: "Merge abort failed",
+  mergeAbortFailedReason:
+    "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
 } as const;
 
 export const OUTPUT_ACTIVITY_KINDS = {

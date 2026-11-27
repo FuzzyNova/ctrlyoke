@@ -310,7 +310,17 @@ resuming a child directly does not pause or resume the parent.
 Workflow steps appear with a Workflow badge, the referenced workflow file, and a
 live child state when that child is tracked. Once the child run is created, use
 **Open run →** to view its own output and history. The parent's output shows the
-child outcome and any worktree branch and merge result. The child's run row and
+child outcome and any worktree branch, merge result and conflicting files.
+
+An inline step is titled by its `name`, or else by its prompt or script, with
+the prompt or script below a name. An inline prompt shows the harness and model
+it inherits, as an ordinary step in its place would. A lane, an inline step
+with its own `worktree`, also has a worktree badge, which names the child's
+branch once the child creates it. A lane that completes but whose
+`merge: true` ends `conflict` or `blocked` keeps its completed status and gets a
+**Merge conflict** or **Merge blocked** badge; hover it for the reason and any
+conflicting files. A clean merge adds no badge. In a parallel group's output,
+each lane's chip filters its outcome block like any member's output. The child's run row and
 header identify the parent run; the link is unavailable when that parent is not
 present in the current project.
 

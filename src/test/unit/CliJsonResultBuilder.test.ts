@@ -20,6 +20,8 @@ import {
   WORKFLOW_VALIDATION_WARNING_CODES,
   GUARDRAIL_STOP_CODES,
   PROMPT_TERMINAL_STATUS,
+  WORKTREE_MERGE_OUTCOMES,
+  WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
@@ -825,7 +827,8 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
     childRunRef: string,
     status: SubWorkflowOutput["outcome"]["status"],
     stepId?: string,
-    childWorkflowKey: WorkflowKey = childKey
+    childWorkflowKey: WorkflowKey = childKey,
+    worktree?: SubWorkflowOutput["worktree"]
   ): Promise<void> {
     const identity = {
       target,
@@ -843,6 +846,7 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
           childWorkflowKey,
           childRunRef: childRunRef as RunRef,
           outcome: { status },
+          ...(worktree ? { worktree } : {}),
         },
       },
       {
@@ -915,6 +919,63 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
     workflowKey,
     runRef,
     status,
+  });
+
+  test("lists each parallel lane once by stepId with its worktree and merge result", async () => {
+    const merged = workflowStep("lane-a");
+    const conflicted = workflowStep("lane-b");
+    await startRun([merged, conflicted]);
+    const mergedWorktree = {
+      mode: WORKTREE_MODES.MANAGED,
+      branchName: "ctrlyoke/lane-a",
+      baseCommit: "base",
+      finalBranchTip: "tip-a",
+      changedFileCount: 2,
+      mergeOutcome: WORKTREE_MERGE_OUTCOMES.FAST_FORWARD,
+    };
+    const conflictWorktree = {
+      mode: WORKTREE_MODES.MANAGED,
+      branchName: "ctrlyoke/lane-b",
+      baseCommit: "base",
+      mergeOutcome: WORKTREE_MERGE_OUTCOMES.CONFLICT,
+      conflictFiles: ["src/shared.ts"],
+    };
+    await settle(
+      queue(0),
+      0,
+      "child-a",
+      "completed",
+      "lane-a",
+      childKey,
+      mergedWorktree
+    );
+    await settle(
+      queue(1),
+      0,
+      "child-b",
+      "completed",
+      "lane-b",
+      childKey,
+      conflictWorktree
+    );
+    merged._runtime = {
+      ...merged._runtime,
+      childRunRef: "child-a" as RunRef,
+      terminalStatus: "completed",
+    };
+    conflicted._runtime = {
+      ...conflicted._runtime,
+      childRunRef: "child-b" as RunRef,
+      terminalStatus: "completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([merged, conflicted]), [
+      { ...entry("lane-a", "child-a", "completed"), worktree: mergedWorktree },
+      {
+        ...entry("lane-b", "child-b", "completed"),
+        worktree: conflictWorktree,
+      },
+    ]);
   });
 
   test("lists both child runs of a step that launched two", async () => {

@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { isPromptStep } from "@root/types/CtrlYokeTypes";
+import { isPromptStep, isSubWorkflowStep } from "@root/types/CtrlYokeTypes";
 import {
   DOCS_URLS,
   KEYBOARD_KEYS,
@@ -90,6 +90,7 @@ import {
 } from "@utils/workflowStepSerialization";
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 import { buildStepOverrideChips } from "@utils/stepOverrideChips";
+import { getInlinePromptStep } from "@utils/subWorkflowDisplay";
 import {
   PENDING_TAIL_DRAG_ID,
   absoluteIndexFromStepDragId,
@@ -920,6 +921,13 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const getStepHarnessModel = useCallback(
     (step: (typeof steps)[0], status?: StepStatus) => {
+      // An inline prompt child (a lane) runs with the same defaults an
+      // ordinary step here would (D13), so it shows what its inner prompt
+      // step would. The child's own run records what it actually used.
+      const inlinePrompt = isSubWorkflowStep(step)
+        ? getInlinePromptStep(step)
+        : undefined;
+      if (inlinePrompt) return getPendingHarnessModel(inlinePrompt);
       if (!isPromptStep(step))
         return {
           harnessId: undefined,

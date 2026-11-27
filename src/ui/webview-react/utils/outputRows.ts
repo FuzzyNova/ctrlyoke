@@ -2641,7 +2641,12 @@ export function buildOutputRows(
     if (input.hiddenTargetKeys?.has(targetKey)) continue;
 
     if (message.type === OUTPUT_MESSAGE_TYPES.STATUS) {
-      if (!message.isActivity && activityStatusTargets.has(targetKey)) continue;
+      if (
+        !message.isActivity &&
+        !message.isSubWorkflowSettlement &&
+        activityStatusTargets.has(targetKey)
+      )
+        continue;
       const activityFirst =
         message.isActivity && previousActivityTargetKey !== targetKey;
       // A status has no header of its own, so the CLI path's leading-chrome

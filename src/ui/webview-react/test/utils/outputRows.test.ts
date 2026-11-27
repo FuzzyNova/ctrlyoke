@@ -36,6 +36,7 @@ import {
   FILE_OPERATION_KINDS,
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
+  OUTPUT_HISTORY_KINDS,
   OUTPUT_ROW_KINDS,
   STEP_COLOR_MODES,
   STEP_STATUS,
@@ -4352,6 +4353,90 @@ describe("outputRows", () => {
         ["queue:0", false],
         ["queue:1", true],
       ]);
+    });
+
+    describe("lane members", () => {
+      const laneSteps = ["Lint rules", "Palette"].map((name) => ({
+        type: STEP_TYPES.WORKFLOW,
+        name,
+        status: STEP_STATUS.COMPLETED,
+        workflow: {
+          prompt: `Implement ${name}.`,
+          worktree: { mode: "managed" },
+        },
+      })) as unknown as WorkflowStep[];
+      const settlement = (stepIndex: number, order: number) => ({
+        kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex } as const,
+        timestampMs: 2000 + order,
+        sequence: 10 + order,
+        subWorkflowOutput: {
+          childWorkflowKey: `lane-${stepIndex}` as never,
+          childRunRef: `run-${stepIndex}` as never,
+          outcome: { status: "completed" as const },
+          worktree: {
+            mode: "managed" as const,
+            branchName: `ctrlyoke/lane-${stepIndex}`,
+            baseCommit: "base",
+            mergeOutcome: "fast-forward" as const,
+          },
+        },
+      });
+      const laneMessages = () =>
+        mapOrderedHistoryEntriesToMessages(
+          [settlement(0, 0), settlement(1, 1)],
+          // A recorded status message at lane 1 must not swallow its block.
+          [
+            {
+              timestampMs: 1500,
+              sequence: 5,
+              target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+              runIndex: 0,
+              attemptIndex: 0,
+              kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+              text: "Lane started",
+            },
+          ]
+        );
+      const settlementTexts = (result: ReturnType<typeof buildOutputRows>) =>
+        result.rows.flatMap((row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.STATUS &&
+          row.status.message.startsWith("Outcome:")
+            ? [row.status.message]
+            : []
+        );
+
+      it("gives each lane a chip and renders its metadata block", () => {
+        const result = buildParallelRows({
+          steps: laneSteps,
+          allMessages: laneMessages(),
+        });
+        const row = headerRow(result);
+        if (row?.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER) {
+          throw new Error("expected a parallel group header row");
+        }
+
+        expect(row.members.map((member) => member.label)).toEqual([
+          "Lint rules",
+          "Palette",
+        ]);
+        expect(settlementTexts(result)).toEqual([
+          "Outcome: completed · Branch: ctrlyoke/lane-0 · Merge: fast-forward",
+          "Outcome: completed · Branch: ctrlyoke/lane-1 · Merge: fast-forward",
+        ]);
+      });
+
+      it("filters a hidden lane's metadata block", () => {
+        const result = buildParallelRows({
+          steps: laneSteps,
+          allMessages: laneMessages(),
+          hiddenTargetKeys: new Set(["queue:1"]),
+        });
+
+        expect(settlementTexts(result)).toEqual([
+          "Outcome: completed · Branch: ctrlyoke/lane-0 · Merge: fast-forward",
+        ]);
+      });
     });
 
     it("grows its estimate when the chip row wraps", () => {

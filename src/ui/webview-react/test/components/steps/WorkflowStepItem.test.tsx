@@ -174,4 +174,30 @@ describe("WorkflowStepItem workflow variant", () => {
       "Verification"
     );
   });
+
+  it("renders an inline lane with harness, worktree branch and merge warning", () => {
+    render(
+      <WorkflowStepItem
+        text="Implement the palette."
+        index={0}
+        status={STEP_STATUS.COMPLETED}
+        stepType={STEP_TYPES.WORKFLOW}
+        workflowIsInline
+        harnessId="claude-cli"
+        harnessLabel="Claude Code"
+        modelLabel="sonnet"
+        worktreeBadge={{ branchName: "ctrlyoke/palette" }}
+        mergeWarning={{ label: "Merge conflict", reason: "Conflicts: a.ts" }}
+      />
+    );
+
+    // The unnamed lane is titled by its prompt, with no duplicate subtitle.
+    expect(screen.getAllByText("Implement the palette.")).toHaveLength(1);
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("ctrlyoke/palette")).toBeInTheDocument();
+    expect(screen.getByText("Merge conflict")).toHaveAttribute(
+      "title",
+      "Conflicts: a.ts"
+    );
+  });
 });

@@ -26,6 +26,7 @@ import type {
   PromptResult,
   QueueState,
   RunRef,
+  SubWorkflowOutput,
   WorkflowKey,
   WorkflowStep,
   WorkflowStopReason,
@@ -242,11 +243,17 @@ export interface CliJsonError {
   attempt: number | null;
 }
 
-/** Direct child runs launched by this workflow. Final-step links use pass. */
+/**
+ * Direct child runs launched by this workflow. Final-step links use pass.
+ * `worktree` is the settled child's worktree metadata (branch, base, tip,
+ * files changed, landing and merge result), present only once a child that
+ * ran in a worktree has settled.
+ */
 export type CliJsonSubWorkflowRun = {
   workflowKey: WorkflowKey;
   runRef: RunRef;
   status: string | null;
+  worktree?: NonNullable<SubWorkflowOutput["worktree"]>;
 } & ({ stepId: string; pass?: never } | { pass: number; stepId?: never });
 
 export interface CliJsonResult {
@@ -384,6 +391,7 @@ function buildSubWorkflowRuns(
       workflowKey: output.childWorkflowKey,
       runRef: output.childRunRef,
       status: output.outcome.status,
+      ...(output.worktree ? { worktree: output.worktree } : {}),
     };
     if (entry.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       settledChildren.add(child);
