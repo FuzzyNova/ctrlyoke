@@ -34,6 +34,9 @@ import {
   LOG_LEVELS,
   EXECUTION_STATES,
   WORKTREE_MERGE_OUTCOMES,
+  APPEND_MODES,
+  PANEL_CLIENT_ID,
+  QUEUE_POSITION,
 } from "../../types/DashboardConstants";
 import type { HarnessId, WorkingFile } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
@@ -1339,6 +1342,148 @@ suite("DashboardMessageRouter — client workflow file paths", () => {
       seen,
       [absolute, absolute],
       "an already-absolute path must not be rewritten"
+    );
+  });
+
+  type AppendCall = [unknown, string, string, unknown, unknown];
+  function appendRecorder(calls: AppendCall[], failWith?: Error) {
+    return {
+      appendFromFileForClient: async (
+        mutation: unknown,
+        filePath: string,
+        clientId: string,
+        position: unknown,
+        appendMode: unknown
+      ) => {
+        calls.push([mutation, filePath, clientId, position, appendMode]);
+        if (failWith) throw failWith;
+      },
+      publishViewIdentityToViewers: async () => null,
+    };
+  }
+
+  test("APPEND_FILE forwards appendMode and position with the mutation", async () => {
+    const calls: AppendCall[] = [];
+    const router = buildRouter(appendRecorder(calls));
+    const mutation = {
+      address: {
+        workflowKey: "wf",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1",
+      },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 4,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: path.resolve("flows/child.ctrlyoke.yaml"),
+      mutation,
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+    });
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: path.resolve("flows/inline.ctrlyoke.yaml"),
+    });
+
+    assert.deepStrictEqual(
+      calls.map(([m, , , position, appendMode]) => [m, position, appendMode]),
+      [
+        [
+          mutation,
+          QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+          APPEND_MODES.SUB_WORKFLOW,
+        ],
+        [undefined, QUEUE_POSITION.END, APPEND_MODES.INLINE],
+      ]
+    );
+  });
+
+  test("APPEND_FILE without a path forwards appendMode, position and mutation after the picker", async () => {
+    const calls: AppendCall[] = [];
+    const picked = path.resolve("flows/picked.ctrlyoke.yaml");
+    const router = buildRouter(appendRecorder(calls), () => {}, undefined, {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+      selectWorkspacePath: async () => picked,
+    });
+    const mutation = {
+      address: { workflowKey: "wf", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      expectedDefinitionRevision: 1,
+      expectedDescriptorRevision: 1,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      mutation,
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.NEXT,
+    });
+    await router.route({ type: MESSAGE_TYPES.APPEND_FILE, mutation });
+
+    assert.deepStrictEqual(calls, [
+      [
+        mutation,
+        picked,
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.NEXT,
+        APPEND_MODES.SUB_WORKFLOW,
+      ],
+      // The inline picker path keeps its original instance-bound call.
+      [undefined, picked, PANEL_CLIENT_ID, QUEUE_POSITION.END, undefined],
+    ]);
+  });
+
+  test("APPEND_FILE reports a refused sub-workflow queue to the client instead of throwing", async () => {
+    const calls: AppendCall[] = [];
+    const replies: { type?: string; action?: string; error?: string }[] = [];
+    const router = buildRouter(
+      appendRecorder(calls, new Error("Parallel width is 1."))
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.APPEND_FILE,
+        filePath: path.resolve("flows/child.ctrlyoke.yaml"),
+        appendMode: APPEND_MODES.SUB_WORKFLOW,
+        position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+      },
+      { clientTag: "browser:3", postMessage: (reply) => replies.push(reply) }
+    );
+
+    const failure = replies.find(
+      (reply) => reply.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.ok(failure, "the refusal must reach the client");
+    assert.strictEqual(
+      failure.action,
+      "run the workflow alongside the current step"
+    );
+    assert.match(failure.error ?? "", /Parallel width is 1/);
+  });
+
+  test("APPEND_FILE refuses an unknown append mode or position without queueing", async () => {
+    const calls: AppendCall[] = [];
+    const replies: { type?: string }[] = [];
+    const router = buildRouter(appendRecorder(calls));
+
+    for (const extra of [{ appendMode: "nested" }, { position: "sideways" }]) {
+      await router.route(
+        {
+          type: MESSAGE_TYPES.APPEND_FILE,
+          filePath: path.resolve("flows/child.ctrlyoke.yaml"),
+          ...extra,
+        },
+        { clientTag: "browser:3", postMessage: (reply) => replies.push(reply) }
+      );
+    }
+
+    assert.strictEqual(calls.length, 0);
+    assert.strictEqual(
+      replies.filter(
+        (reply) => reply.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      ).length,
+      2
     );
   });
 });

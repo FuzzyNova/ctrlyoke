@@ -19,7 +19,10 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { captureLog } from "../helpers/logCapture";
 import { MERGE_INTO_SHARED_ROOT_GUIDANCE } from "../../core/ParallelGroupPreflight";
 import {
+  APPEND_MODES,
   EXECUTION_STATES,
+  QUEUE_POSITION,
+  STEP_TYPES,
   WORKTREE_LIFECYCLE_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
@@ -36,6 +39,7 @@ import {
   type WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 import {
   gitCommonDir,
   setGitTimeoutOverridesForTests,
@@ -2360,6 +2364,75 @@ suite("Sub-workflow host end to end", () => {
         instance.dispose();
       }
       removeTempDir(workspace);
+    }
+  });
+
+  test("a workflow file queued as a sub-workflow while the run is RUNNING runs as a child at the next boundary", async () => {
+    const workspace = makeTempDir("ctrlyoke-queue-subworkflow-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    try {
+      const childMarker = path.join(workspace, "child-ran");
+      const childPath = path.join(workspace, "flows", "child.ctrlyoke.json");
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await fs.mkdir(path.dirname(childPath), { recursive: true });
+      await writeJson(childPath, {
+        steps: [
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').writeFileSync('" +
+              childMarker.replace(/\\/g, "\\\\") +
+              "','yes')\"",
+          },
+        ],
+      });
+      await writeJson(parentPath, {
+        steps: [{ type: "script", script: sentinelScript("first-ran", "go") }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "first-ran"));
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.RUNNING
+      );
+
+      await parent.appendFromFile(
+        childPath,
+        QUEUE_POSITION.END,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+
+      const queued = parent.promptQueue.getState().steps;
+      assert.strictEqual(queued.length, 2);
+      assert.ok(isSubWorkflowStep(queued[1]));
+      assert.strictEqual(queued[1].type, STEP_TYPES.WORKFLOW);
+      assert.strictEqual(queued[1].workflow, "flows/child.ctrlyoke.json");
+      assert.strictEqual(
+        instances.length,
+        1,
+        "no child starts before the running step finishes"
+      );
+
+      await fs.writeFile(path.join(workspace, "go"), "");
+      await execution;
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(state.status, EXECUTION_STATES.COMPLETED);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(
+        childAt(1).promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.strictEqual(await fs.readFile(childMarker, "utf8"), "yes");
+      const childRef = childRunRefOf(state.steps[1]);
+      assert.ok(childRef, "the workflow step records its child run");
+      assert.strictEqual(childRef, childAt(1).promptQueue.getState().runRef);
+    } finally {
+      await disposeAll(instances, workspace);
     }
   });
 
@@ -5263,6 +5336,7 @@ suite("Sub-workflow host end to end", () => {
         ["-C", workspace, "branch", "--show-current"],
         { encoding: "utf8" }
       ).trim();
+      const mainHeadBefore = git(workspace, "rev-parse", "HEAD");
       const parent = createInstance();
       instances.push(parent);
       const lines = await runCapturingLog(parent, parentPath);
@@ -5281,9 +5355,19 @@ suite("Sub-workflow host end to end", () => {
         return lane;
       });
       const worktreesRoot = await fs.realpath(`${workspace}.worktrees`);
+      // The child branched from main's HEAD, and the group is its first step
+      // in a clean worktree (no D4c checkpoint), so its HEAD at fan-out is
+      // that same commit. Both lanes must branch from it (D4b), and neither
+      // from a commit a faster sibling's merge added to the child's branch.
+      assert.strictEqual(childWorktree.baseCommit, mainHeadBefore);
       // The child's worktree is every lane's source checkout and target.
       for (const [index, lane] of lanes.entries()) {
         const laneWorktree = await worktreeRuntimeOf(lane);
+        assert.strictEqual(
+          laneWorktree.baseCommit,
+          childWorktree.baseCommit,
+          `lane ${index + 1} branches from the child worktree's HEAD at fan-out`
+        );
         assert.ok(
           laneWorktree.mergeOutcome === "fast-forward" ||
             laneWorktree.mergeOutcome === "merge-commit",
@@ -6793,6 +6877,162 @@ suite("Sub-workflow host end to end", () => {
     } finally {
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a parallelWithCurrent joiner naming a running member's named branch fails alone with WORKTREE_COLLISION", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-named-joiner-collision-");
+    // Gate files live outside the repository, so the holder's worktree and
+    // the parent's checkout stay clean.
+    const gates = makeTempDir("ctrlyoke-named-joiner-collision-gates-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(
+        path.join(workspace, "hold.js"),
+        [
+          "const fs = require('fs');",
+          "const path = require('path');",
+          "const dir = process.argv[2];",
+          "fs.writeFileSync(path.join(dir, 'holder-runs'), 'ran');",
+          "const timer = setInterval(() => {",
+          "  if (fs.existsSync(path.join(dir, 'holder-go'))) {",
+          "    clearInterval(timer);",
+          "    process.exit(0);",
+          "  }",
+          "}, 25);",
+        ].join("\n")
+      );
+      const latePath = path.join(workspace, "flows", "late.ctrlyoke.json");
+      await fs.mkdir(path.dirname(latePath), { recursive: true });
+      await writeJson(latePath, {
+        name: "Late",
+        worktree: { mode: "named", branch: "refs/heads/lane/shared" },
+        steps: [{ type: "script", script: "node --version" }],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Named joiner",
+        steps: [
+          {
+            parallel: [
+              inlineLane("Holder", `node hold.js ${JSON.stringify(gates)}`, {
+                worktree: "lane/shared",
+              }),
+              inlineLane("Quick", "node --version"),
+            ],
+            failFast: false,
+          },
+        ],
+      });
+      commitAll(workspace, "add workflows");
+
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(gates, "holder-runs"));
+      await waitFor(
+        "the holder lane running",
+        () =>
+          laneChildOf(instances, parent, 0)?.promptQueue.getState().status ===
+          EXECUTION_STATES.RUNNING
+      );
+      const launchesBeforeJoin = instances.length;
+
+      // The dashboard's "run alongside" and MCP's `parallelWithCurrent` both
+      // join through this transaction; the executor learns of the member
+      // from the working-file watcher's merge.
+      const { workflowKey, runRef } = parent.promptQueue.getState();
+      await RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace,
+        workflowKey!,
+        runRef!,
+        [
+          {
+            type: STEP_TYPES.WORKFLOW,
+            name: "Late",
+            workflow: "flows/late.ctrlyoke.json",
+          },
+        ],
+        await RunContinuationService.readRunDefinitionRevision(
+          workspace,
+          workflowKey!,
+          runRef!
+        ),
+        100,
+        undefined,
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        6,
+        workspace
+      );
+      await parent.promptQueue.mergeStepsFromDisk();
+      await waitFor(
+        "the joiner to settle",
+        () =>
+          parent.promptQueue.getState().steps[2]?._runtime?.completedAt !==
+          undefined
+      );
+      const holderStatus = laneChildOf(
+        instances,
+        parent,
+        0
+      )?.promptQueue.getState().status;
+      await fs.writeFile(path.join(gates, "holder-go"), "");
+      await execution;
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        holderStatus,
+        EXECUTION_STATES.RUNNING,
+        "the holder kept running while the joiner failed"
+      );
+      assert.strictEqual(state.steps[2]?.name, "Late");
+      assert.strictEqual(
+        state.steps[2]?._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.FAILED
+      );
+      assert.match(
+        state.steps[2]?._runtime?.failureMessage ?? "",
+        /use the same named worktree "lane\/shared" in one parallel group/
+      );
+      assert.strictEqual(
+        childRunRefOf(state.steps[2]),
+        undefined,
+        "the joiner never launched a child"
+      );
+      assert.strictEqual(
+        instances.length,
+        launchesBeforeJoin,
+        "no child instance was created for the joiner"
+      );
+      assert.strictEqual(
+        laneChildOf(instances, parent, 0)?.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      // The holder and its sibling completed; the group then fails for the
+      // joiner at the join, as it would for a late prompt member's
+      // SESSION_COLLISION.
+      assert.deepStrictEqual(
+        state.steps.slice(0, 2).map((step) => step._runtime?.terminalStatus),
+        [PROMPT_TERMINAL_STATUS.COMPLETED, PROMPT_TERMINAL_STATUS.COMPLETED]
+      );
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.ERROR,
+        JSON.stringify(state.results)
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(gates);
       removeTempDir(`${workspace}.worktrees`);
     }
   });

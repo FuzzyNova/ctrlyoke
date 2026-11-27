@@ -112,7 +112,11 @@ import type {
   PromptResult,
   FinalStepRuntimeState,
 } from "./CtrlYokeTypes";
-import type { WorkflowDocumentIssueSeverity } from "./DashboardConstants";
+import type {
+  AppendMode,
+  QueuePosition,
+  WorkflowDocumentIssueSeverity,
+} from "./DashboardConstants";
 import type {
   CtrlYokeGlobalSettings,
   HarnessColorSettings,
@@ -2730,6 +2734,13 @@ export interface AppendFileMessage {
   type: typeof MESSAGE_TYPES.APPEND_FILE;
   filePath?: string;
   mutation?: WorkflowDefinitionMutation;
+  /** `subWorkflow` queues the file as one workflow step; default `inline`. */
+  appendMode?: AppendMode;
+  /**
+   * Where the tail goes; default `end`. `parallelWithCurrent` (sub-workflow
+   * mode only) runs the file beside the step that is running now.
+   */
+  position?: QueuePosition;
 }
 
 /** Context-menu origin carried back only when a queued-step steer fails. */

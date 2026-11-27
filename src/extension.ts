@@ -1119,6 +1119,25 @@ function registerCommands(
     }
   );
 
+  // Queue as Sub-workflow (context menu) - appends one workflow step that runs the file as a child run
+  const queueAsSubWorkflowFromContextCommand = vscode.commands.registerCommand(
+    "ctrlyoke.queueAsSubWorkflowFromContext",
+    async (uri: vscode.Uri) => {
+      if (!uri) {
+        reportCommandError("No file selected");
+        return;
+      }
+      await saveIfDirty(uri.fsPath, workflowOrchestrator.getUserFeedbackSink());
+      try {
+        await workflowOrchestrator.queueSubWorkflowFromFileForPanel(uri.fsPath);
+      } catch (error) {
+        reportCommandError(
+          `Failed to queue as a sub-workflow: ${getErrorMessage(error)}`
+        );
+      }
+    }
+  );
+
   // Queue Next With ctrlyoke command (context menu) - appends prompts after current position
   const queueNextFromContextCommand = vscode.commands.registerCommand(
     "ctrlyoke.queueNextFromContext",
@@ -1990,6 +2009,7 @@ function registerCommands(
     createNewTemplateCommand,
     runFromContextCommand,
     queueFromContextCommand,
+    queueAsSubWorkflowFromContextCommand,
     queueNextFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,

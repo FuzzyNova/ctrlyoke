@@ -31,8 +31,11 @@ import {
   type RunnerHostIdentity,
   EXECUTION_STATES,
   type PromptFile,
+  type ParsedPromptFile,
+  type SubWorkflowStep,
   type WorkflowStep,
   type WorkflowKey,
+  hasExecutableSteps,
   type RunRef,
   type WorkflowRunAddress,
   type WorkflowViewAddress,
@@ -60,13 +63,18 @@ import {
   type ApprovalDecision,
   type HarnessId,
   type QueuePosition,
+  type AppendMode,
   type ActionType,
   type WorktreeManagementAction,
   type RunDefinitionDecision,
+  APPEND_MODES,
+  QUEUE_POSITION,
   WORKFLOW_VIEW_ADDRESS_KIND,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "../types/DashboardConstants";
+import { buildSubWorkflowReferenceStep } from "./SubWorkflowReferenceStep";
+import { classifySubWorkflowWorktree } from "../utils/WorktreeConfigShape";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { sendAsMessageBatch } from "../ui/MessageBatchSender";
@@ -277,6 +285,17 @@ export interface WorkflowOrchestratorDependencies {
 export type ResumableSession = Awaited<
   ReturnType<WorkspaceSessionManager["discoverSessions"]>
 >[number];
+
+/**
+ * States in which a resident instance takes a queued sub-workflow in memory,
+ * picking it up at its next step boundary. A settled run is continued through
+ * `appendAndContinueAtRun` instead; a stopping one takes neither.
+ */
+const SUB_WORKFLOW_LIVE_APPEND_STATES: ReadonlySet<string> = new Set([
+  EXECUTION_STATES.RUNNING,
+  EXECUTION_STATES.PAUSING,
+  EXECUTION_STATES.PAUSED,
+]);
 
 const snapshotContentRequests = new Map<
   string,
@@ -2158,8 +2177,22 @@ export class WorkflowOrchestrator {
     mutation: WorkflowDefinitionMutation | undefined,
     filePath: string,
     clientId: string,
-    position?: QueuePosition
+    position?: QueuePosition,
+    appendMode: AppendMode = APPEND_MODES.INLINE
   ): Promise<void> {
+    if (appendMode === APPEND_MODES.SUB_WORKFLOW) {
+      return this.appendSubWorkflowFromFileForClient(
+        mutation,
+        filePath,
+        clientId,
+        position
+      );
+    }
+    if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
+      throw new Error(
+        "Only a workflow queued as a sub-workflow can run alongside the current step; nothing was queued."
+      );
+    }
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).appendFromFile(
         filePath,
@@ -2192,6 +2225,182 @@ export class WorkflowOrchestrator {
       mutation.expectedDefinitionRevision,
       mutation.expectedDescriptorRevision,
       clientId
+    );
+  }
+
+  /**
+   * The VS Code explorer's "Queue as Sub-workflow": queue onto whatever the
+   * panel is showing, addressed exactly as the dashboard's own queue action
+   * would be, so a settled run it shows is continued rather than reopened
+   * in memory.
+   */
+  async queueSubWorkflowFromFileForPanel(filePath: string): Promise<void> {
+    const identity = await this.getViewIdentity(this.PANEL_CLIENT_ID);
+    await this.appendFromFileForClient(
+      identity
+        ? {
+            address: identity.address,
+            expectedDefinitionRevision: identity.definitionRevision,
+            expectedDescriptorRevision: identity.descriptorRevision,
+          }
+        : undefined,
+      filePath,
+      this.PANEL_CLIENT_ID,
+      QUEUE_POSITION.END,
+      APPEND_MODES.SUB_WORKFLOW
+    );
+  }
+
+  /**
+   * Queue a workflow file as one sub-workflow step, routed by the target's
+   * state: a run executing here (RUNNING/PAUSING/PAUSED) appends in memory and
+   * picks the step up at its next boundary; a settled addressed run
+   * (COMPLETED/STOPPED/ERROR) appends and continues; an unaddressed draft
+   * appends to its queue. `parallelWithCurrent` joins the step that is
+   * running now instead.
+   */
+  private async appendSubWorkflowFromFileForClient(
+    mutation: WorkflowDefinitionMutation | undefined,
+    filePath: string,
+    clientId: string,
+    position: QueuePosition = QUEUE_POSITION.END
+  ): Promise<void> {
+    const runAddress =
+      mutation?.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+        ? {
+            workflowKey: mutation.address.workflowKey,
+            runRef: mutation.address.runRef,
+          }
+        : undefined;
+    if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
+      await this.runSubWorkflowAlongsideCurrentStep(
+        runAddress,
+        filePath,
+        clientId
+      );
+      return;
+    }
+    const live = runAddress
+      ? this.findLiveInstanceForRun(runAddress)
+      : undefined;
+    if (!runAddress || live) {
+      // The instance parses the file and reports a failure as feedback.
+      await (live ?? this.getInstanceForClient(clientId)).appendFromFile(
+        filePath,
+        position,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+      return;
+    }
+    await this.parseSubWorkflowChildFile(filePath);
+    await this.appendAndContinueAtRun(
+      runAddress,
+      [this.subWorkflowReferenceStepFor(filePath)],
+      mutation!.expectedDefinitionRevision,
+      mutation!.expectedDescriptorRevision,
+      clientId
+    );
+  }
+
+  /**
+   * "Run workflow alongside current step": join the file, as one sub-workflow
+   * step, to the group running now, or promote the running step into a new
+   * group, through the same cross-process transaction MCP `append_step` uses.
+   * The run must be RUNNING, outside its final step, with
+   * `queue.maxParallelSteps` above 1. The executing instance picks the member
+   * up from disk and preflights it before it starts (`WORKTREE_COLLISION`,
+   * `MERGE_INTO_SHARED_ROOT`, and the launcher's own dirty-checkout check).
+   * The parsed child's worktree plan lets the transaction refuse a merging
+   * child beside an editing member up front, as it does for a lane.
+   */
+  private async runSubWorkflowAlongsideCurrentStep(
+    runAddress: { workflowKey: WorkflowKey; runRef: RunRef } | undefined,
+    filePath: string,
+    clientId: string
+  ): Promise<void> {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const boundState = runAddress
+      ? undefined
+      : this.getBoundInstance(clientId)?.getQueueState();
+    const address =
+      runAddress ??
+      (boundState?.workflowKey && boundState.runRef
+        ? { workflowKey: boundState.workflowKey, runRef: boundState.runRef }
+        : undefined);
+    if (!address) {
+      throw new Error(
+        "Running a workflow alongside the current step needs a running workflow; nothing was queued."
+      );
+    }
+    const parsed = await this.parseSubWorkflowChildFile(filePath);
+    const resident =
+      this.findLiveInstanceForRun(address) ??
+      this.findResidentInstanceForRun(address.workflowKey, address.runRef);
+    const definitionRevision =
+      await RunContinuationService.readRunDefinitionRevision(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef
+      );
+    await RunContinuationService.appendStepsToActiveParallelGroup(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef,
+      [this.subWorkflowReferenceStepFor(filePath)],
+      definitionRevision,
+      ConfigurationUtils.getGlobalMaxSteps(),
+      this.lineageRepository,
+      QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+      ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps,
+      resident?.getExecutionRoot(),
+      [classifySubWorkflowWorktree(parsed.worktree)]
+    );
+  }
+
+  /** Parse a file about to be queued as a sub-workflow, failing fast. */
+  private async parseSubWorkflowChildFile(
+    filePath: string
+  ): Promise<ParsedPromptFile> {
+    const parsed = await this.promptFileParser.parsePromptFile(filePath);
+    if (!parsed) {
+      throw new Error(
+        `Cannot queue ${path.basename(filePath)}: ${
+          this.promptFileParser.lastParseError?.message ??
+          "the file could not be parsed"
+        }`
+      );
+    }
+    if (!hasExecutableSteps(parsed)) {
+      throw new Error("No steps found in file");
+    }
+    return parsed;
+  }
+
+  private subWorkflowReferenceStepFor(filePath: string): SubWorkflowStep {
+    return buildSubWorkflowReferenceStep(
+      filePath,
+      this.requireWorkspaceRoot(),
+      this.platform.getNamedWorkspaceRoots()
+    );
+  }
+
+  /**
+   * The resident instance executing `address` right now (RUNNING, PAUSING or
+   * PAUSED), which takes an in-memory append at its next step boundary.
+   */
+  private findLiveInstanceForRun(address: {
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+  }): WorkflowInstance | undefined {
+    return [...this.instances.values(), ...this.retiredInstances.values()].find(
+      (instance) => {
+        const state = instance.getQueueState();
+        return (
+          state.workflowKey === address.workflowKey &&
+          state.runRef === address.runRef &&
+          SUB_WORKFLOW_LIVE_APPEND_STATES.has(state.status)
+        );
+      }
     );
   }
 

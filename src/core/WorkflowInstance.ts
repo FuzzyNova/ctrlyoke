@@ -1,8 +1,12 @@
 import * as path from "path";
-import { getWorkflowStepText } from "../types/CtrlYokeTypes";
+import {
+  getWorkflowStepText,
+  hasExecutableSteps,
+} from "../types/CtrlYokeTypes";
 import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
+import { buildSubWorkflowReferenceStep } from "./SubWorkflowReferenceStep";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
 import {
@@ -89,6 +93,7 @@ import {
   PARALLEL_GROUP_ADMISSION,
   getEffectiveParallelGroupWidth,
   QUEUE_POSITION,
+  APPEND_MODES,
   RUNNER_IDS,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
@@ -112,6 +117,7 @@ import {
   type ActionType,
   type ExecutionMode,
   type QueuePosition,
+  type AppendMode,
   type TerminalEndReason,
   type WorkflowTelemetryOutcome,
   type ApprovalDecision,
@@ -3486,16 +3492,24 @@ export class WorkflowInstance
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Append prompts from a file to the current queue.
+   * Append a workflow file to the current queue. `inline` splices the file's
+   * steps in; `subWorkflow` appends one workflow step that runs the file as a
+   * child run. The file is parsed either way, so a broken file fails here
+   * rather than when its child launches.
    */
   async appendFromFile(
     filePath: string,
-    position: QueuePosition = QUEUE_POSITION.END
+    position: QueuePosition = QUEUE_POSITION.END,
+    appendMode: AppendMode = APPEND_MODES.INLINE
   ): Promise<void> {
     try {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
+      const asSubWorkflow = appendMode === APPEND_MODES.SUB_WORKFLOW;
 
-      if (!parsed?.steps?.length) {
+      if (
+        !parsed ||
+        (asSubWorkflow ? !hasExecutableSteps(parsed) : !parsed.steps?.length)
+      ) {
         notifyUserFeedback(
           this.userFeedbackSink,
           "error",
@@ -3503,6 +3517,24 @@ export class WorkflowInstance
         );
         return;
       }
+
+      const workspaceRoot =
+        this.getStateRoot() ??
+        this.platform.getWorkspaceRoot() ??
+        path.dirname(filePath);
+      const tail: WorkflowStep[] = asSubWorkflow
+        ? [
+            buildSubWorkflowReferenceStep(
+              filePath,
+              workspaceRoot,
+              this.platform.getNamedWorkspaceRoots()
+            ),
+          ]
+        : (parsed.steps ?? []);
+      const tailGroups = asSubWorkflow ? [] : parsed.parallelGroups;
+      const queuedLabel = asSubWorkflow
+        ? `"${path.basename(filePath)}" as a sub-workflow`
+        : `${tail.length} prompt(s)`;
 
       const queueState = this.promptQueue.getState();
       const currentSize = queueState.steps.length;
@@ -3516,12 +3548,15 @@ export class WorkflowInstance
           : DEFAULT_WORKFLOW_NAME;
 
         await this.initializeNewWorkflow(
-          parsed.steps,
+          tail,
           path.basename(filePath),
-          filePath,
+          // The child file is not this workflow's definition: recording it
+          // as the source would make the parent's own lineage look like the
+          // child and trip cycle detection at launch.
+          asSubWorkflow ? undefined : filePath,
           true,
-          `Queued ${parsed.steps.length} prompt(s) to ${workflowType}`,
-          parsed.parallelGroups
+          `Queued ${queuedLabel} to ${workflowType}`,
+          tailGroups
         );
         return;
       }
@@ -3535,7 +3570,7 @@ export class WorkflowInstance
         return;
       }
 
-      const newSize = currentSize + parsed.steps.length;
+      const newSize = currentSize + tail.length;
       const workflowMaxSteps = resolveWorkflowMaxSteps(
         this.promptQueue.getWorkflowFile()
       );
@@ -3558,24 +3593,20 @@ export class WorkflowInstance
       }
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
-      const rebasedSteps = await rebaseWorkflowStepPaths(
-        parsed.steps,
-        filePath,
-        this.getStateRoot() ??
-          this.platform.getWorkspaceRoot() ??
-          path.dirname(filePath),
-        {
-          namedRoots: this.platform.getNamedWorkspaceRoots(),
-          trustedRoots: this.platform.getWorkspaceRoots(),
-          destinationDefinitionPath: this.sourceDefinitionPath,
-        }
-      );
+      // A sub-workflow reference is already workspace-relative or absolute.
+      const rebasedSteps = asSubWorkflow
+        ? tail
+        : await rebaseWorkflowStepPaths(tail, filePath, workspaceRoot, {
+            namedRoots: this.platform.getNamedWorkspaceRoots(),
+            trustedRoots: this.platform.getWorkspaceRoots(),
+            destinationDefinitionPath: this.sourceDefinitionPath,
+          });
       this.reopenRuntimeForContinuationIfNeeded(false);
       const shiftWarning = await this.promptQueue.appendSteps(
         rebasedSteps,
         source,
         position,
-        parsed.parallelGroups
+        tailGroups
       );
       this.syncCurrentPromptFileFromQueue();
 
@@ -3600,7 +3631,10 @@ export class WorkflowInstance
         Log.debug(
           "[WorkflowInstance] No prompt file loaded, updating context (append mode)"
         );
-        this.currentPromptFile = { filePath, promptFile: parsed };
+        // A queued sub-workflow's file is the child's definition, not this one.
+        if (!asSubWorkflow) {
+          this.currentPromptFile = { filePath, promptFile: parsed };
+        }
         const appendWorkingFilePath =
           this.promptQueue.getState().workingFilePath;
         if (appendWorkingFilePath) {
@@ -3615,7 +3649,7 @@ export class WorkflowInstance
       notifyUserFeedback(
         this.userFeedbackSink,
         "info",
-        `Queued ${parsed.steps.length} prompt(s) ${positionText}`
+        `Queued ${queuedLabel} ${positionText}`
       );
       this.notifyShiftedReferences(shiftWarning);
     } catch (error) {

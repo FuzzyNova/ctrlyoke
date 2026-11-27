@@ -17,6 +17,7 @@ import {
   describeInvalidInlineSubWorkflowDefinition,
 } from "../../types/CtrlYokeTypes";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import type { SubWorkflowWorktreePlan } from "../../types/SubWorkflowTypes";
 import {
   EXECUTION_STATES,
   ACTIVE_EXECUTION_STATES,
@@ -623,7 +624,13 @@ export class RunContinuationService {
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     position: QueuePosition = QUEUE_POSITION.PARALLEL_WITH_CURRENT,
     configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
-    executionRoot?: string
+    executionRoot?: string,
+    /**
+     * The worktree plan of each incoming step's child, by position in
+     * `steps`, when the caller already parsed it (a file child). Lets the
+     * merge-lane check see a file child, which it otherwise never parses.
+     */
+    incomingWorktreePlans?: readonly (SubWorkflowWorktreePlan | undefined)[]
   ): Promise<RunParallelJoinMutationResult> {
     if (position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       throw new Error(
@@ -807,11 +814,18 @@ export class RunContinuationService {
             `Cannot join parallel group ${joinedGroupId}: group is missing after insertion`
           );
         }
+        const plansByStepId = new Map<string, SubWorkflowWorktreePlan>();
+        identifiedSteps.forEach((step, index) => {
+          const plan = incomingWorktreePlans?.[index];
+          const stepId = step._runtime?.stepId;
+          if (plan && stepId) plansByStepId.set(stepId, plan);
+        });
         const mergeIssue = mergeIntoSharedRootIssueInGroup(
           source,
           nextTopology.steps,
           joinedGroup,
-          runExecutesInMainCheckout(source, workspaceRoot, executionRoot)
+          runExecutesInMainCheckout(source, workspaceRoot, executionRoot),
+          plansByStepId
         );
         if (mergeIssue) {
           throw new Error(
@@ -1386,6 +1400,20 @@ export class RunContinuationService {
     });
   }
 
+  /**
+   * The run file's current `definitionRevision`, for an additive caller
+   * (the dashboard's "run alongside") that has no revision of its own to
+   * assert; the transaction re-checks it under the run-file lock.
+   */
+  static async readRunDefinitionRevision(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<number> {
+    const run = await this.readRun(workspaceRoot, workflowKey, runRef);
+    return run.definitionRevision ?? 1;
+  }
+
   private static async readRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
@@ -1437,14 +1465,16 @@ function runExecutesInMainCheckout(
  * pending, runs beside the rest. A workflow member with no `worktree` (an
  * inheriting child) runs in this run's root, so it counts as editing it, as
  * in group preflight. A file child is never parsed here and counts as
- * neither. Shared by the `parallelWithCurrent` join and an edit of a running
- * group's member, so both refuse with the preflight's text.
+ * neither, unless its caller parsed it and passed its plan in `plans`.
+ * Shared by the `parallelWithCurrent` join and an edit of a running group's
+ * member, so both refuse with the preflight's text.
  */
 function mergeIntoSharedRootIssueInGroup(
   source: WorkingFile,
   steps: readonly WorkflowStep[],
   group: ParallelGroupDefinition,
-  parentRunsInMainCheckout: boolean
+  parentRunsInMainCheckout: boolean,
+  plans?: ReadonlyMap<string, SubWorkflowWorktreePlan>
 ): ParallelGroupPreflightIssue | undefined {
   const users: ParentCheckoutUser[] = [];
   for (let index = group.startIndex; index <= group.endIndex; index += 1) {
@@ -1458,7 +1488,11 @@ function mergeIntoSharedRootIssueInGroup(
     }
     users.push({
       stepIndex: index,
-      use: stepParentCheckoutUse(step, parentRunsInMainCheckout),
+      use: stepParentCheckoutUse(
+        step,
+        parentRunsInMainCheckout,
+        step._runtime?.stepId ? plans?.get(step._runtime.stepId) : undefined
+      ),
     });
   }
   return mergeIntoSharedRootIssueAmong({ ...source, steps: [...steps] }, users);

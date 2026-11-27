@@ -3600,6 +3600,28 @@ export const QUEUE_POSITION = {
   PARALLEL_WITH_CURRENT: "parallelWithCurrent", // Append to the live group containing current
 } as const;
 
+/** Whether a wire value names a {@link QUEUE_POSITION}. */
+export function isQueuePosition(value: unknown): value is QueuePosition {
+  return (Object.values(QUEUE_POSITION) as unknown[]).includes(value);
+}
+
+/**
+ * How "Queue from File" adds a workflow file to a run: `inline` splices the
+ * file's steps into the run, `subWorkflow` appends one workflow step that
+ * runs the file as a child run.
+ */
+export const APPEND_MODES = {
+  INLINE: "inline",
+  SUB_WORKFLOW: "subWorkflow",
+} as const;
+
+export type AppendMode = (typeof APPEND_MODES)[keyof typeof APPEND_MODES];
+
+/** Whether a wire value names an {@link APPEND_MODES} value. */
+export function isAppendMode(value: unknown): value is AppendMode {
+  return (Object.values(APPEND_MODES) as unknown[]).includes(value);
+}
+
 /**
  * Resolve the array index a queue position splices at, given the execution head
  * and the current step count. Single source for every append path — the

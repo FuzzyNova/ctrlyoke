@@ -356,6 +356,30 @@ into. A lane without `merge`, or one joining a group of lanes, is admitted.
 switching it to a merging preset, wrapping it into a merging lane, or turning
 it back into a prompt step beside a merging lane is refused the same way.
 
+## Queuing a workflow file as a sub-workflow
+
+In VS Code, right-click a workflow file in the Explorer or on its editor tab,
+or use the **Run with ctrlyoke** menu in the editor title bar, and choose
+**Queue as Sub-workflow with ctrlyoke**. Like **Queue Steps with ctrlyoke**,
+it appears once the active queue has at least one step.
+This adds one workflow step that runs the file as a child run, instead of
+copying the file's steps into the workflow the way **Queue Steps with
+ctrlyoke** does. The child keeps its own settings, history and `worktree`.
+
+The step goes onto the workflow the dashboard panel is showing:
+
+- If that workflow is running, pausing or paused, the step is added to the end
+  of its queue and runs after the steps already queued.
+- If it is a run that has finished, stopped or failed, the step is added and
+  the run continues with it.
+- Otherwise it is added to the queue like any other step.
+
+The step's `workflow` path is relative to the workspace when the file is
+inside it (in a multi-root workspace, prefixed with the folder name when the
+file is outside the first folder), and absolute otherwise. ctrlyoke reads the
+file when you queue it, so a file that does not parse is refused right away
+instead of failing when the step starts.
+
 ## Outcomes, Stop, and Pause
 
 A completed child completes the parent step. If the child fails or cannot

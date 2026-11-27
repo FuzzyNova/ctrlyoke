@@ -18,6 +18,9 @@ import {
   LOG_LEVELS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  APPEND_MODES,
+  isAppendMode,
+  isQueuePosition,
   USER_FEEDBACK_SEVERITY,
   isStatusLineHarnessId,
   isRerunConfirmationMode,
@@ -1355,6 +1358,28 @@ export class DashboardMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
+      if (
+        (message.appendMode !== undefined &&
+          !isAppendMode(message.appendMode)) ||
+        (message.position !== undefined && !isQueuePosition(message.position))
+      ) {
+        this.mutationCoordinator.showRunActionFailure(
+          ctx,
+          "queue from file",
+          new Error(
+            `Unknown append mode or position (${String(message.appendMode)}, ${String(message.position)}); nothing was queued`
+          )
+        );
+        return;
+      }
+      const appendMode = message.appendMode ?? APPEND_MODES.INLINE;
+      const position = message.position ?? QUEUE_POSITION.END;
+      const failureAction =
+        appendMode === APPEND_MODES.INLINE
+          ? "append and continue from file"
+          : position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+            ? "run the workflow alongside the current step"
+            : "queue the workflow as a sub-workflow";
       if (message.filePath) {
         const mutation =
           this.mutationCoordinator.asWorkflowDefinitionMutation(message);
@@ -1365,13 +1390,18 @@ export class DashboardMessageRouter {
             mutation,
             this.resolveClientWorkflowFilePath(message.filePath),
             ctx.clientId,
-            QUEUE_POSITION.END
+            position,
+            appendMode
           );
         } catch (error) {
-          if (!isRunAddressed) throw error;
+          // Inline drafts keep their original rethrow; a sub-workflow queue
+          // reports every refusal, since "run alongside" has no other channel.
+          if (!isRunAddressed && appendMode === APPEND_MODES.INLINE) {
+            throw error;
+          }
           this.mutationCoordinator.showRunActionFailure(
             ctx,
-            "append and continue from file",
+            failureAction,
             error
           );
         }
@@ -1386,12 +1416,32 @@ export class DashboardMessageRouter {
         kind: PATH_SELECTION_KINDS.FILE,
         title: PATH_SELECTION_TITLES.APPEND_WORKFLOW,
       });
-      if (filePath) {
+      if (!filePath) return;
+      if (appendMode === APPEND_MODES.INLINE) {
         await this.getOrchestrator()?.appendFromFileForClient(
           undefined,
           this.resolveClientWorkflowFilePath(filePath),
           ctx.clientId,
-          QUEUE_POSITION.END
+          position
+        );
+        return;
+      }
+      // A sub-workflow queue is routed by its target's state, so it needs
+      // the address the client is viewing; the inline picker path above
+      // keeps its original instance-bound behaviour.
+      try {
+        await this.getOrchestrator()?.appendFromFileForClient(
+          this.mutationCoordinator.asWorkflowDefinitionMutation(message),
+          this.resolveClientWorkflowFilePath(filePath),
+          ctx.clientId,
+          position,
+          appendMode
+        );
+      } catch (error) {
+        this.mutationCoordinator.showRunActionFailure(
+          ctx,
+          failureAction,
+          error
         );
       }
     });

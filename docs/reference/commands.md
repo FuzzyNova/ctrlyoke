@@ -63,15 +63,17 @@ Right-click a `.ctrlyoke.yaml`, `.ctrlyoke.yml`, `.ctrlyoke.json`, or `.prompt.m
 Explorer or on its editor tab, or use the play-icon **Run with ctrlyoke** menu in the editor title
 bar:
 
-| Menu item                      | What it does                                           |
-| ------------------------------ | ------------------------------------------------------ |
-| Run with ctrlyoke              | Save the file if needed, load it, and run it           |
-| Load in ctrlyoke               | Load the file into the dashboard without running it    |
-| Queue Steps with ctrlyoke      | Append the file's steps to the end of the active queue |
-| Queue Steps Next with ctrlyoke | Insert the file's steps after the current step         |
+| Menu item                           | What it does                                                       |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| Run with ctrlyoke                   | Save the file if needed, load it, and run it                       |
+| Load in ctrlyoke                    | Load the file into the dashboard without running it                |
+| Queue Steps with ctrlyoke           | Append the file's steps to the end of the active queue             |
+| Queue as Sub-workflow with ctrlyoke | Append one step that runs the file as a child run (a sub-workflow) |
+| Queue Steps Next with ctrlyoke      | Insert the file's steps after the current step                     |
 
-Queue Steps and Queue Steps Next are hidden until the active queue already contains at least one
-step. These items are menu-only and do not appear in the Command Palette.
+Queue Steps, Queue as Sub-workflow and Queue Steps Next are hidden until the active queue already
+contains at least one step. These items are menu-only and do not appear in the Command Palette.
+See [Queuing a workflow file as a sub-workflow](/workflows/sub-workflow-steps#queuing-a-workflow-file-as-a-sub-workflow).
 
 ## Adding context to the prompt editor
 
