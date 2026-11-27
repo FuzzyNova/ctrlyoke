@@ -297,6 +297,13 @@ interface ActiveTargetResources {
   subWorkflow?: SubWorkflowControl;
 }
 
+/**
+ * Shown when a Continue arrives while a Stop of the paused run is still
+ * ending it: the Stop was pressed first, so the Continue is ignored.
+ */
+export const PAUSED_STOP_IGNORES_CONTINUE_MESSAGE =
+  "Continue ignored: the paused workflow is being stopped.";
+
 /** What a run's end keeps of its worktree reservation, and what it settles. */
 interface RunEndReservation {
   /** Kept: worktree, lease and runner lock stay held. */
@@ -403,6 +410,19 @@ export class WorkflowInstance
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
   /**
+   * A `resume()` of a PAUSED run has made it RUNNING but has not begun its
+   * setup yet (it may be waiting for the paused execution to unwind, or
+   * have only just marked its `preDispatchStartup`): nothing is in flight
+   * and nothing is in setup, so `stop()` treats it as the pause it still is.
+   */
+  private resumeEnteringSetup = false;
+  /**
+   * The `stop()` ending a paused run (`stopPausedRun`), while it runs. A
+   * second stop joins it instead of driving the run through the
+   * cancellation path, and `resume()` leaves the run alone meanwhile.
+   */
+  private pausedRunStop: Promise<void> | undefined;
+  /**
    * Set while a start or resume is preflighting / running worktree setup and
    * has not dispatched a step yet (cleared by `beginExecution`). A stop in
    * this window must not cancel or skip the current step, which never ran,
@@ -411,17 +431,6 @@ export class WorkflowInstance
    * `stopRequestCount` the startup began with (see
    * `isStopRequestedDuringStartup`).
    */
-  /**
-   * A `resume()` of a PAUSED run has made it RUNNING but has not begun its
-   * `preDispatchStartup` yet: nothing is in flight and nothing is in setup,
-   * so `stop()` treats it as the pause it still is.
-   */
-  private resumeEnteringSetup = false;
-  /**
-   * `stop()` of a PAUSED run is waiting for its execution to unwind from
-   * the pause; `resume()` leaves the run alone meanwhile.
-   */
-  private stopWaitingOnPause = false;
   private preDispatchStartup:
     | {
         readonly settled: Promise<void>;
@@ -2849,8 +2858,9 @@ export class WorkflowInstance
    * Waits out any startup still in its pre-dispatch phase (e.g. one the user
    * stopped mid-setup, which is still releasing its lock and worktree), then
    * marks a new one as begun. Returns its token for `endPreDispatchStartup`.
+   * Protected so a test subclass can land a stop just after the mark.
    */
-  private async beginPreDispatchStartup(
+  protected async beginPreDispatchStartup(
     stopRequestBaseline?: number
   ): Promise<NonNullable<WorkflowInstance["preDispatchStartup"]>> {
     while (this.preDispatchStartup) {
@@ -2965,9 +2975,13 @@ export class WorkflowInstance
       return;
     }
 
-    if (this.stopWaitingOnPause) {
-      Log.info(
-        `[inst:${this.id.slice(0, 8)}] resume() ignored - a stop pressed while paused is ending the run`
+    // A stop pressed while paused is ending the run (it may be waiting for
+    // the paused execution to unwind). The stop was pressed first.
+    if (this.pausedRunStop) {
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.INFO,
+        PAUSED_STOP_IGNORES_CONTINUE_MESSAGE
       );
       return;
     }
@@ -2977,9 +2991,10 @@ export class WorkflowInstance
     }
     const stopRequestBaseline = this.workflowRuntime.stopRequestCount;
 
-    // RUNNING from here, but no startup is in setup until
-    // beginPreDispatchStartup below: a stop in between takes stop()'s idle
-    // branch, which settles the paused reservation, and this resume ends.
+    // RUNNING from here, but nothing is in setup until this try ends: a stop
+    // in between (even one landing after beginPreDispatchStartup has marked
+    // the startup) is a stop of the paused run, which settles the paused
+    // reservation (`stopPausedRun`), and this resume ends.
     this.resumeEnteringSetup = true;
     let startup: NonNullable<WorkflowInstance["preDispatchStartup"]>;
     let resolvedHistoryFilePath: string;
@@ -3021,8 +3036,9 @@ export class WorkflowInstance
       this.resumeEnteringSetup = false;
     }
     try {
-      // Stopped while this resume waited for an earlier startup to end:
-      // stop()'s idle branch has already settled the reservation.
+      // Stopped while beginPreDispatchStartup was marking this startup:
+      // resumeEnteringSetup was still set, so that stop took the paused-run
+      // branch (`stopPausedRun`) and settled the reservation itself.
       if (this.isResumeSuperseded(stopRequestBaseline)) {
         return;
       }
@@ -3042,6 +3058,7 @@ export class WorkflowInstance
   /** A stop (or another transition) has overtaken a resume before its setup. */
   private isResumeSuperseded(stopRequestBaseline: number): boolean {
     return (
+      this.pausedRunStop !== undefined ||
       this.workflowRuntime.status !== EXECUTION_STATES.RUNNING ||
       this.workflowRuntime.stopRequestCount !== stopRequestBaseline
     );
@@ -3150,6 +3167,54 @@ export class WorkflowInstance
    * Stop current execution.
    */
   async stop(): Promise<void> {
+    // A second stop of a paused run (a parent's forwarded stop beside a
+    // direct one, a double click) joins the one already ending it. Driven
+    // on its own it would find the run CANCELLING and take the cancellation
+    // path: the next pending step's attempt cancelled, the detector's 10 s
+    // fallback, and `startPending` cleared under the first stop's
+    // settlement hold.
+    if (this.pausedRunStop) {
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] stop() joined the stop already ending the paused run`
+      );
+      await this.pausedRunStop;
+      return;
+    }
+    if (!this.isPausedWithNothingInFlight()) {
+      await this.stopRun(false);
+      return;
+    }
+    const pausedRunStop = this.stopRun(true);
+    this.pausedRunStop = pausedRunStop;
+    try {
+      await pausedRunStop;
+    } finally {
+      if (this.pausedRunStop === pausedRunStop) {
+        this.pausedRunStop = undefined;
+      }
+    }
+  }
+
+  /**
+   * A PAUSED run, or one a Continue has made RUNNING but whose setup has not
+   * begun (`resumeEnteringSetup`): a pause is confirmed only at a step
+   * boundary, so no step is in flight. Its execution may still be unwinding
+   * from that boundary.
+   */
+  private isPausedWithNothingInFlight(): boolean {
+    const status = this.workflowRuntime.status;
+    return (
+      (status === EXECUTION_STATES.PAUSED ||
+        (this.resumeEnteringSetup && status === EXECUTION_STATES.RUNNING)) &&
+      this.activeTargetResources.size === 0
+    );
+  }
+
+  /**
+   * @param pausedAtEntry `isPausedWithNothingInFlight()` when the stop was
+   *   pressed; the caller holds `pausedRunStop` for it.
+   */
+  private async stopRun(pausedAtEntry: boolean): Promise<void> {
     const stopReason = "Workflow stopped by user";
 
     Log.info(`[WorkflowInstance] stop() - stopping active target resources`);
@@ -3173,24 +3238,46 @@ export class WorkflowInstance
       }
     }
 
-    // A pause is confirmed only at a step boundary, so a PAUSED run has no
-    // step in flight. Its execution may still be unwinding from that
-    // boundary (a group run that just returned `paused`, the queue loop
-    // breaking): wait for it, bounded, rather than drive it through the
-    // cancellation path below, which only the detector's timer would end.
-    // The stop was pressed first, so a Continue pressed during the wait is
-    // ignored (`resume()`): resuming here would hand the still-live
-    // executor RUNNING, and it would carry on in place under this wait.
-    if (
-      this.workflowRuntime.status === EXECUTION_STATES.PAUSED &&
-      this.activeTargetResources.size === 0 &&
-      this.workflowExecutor.hasLiveExecution()
-    ) {
-      this.stopWaitingOnPause = true;
-      try {
+    // A paused run has no step in flight, but its execution may still be
+    // unwinding from the pause's step boundary (a group run that just
+    // returned `paused`, the queue loop breaking): wait for it, bounded,
+    // rather than drive it through the cancellation path below, which only
+    // the detector's timer would end. The stop was pressed first, so a
+    // Continue pressed during the wait is ignored, and one pressed just
+    // before it ends without starting (`isResumeSuperseded`): resuming here
+    // would hand the still-live executor RUNNING, and it would carry on in
+    // place under this wait.
+    //
+    // Then, with nothing in flight: as in setup below, nothing is cancelled
+    // and nothing is skipped. The head (the next pending step, or a group a
+    // Continue re-enters at its unstarted members) stays as the pause left
+    // it. This comes before the setup branch: a Continue's resume marks its
+    // startup before it has done any setup, and the reservation its pause
+    // kept is settled here, not by that resume.
+    if (pausedAtEntry) {
+      if (this.workflowExecutor.hasLiveExecution()) {
+        // A Continue pressed first has already made the run RUNNING, and the
+        // still-live executor carries on in place when it sees that (the
+        // Continue's resume waits for it rather than starting its own).
+        // Requesting the stop now holds it at the step boundary it paused
+        // at; nothing is in flight, so no attempt is cancelled.
+        if (
+          this.workflowRuntime.status === EXECUTION_STATES.RUNNING &&
+          this.workflowRuntime.requestStop()
+        ) {
+          await this.promptQueue.commitRuntimeTransition({ persist: false });
+        }
         await this.waitForPausedExecutionToUnwind();
-      } finally {
-        this.stopWaitingOnPause = false;
+      }
+      if (
+        this.activeTargetResources.size === 0 &&
+        !this.workflowExecutor.hasLiveExecution()
+      ) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] stop() while paused - no step in flight, leaving the current step pending`
+        );
+        await this.stopIdlePausedRun();
+        return;
       }
     }
 
@@ -3208,26 +3295,6 @@ export class WorkflowInstance
       if (this.workflowRuntime.confirmStopped()) {
         await this.promptQueue.commitRuntimeTransition();
       }
-      return;
-    }
-
-    // Stopped while paused with nothing in flight: as in setup above,
-    // nothing is cancelled and nothing is skipped. The head (the next
-    // pending step, or a group a Continue re-enters at its unstarted
-    // members) stays as the pause left it. A Continue that has already
-    // resumed the run but not yet begun its setup has nothing in flight
-    // either; `resume()` sees this stop and goes no further.
-    if (
-      (this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
-        (this.resumeEnteringSetup &&
-          this.workflowRuntime.status === EXECUTION_STATES.RUNNING)) &&
-      this.activeTargetResources.size === 0 &&
-      !this.workflowExecutor.hasLiveExecution()
-    ) {
-      Log.info(
-        `[inst:${this.id.slice(0, 8)}] stop() while paused - no step in flight, leaving the current step pending`
-      );
-      await this.stopIdlePausedRun();
       return;
     }
 
@@ -3433,10 +3500,11 @@ export class WorkflowInstance
       }
       this.workflowExecutor.clearResponseWaitState();
       if (settlesReservation) {
+        // The pause already settled this run's execution integrations, so
+        // none are passed; the ones it parked are settled strictly inside.
         await this.settleRunEndReservations(
           { workingFilePath: this.promptQueue.getState().workingFilePath },
-          this.resolveRunEndReservation(false),
-          { strictArtifactCleanupSucceeded: true }
+          this.resolveRunEndReservation(false)
         );
       }
     } finally {
@@ -5868,7 +5936,11 @@ export class WorkflowInstance
    * settled: retained terminals, the worktree (merged per its config through
    * `settleManagedWorktree`), then the lease, heartbeat and runner lock.
    * Execution settlement reaches it when the run ends; `stopIdlePausedRun`
-   * when a stop ends a run whose pause had kept them.
+   * when a stop ends a run whose pause had kept them. `cleanup` is the
+   * strict artifact cleanup of the execution integrations settled just
+   * before (`settleExecutionIntegrations`); a stopped pause has none left,
+   * and the integrations its pause parked are cleaned strictly in
+   * `settleRetainedIntegrations`, whose result decides the landing.
    */
   private async settleRunEndReservations(
     options: { workingFilePath: string | undefined },
@@ -5876,7 +5948,7 @@ export class WorkflowInstance
     cleanup: {
       strictArtifactCleanupSucceeded: boolean;
       strictArtifactCleanupMessage?: string;
-    }
+    } = { strictArtifactCleanupSucceeded: true }
   ): Promise<void> {
     // Only a started run reaches settlement, and a run needs a state root.
     const workspaceRoot = this.executionWorkspace.stateRoot;
@@ -6034,17 +6106,34 @@ export class WorkflowInstance
   }> {
     // A retained entry can survive an unusual handoff path even when it was
     // not reinserted into executionIntegrations. It is still part of the
-    // worktree cleanup barrier and must never outlive the lease.
+    // worktree cleanup barrier and must never outlive the lease. So are the
+    // integrations a pause parked in `lastRunIntegrations`: the pause kept
+    // the worktree, so it settled them non-terminally (best-effort artifact
+    // cleanup, terminal tab left open), and a stop ending that paused run
+    // (`stopIdlePausedRun`) settles them here, as the terminal settlement it
+    // is: their terminals released with the worktree, and the strict
+    // cleanup's result deciding whether the worktree may land.
     if (terminalWorktreeRun) {
+      const parked = this.lastRunIntegrations;
+      this.lastRunIntegrations = [];
+      for (const integration of parked) {
+        // Already disposed by the pause; only its terminal is left.
+        integration.closeTerminal(TERMINAL_END_REASONS.WORKTREE_RELEASED);
+      }
       for (const retained of this.liveReusableIntegrations.values()) {
         retained.closeTerminalGracefully(
           TERMINAL_END_REASONS.WORKTREE_RELEASED
         );
         retained.dispose();
+      }
+      for (const integration of [
+        ...parked,
+        ...this.liveReusableIntegrations.values(),
+      ]) {
         const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
-          retained,
+          integration,
           options.workingFilePath,
-          retained.getExecutionRoot() ?? workspaceRoot,
+          integration.getExecutionRoot() ?? workspaceRoot,
           true
         );
         if (!cleanup.cleaned) {

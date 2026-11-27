@@ -3,7 +3,10 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, test } from "mocha";
-import { WorkflowInstance } from "../../core/WorkflowInstance";
+import {
+  PAUSED_STOP_IGNORES_CONTINUE_MESSAGE,
+  WorkflowInstance,
+} from "../../core/WorkflowInstance";
 import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
 import {
   STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE,
@@ -28,7 +31,10 @@ import {
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
   SUB_WORKFLOW_CANCELLATION_SOURCES,
+  TERMINAL_END_REASONS,
+  USER_FEEDBACK_SEVERITY,
   WORKFLOW_ATTEMPT_COMMANDS,
+  type TerminalEndReason,
 } from "../../types/DashboardConstants";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
@@ -56,6 +62,11 @@ import { TestWorkflowInstanceRegistryHost } from "../helpers/workflowInstanceReg
 import { CtrlYokeMCPServer } from "../../mcp-server";
 import { MCP_APPEND_STEP_TOOL_NAME } from "../../utils/McpToolDefinitions";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
+import type {
+  UserFeedback,
+  UserFeedbackSink,
+} from "../../core/UserFeedbackSink";
+import type { WorkflowArtifactCleanupResult } from "../../core/HarnessIntegration";
 import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
 
 function restoreEnvironmentValues(
@@ -67,6 +78,68 @@ function restoreEnvironmentValues(
     } else {
       process.env[key] = value;
     }
+  }
+}
+
+/**
+ * A `WorkflowInstance` that can run a hook the moment a start or resume has
+ * marked its pre-dispatch startup, before its caller goes on: the one point
+ * where a resume has marked a startup but done none of its setup.
+ */
+class StartupHookedWorkflowInstance extends WorkflowInstance {
+  /** Awaited once, right after the next startup is marked. */
+  afterStartupMarked?: () => Promise<void>;
+
+  protected override async beginPreDispatchStartup(
+    stopRequestBaseline?: number
+  ) {
+    const startup = await super.beginPreDispatchStartup(stopRequestBaseline);
+    const hook = this.afterStartupMarked;
+    this.afterStartupMarked = undefined;
+    await hook?.();
+    return startup;
+  }
+}
+
+/** Records the operational feedback an instance raises. */
+class RecordingFeedbackSink implements UserFeedbackSink {
+  readonly notices: UserFeedback[] = [];
+
+  notify(message: UserFeedback): void {
+    this.notices.push(message);
+  }
+}
+
+/**
+ * A harness whose best-effort artifact cleanup removes nothing and whose
+ * strict cleanup reports a provider file left behind, as a hook or MCP
+ * config file the harness wrote into the worktree would be.
+ */
+class ArtifactLeavingIntegration extends MockHarnessIntegration {
+  static readonly LEFT_ARTIFACT = "provider-hooks.json";
+  bestEffortCleanups = 0;
+  readonly strictCleanupRoots: string[] = [];
+  readonly closedTerminals: TerminalEndReason[] = [];
+
+  override async cleanupWorkflowArtifacts(): Promise<void> {
+    this.bestEffortCleanups++;
+  }
+
+  override async cleanupWorkflowArtifactsStrict(
+    _workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): Promise<WorkflowArtifactCleanupResult> {
+    this.strictCleanupRoots.push(workspaceRoot);
+    return {
+      cleaned: false,
+      failures: [
+        `Provider artifact remains after cleanup: ${path.join(workspaceRoot, ArtifactLeavingIntegration.LEFT_ARTIFACT)}`,
+      ],
+    };
+  }
+
+  override closeTerminal(reason: TerminalEndReason): void {
+    this.closedTerminals.push(reason);
   }
 }
 
@@ -109,9 +182,10 @@ suite("Sub-workflow host end to end", () => {
     childOptions?: {
       ancestorPaths: readonly string[];
       delegationChain: readonly string[];
-    }
-  ): WorkflowInstance {
-    return new WorkflowInstance(
+    },
+    userFeedbackSink?: UserFeedbackSink
+  ): StartupHookedWorkflowInstance {
+    return new StartupHookedWorkflowInstance(
       platform,
       undefined,
       integrationFactory,
@@ -122,7 +196,7 @@ suite("Sub-workflow host end to end", () => {
       false,
       false,
       undefined,
-      undefined,
+      userFeedbackSink,
       undefined,
       undefined,
       undefined,
@@ -173,7 +247,9 @@ suite("Sub-workflow host end to end", () => {
     /** Awaited inside `host.launch`, before the child loads its definition. */
     beforeChildLoad?: () => Promise<void>,
     /** Called with each child instance the launcher creates. */
-    onChildCreated?: (child: WorkflowInstance) => void
+    onChildCreated?: (child: WorkflowInstance) => void,
+    /** Where every instance built here raises its user feedback. */
+    userFeedbackSink?: UserFeedbackSink
   ) {
     const platform = new MockPlatform(workspace);
     const integrationFactory = new MockIntegrationFactory(
@@ -199,7 +275,8 @@ suite("Sub-workflow host end to end", () => {
         integrationFactory,
         detector,
         launcher,
-        childOptions
+        childOptions,
+        userFeedbackSink
       );
     launcher = new SubWorkflowLauncher(
       ({ ancestorPaths, delegationChain, concurrent }) => {
@@ -3908,9 +3985,27 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
-  test("a Continue pressed while a stop waits for a pause to unwind is ignored, and the stop cancels nothing", async () => {
-    const workspace = makeTempDir("ctrlyoke-paused-stop-continue-race-");
-    const { createInstance, instances } = makeInstanceFactory(workspace);
+  /**
+   * Run a two-member gated group (a third member unstarted, a step after
+   * it), pause it, and run `press` the moment the group confirms PAUSED,
+   * while the executor is still unwinding from the pause. Whatever `press`
+   * does, it must end the run STOPPED with nothing cancelled and nothing
+   * skipped, without stop()'s 10 s fallback, and a later Continue must run
+   * the rest. Returns the feedback the instance raised meanwhile.
+   */
+  async function pressesWhileAPauseUnwinds(
+    prefix: string,
+    press: (parent: WorkflowInstance) => Promise<void>[]
+  ): Promise<UserFeedback[]> {
+    const workspace = makeTempDir(prefix);
+    const feedback = new RecordingFeedbackSink();
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      undefined,
+      undefined,
+      undefined,
+      feedback
+    );
     configService.setCliOverlay({ queue: { maxParallelSteps: 2 } });
     try {
       await writeGateScript(workspace);
@@ -3935,33 +4030,26 @@ suite("Sub-workflow host end to end", () => {
       await waitForFile(path.join(workspace, "a-runs"));
       await waitForFile(path.join(workspace, "b-runs"));
 
-      // Stop the moment the group confirms PAUSED, while the executor is
-      // still unwinding, and press Continue straight after: the stop waits
-      // for the unwind, and the Continue resumes the run meanwhile.
       const cancellations = recordAttemptCancellations(parent);
-      let stop: Promise<void> | undefined;
-      let resume: Promise<void> | undefined;
-      let liveAtStop: boolean | undefined;
+      let presses: Promise<void>[] | undefined;
+      let unsettledAtPress: boolean | undefined;
       parent.promptQueue.onDidChangeState((state) => {
-        if (stop || state.status !== EXECUTION_STATES.PAUSED) return;
-        liveAtStop = (
-          parent as unknown as {
-            workflowExecutor: { hasLiveExecution(): boolean };
-          }
-        ).workflowExecutor.hasLiveExecution();
-        stop = parent.stop();
-        resume = parent.resume();
+        if (presses || state.status !== EXECUTION_STATES.PAUSED) return;
+        // The paused execution has not settled (it clears startPending).
+        unsettledAtPress = parent.startPending;
+        presses = press(parent);
       });
       await withoutStopFallback(async () => {
         await parent.pause();
         await fs.writeFile(path.join(workspace, "a-go"), "");
         await fs.writeFile(path.join(workspace, "b-go"), "");
         await settlesWithin("the paused execution", execution);
-        await waitFor("the stop to start", () => stop !== undefined);
-        await settlesWithin("the stop", stop!);
-        await settlesWithin("the overtaken continue", resume!);
+        await waitFor("the presses", () => presses !== undefined);
+        for (const pressed of presses!) {
+          await settlesWithin("a press", pressed);
+        }
       });
-      assert.strictEqual(liveAtStop, true, "the stop landed mid-unwind");
+      assert.strictEqual(unsettledAtPress, true, "pressed mid-unwind");
       assert.deepStrictEqual(cancellations(), [], "no attempt was cancelled");
       const stopped = parent.promptQueue.getState();
       assert.strictEqual(
@@ -3980,6 +4068,7 @@ suite("Sub-workflow host end to end", () => {
         ]
       );
       await assert.rejects(fs.access(path.join(workspace, "c-ran")));
+      const raised = [...feedback.notices];
 
       // Nothing was skipped: a later Continue runs the unstarted member.
       await withoutStopFallback(() =>
@@ -3991,10 +4080,94 @@ suite("Sub-workflow host end to end", () => {
       );
       await fs.access(path.join(workspace, "c-ran"));
       await fs.access(path.join(workspace, "after"));
+      return raised;
     } finally {
       configService.setCliOverlay({});
       await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
       await fs.writeFile(path.join(workspace, "b-go"), "").catch(() => {});
+      await disposeAll(instances, workspace);
+    }
+  }
+
+  const continueIgnoredNotice: UserFeedback = {
+    severity: USER_FEEDBACK_SEVERITY.INFO,
+    message: PAUSED_STOP_IGNORES_CONTINUE_MESSAGE,
+  };
+
+  test("a Continue pressed while a stop waits for a pause to unwind is ignored with a notice, and the stop cancels nothing", async () => {
+    const raised = await pressesWhileAPauseUnwinds(
+      "ctrlyoke-paused-stop-continue-race-",
+      (parent) => [parent.stop(), parent.resume()]
+    );
+    assert.deepStrictEqual(raised, [continueIgnoredNotice]);
+  });
+
+  test("a stop pressed after a Continue, while the pause still unwinds, stops the paused run and cancels nothing", async () => {
+    const raised = await pressesWhileAPauseUnwinds(
+      "ctrlyoke-paused-continue-stop-unwind-",
+      (parent) => [parent.resume(), parent.stop()]
+    );
+    // The Continue came first, so it was not ignored: the stop overtook it.
+    assert.deepStrictEqual(raised, []);
+  });
+
+  test("a second stop of a paused run while its pause unwinds joins the first and cancels nothing", async () => {
+    await pressesWhileAPauseUnwinds(
+      "ctrlyoke-paused-double-stop-unwind-",
+      (parent) => [parent.stop(), parent.stop()]
+    );
+  });
+
+  test("a second stop of an idle paused run joins the first and skips nothing", async () => {
+    const workspace = makeTempDir("ctrlyoke-paused-double-stop-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      await writeGateScript(workspace);
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [
+          { type: "script", script: "node gate.js a" },
+          { type: "script", script: WRITE_C_RAN },
+          AFTER_SCRIPT_STEP,
+        ],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "a-runs"));
+      await parent.pause();
+      await fs.writeFile(path.join(workspace, "a-go"), "");
+      await settlesWithin("the paused execution", execution);
+      assert.strictEqual(parent.startPending, false, "the pause has settled");
+
+      // A parent's forwarded stop beside a direct one, or a double click.
+      const cancellations = recordAttemptCancellations(parent);
+      await withoutStopFallback(async () => {
+        const first = parent.stop();
+        const second = parent.stop();
+        await settlesWithin("the second stop", second);
+        await settlesWithin("the first stop", first);
+      });
+      assert.deepStrictEqual(cancellations(), [], "no attempt was cancelled");
+      const stopped = parent.promptQueue.getState();
+      assert.strictEqual(stopped.status, EXECUTION_STATES.STOPPED);
+      assert.strictEqual(stopped.currentIndex, 1);
+      assert.deepStrictEqual(
+        stopped.results.slice(0, 3).map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.PENDING, STEP_STATUS.PENDING]
+      );
+
+      await withoutStopFallback(() =>
+        settlesWithin("the continue", continueParent(parent))
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      await fs.access(path.join(workspace, "c-ran"));
+    } finally {
+      await fs.writeFile(path.join(workspace, "a-go"), "").catch(() => {});
       await disposeAll(instances, workspace);
     }
   });
@@ -7258,18 +7431,20 @@ suite("Sub-workflow host end to end", () => {
   });
 
   /**
-   * A top-level worktree run paused at its first step boundary: step 1
-   * writes `lane.txt` in its checkout and waits on `<control>/a-go`, step 2
-   * writes `<control>/second-ran`. The control files live outside the
-   * repository so the run's checkout stays the step's own work.
+   * A top-level worktree run paused at its gated step's boundary: that step
+   * writes `lane.txt` in its checkout and waits on `<control>/a-go`, the
+   * next writes `<control>/second-ran`. `leadingSteps` run before the gated
+   * one. The control files live outside the repository so the run's
+   * checkout stays the step's own work.
    */
-  async function pausedWorktreeRun(
+  async function pausedWorktreeRun<T extends WorkflowInstance>(
     workspace: string,
     control: string,
     worktree: unknown,
-    createInstance: () => WorkflowInstance,
-    instances: WorkflowInstance[]
-  ): Promise<WorkflowInstance> {
+    createInstance: () => T,
+    instances: WorkflowInstance[],
+    leadingSteps: readonly unknown[] = []
+  ): Promise<T> {
     initGitRepository(workspace);
     await writeGateScript(control);
     await fs.writeFile(
@@ -7282,6 +7457,7 @@ suite("Sub-workflow host end to end", () => {
       name: "Paused worktree run",
       worktree,
       steps: [
+        ...leadingSteps,
         {
           type: "script",
           script: `${write("lane.txt")} && node "${path.join(control, "gate.js")}" "${path.join(control, "a")}"`,
@@ -7484,15 +7660,22 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
-  test("a stop landing while a managed run's parallel group unwinds its pause settles the worktree", async function () {
-    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
-    this.timeout(180_000);
+  /**
+   * A managed merge run paused inside a gated group, with `press` run the
+   * moment the group confirms PAUSED, while the executor is still unwinding
+   * from it: whatever `press` does, the run ends STOPPED with its worktree
+   * landed and its lease and runner lock released.
+   */
+  async function stopsManagedGroupMidUnwind(
+    prefix: string,
+    press: (parent: WorkflowInstance) => Promise<void>[]
+  ): Promise<void> {
     const restoreGitTimeouts = setGitTimeoutOverridesForTests({
       shortTimeoutMs: 60_000,
       mutationTimeoutMs: 120_000,
     });
-    const workspace = makeTempDir("ctrlyoke-paused-managed-group-stop-");
-    const control = makeTempDir("ctrlyoke-paused-managed-group-control-");
+    const workspace = makeTempDir(prefix);
+    const control = makeTempDir(`${prefix}control-`);
     const { createInstance, instances } = makeInstanceFactory(workspace);
     configService.setCliOverlay({ queue: { maxParallelSteps: 2 } });
     try {
@@ -7538,29 +7721,25 @@ suite("Sub-workflow host end to end", () => {
         }
       );
 
-      // Stop the moment the group confirms PAUSED, while the executor is
-      // still unwinding from it: the settlement the stop waits for runs as
-      // PAUSED and keeps the reservation, which the stop must then end.
-      let stop: Promise<void> | undefined;
-      let liveAtStop: boolean | undefined;
+      let presses: Promise<void>[] | undefined;
+      let unsettledAtPress: boolean | undefined;
       parent.promptQueue.onDidChangeState((state) => {
-        if (stop || state.status !== EXECUTION_STATES.PAUSED) return;
-        liveAtStop = (
-          parent as unknown as {
-            workflowExecutor: { hasLiveExecution(): boolean };
-          }
-        ).workflowExecutor.hasLiveExecution();
-        stop = parent.stop();
+        if (presses || state.status !== EXECUTION_STATES.PAUSED) return;
+        // The paused execution has not settled (it clears startPending).
+        unsettledAtPress = parent.startPending;
+        presses = press(parent);
       });
       await withoutStopFallback(async () => {
         await parent.pause();
         await fs.writeFile(path.join(control, "a-go"), "");
         await fs.writeFile(path.join(control, "b-go"), "");
         await settlesWithin("the paused execution", execution, 60_000);
-        await waitFor("the stop to start", () => stop !== undefined);
-        await settlesWithin("the stop", stop!, 60_000);
+        await waitFor("the presses", () => presses !== undefined);
+        for (const pressed of presses!) {
+          await settlesWithin("a press", pressed, 60_000);
+        }
       });
-      assert.strictEqual(liveAtStop, true, "the stop landed mid-unwind");
+      assert.strictEqual(unsettledAtPress, true, "pressed mid-unwind");
       const stopped = parent.promptQueue.getState();
       assert.strictEqual(
         stopped.status,
@@ -7586,6 +7765,167 @@ suite("Sub-workflow host end to end", () => {
           .writeFile(path.join(control, `${name}-go`), "")
           .catch(() => {});
       }
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(control);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  }
+
+  test("a stop landing while a managed run's parallel group unwinds its pause settles the worktree", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    // The settlement the stop waits for runs as PAUSED and keeps the
+    // reservation, which the stop must then end.
+    await stopsManagedGroupMidUnwind(
+      "ctrlyoke-paused-managed-group-stop-",
+      (parent) => [parent.stop()]
+    );
+  });
+
+  test("a stop pressed after a Continue while a managed run's parallel group unwinds its pause settles the worktree", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    await stopsManagedGroupMidUnwind(
+      "ctrlyoke-paused-managed-group-continue-stop-",
+      (parent) => [parent.resume(), parent.stop()]
+    );
+  });
+
+  test("stopping a paused managed run lands it only through the strict artifact check, and releases its parked terminals", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-paused-managed-artifact-stop-");
+    const control = makeTempDir("ctrlyoke-paused-managed-artifact-control-");
+    const integration = new ArtifactLeavingIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      integration
+    );
+    try {
+      const parent = await pausedWorktreeRun(
+        workspace,
+        control,
+        { mode: "managed", merge: true },
+        createInstance,
+        instances,
+        [{ prompt: "write the provider hooks" }]
+      );
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "write the provider hooks",
+      ]);
+      // The pause kept the worktree, so it ran only the best-effort cleanup
+      // and left the integration's terminal open.
+      assert.ok(integration.bestEffortCleanups > 0, "best-effort cleanup ran");
+      assert.deepStrictEqual(integration.strictCleanupRoots, []);
+      assert.deepStrictEqual(integration.closedTerminals, []);
+      const leasesRoot = await worktreeLeasesRoot(parent);
+
+      await withoutStopFallback(() =>
+        settlesWithin("the stop", parent.stop(), 60_000)
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.ok(
+        integration.strictCleanupRoots.length > 0,
+        "the stop ran the strict cleanup a terminal settlement runs"
+      );
+      assert.ok(integration.closedTerminals.length > 0, "terminals closed");
+      assert.ok(
+        integration.closedTerminals.every(
+          (reason) => reason === TERMINAL_END_REASONS.WORKTREE_RELEASED
+        ),
+        integration.closedTerminals.join(", ")
+      );
+      const settled = await worktreeRuntimeOf(parent);
+      assert.strictEqual(settled.landingOutcome, "blocked");
+      assert.ok(
+        settled.message?.includes(ArtifactLeavingIntegration.LEFT_ARTIFACT),
+        String(settled.message)
+      );
+      await assert.rejects(
+        fs.access(path.join(workspace, "lane.txt")),
+        "nothing landed in the main checkout"
+      );
+      assert.strictEqual(
+        (await runReservations(parent, workspace, leasesRoot)).runnerLock,
+        false
+      );
+    } finally {
+      await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(control);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a stop landing just as a Continue marks its startup settles the paused managed run's reservation", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-paused-managed-startup-stop-");
+    const control = makeTempDir("ctrlyoke-paused-managed-startup-control-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      const parent = await pausedWorktreeRun(
+        workspace,
+        control,
+        { mode: "managed", merge: true },
+        createInstance,
+        instances
+      );
+      const leasesRoot = await worktreeLeasesRoot(parent);
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: true, leases: 1 }
+      );
+
+      // The Continue has marked its pre-dispatch startup but done none of
+      // its setup when the stop lands.
+      let stop: Promise<void> | undefined;
+      parent.afterStartupMarked = async () => {
+        stop = parent.stop();
+        await stop;
+      };
+      const cancellations = recordAttemptCancellations(parent);
+      await withoutStopFallback(() =>
+        settlesWithin("the overtaken continue", parent.resume(), 60_000)
+      );
+      assert.ok(stop, "the stop landed inside the continue's startup");
+      assert.deepStrictEqual(cancellations(), [], "no attempt was cancelled");
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: false, leases: 0 }
+      );
+      const settled = await worktreeRuntimeOf(parent);
+      assert.strictEqual(settled.landingOutcome, "landed");
+      assert.strictEqual(settled.mergeOutcome, "fast-forward");
+      await assert.rejects(fs.access(path.join(control, "second-ran")));
+
+      await withoutStopFallback(() =>
+        settlesWithin("the continue", continueParent(parent), 60_000)
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      await fs.access(path.join(control, "second-ran"));
+    } finally {
+      await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
       restoreGitTimeouts();
       await disposeAll(instances, workspace);
       removeTempDir(control);
