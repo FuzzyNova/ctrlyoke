@@ -4,7 +4,10 @@ import {
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import { hasStarted } from "../utils/StepStatusDerivation";
-import { parseInlinePriorContextRefs } from "../utils/FileReferenceParser";
+import {
+  getPromptReferenceTexts,
+  parseInlinePriorContextRefs,
+} from "../utils/FileReferenceParser";
 import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 
 type WorkflowReferenceDefaults = Pick<PromptFile, "priorContext" | "sessionId">;
@@ -108,22 +111,16 @@ export function describeStepRemoval(removedIndices: readonly number[]): string {
 
 function stepPositionalReferences(step: WorkflowStep): number[] {
   if (!isPromptStep(step)) return [];
-  const texts = [
-    step.prompt,
-    step.endCondition?.retryPrompt,
-    step.endCondition?.passRetryPrompt,
-  ];
+  const texts = getPromptReferenceTexts(step);
   return [
     ...numericReferences(step.sessionId),
     ...numericReferences(step.priorContext),
     ...texts.flatMap((text) =>
-      typeof text === "string"
-        ? parseInlinePriorContextRefs(text).flatMap((match) =>
-            match.ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
-              ? match.ref.indices
-              : []
-          )
-        : []
+      parseInlinePriorContextRefs(text).flatMap((match) =>
+        match.ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+          ? match.ref.indices
+          : []
+      )
     ),
   ];
 }

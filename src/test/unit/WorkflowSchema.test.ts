@@ -91,6 +91,7 @@ suite("Workflow template schema", () => {
       { prompt: "x", maxSteps: 3 },
       { prompt: "x", trustedExternalRoots: [] },
       { prompt: "x", conditions: {} },
+      { prompt: "x", _runtime: { sessionId: "parent-session" } },
       { prompt: "x", additionalWorkflowKey: true },
     ]) {
       assert.strictEqual(

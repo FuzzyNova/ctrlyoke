@@ -32,6 +32,20 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
     );
   });
 
+  test("rejects inline child runtime metadata from clipboard input", () => {
+    assert.throws(
+      () =>
+        sanitizeClipboardWorkflowStep({
+          type: STEP_TYPES.WORKFLOW,
+          workflow: {
+            prompt: "child",
+            _runtime: { sessionId: "parent-session", stepId: "parent-step" },
+          },
+        }),
+      /path or inline definition/
+    );
+  });
+
   test("an enabled toggle keeps a named sub-workflow step's workflow", () => {
     // The dashboard toggle sends getWorkflowStepText as `text`; it must carry
     // the path (or keep the inline object), never the step's display name.

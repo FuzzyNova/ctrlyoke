@@ -1390,6 +1390,9 @@ $defs:
   inlineSubWorkflowDefinition:
     oneOf:
       - type: object
+        not:
+          required:
+            - _runtime
         allOf:
           - $ref: '#/$defs/promptStep'
           - type: object
@@ -1399,6 +1402,9 @@ $defs:
                 title: Worktree
         unevaluatedProperties: false
       - type: object
+        not:
+          required:
+            - _runtime
         allOf:
           - $ref: '#/$defs/scriptStep'
           - type: object

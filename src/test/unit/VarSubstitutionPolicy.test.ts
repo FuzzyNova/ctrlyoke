@@ -326,11 +326,21 @@ suite("VarSubstitutionPolicy documentation", () => {
       assert.ok(!seen.has(key), `${field} and ${seen.get(key)} share ${key}`);
       seen.set(key, field);
     }
-    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS)
+    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS) {
+      const excludedSegments = excluded.split(".");
       assert.ok(
-        !POLICY_ENTRIES.some(([, entry]) => entry.path.join(".") === excluded),
+        !POLICY_ENTRIES.some(([, entry]) => {
+          const policyPath = entry.path.join(".").split(".");
+          return (
+            policyPath.length >= excludedSegments.length &&
+            excludedSegments.every(
+              (segment, index) => policyPath[index] === segment
+            )
+          );
+        }),
         `${excluded} is excluded but has a policy entry`
       );
+    }
   });
 
   test("walker: text fields substitute, keep advisory placeholders, and honor fences", () => {

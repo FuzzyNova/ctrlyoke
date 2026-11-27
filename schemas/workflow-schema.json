@@ -1211,6 +1211,7 @@
       "oneOf": [
         {
           "type": "object",
+          "not": { "required": ["_runtime"] },
           "allOf": [
             { "$ref": "#/$defs/promptStep" },
             {
@@ -1222,6 +1223,7 @@
         },
         {
           "type": "object",
+          "not": { "required": ["_runtime"] },
           "allOf": [
             { "$ref": "#/$defs/scriptStep" },
             {

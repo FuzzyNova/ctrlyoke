@@ -1131,6 +1131,7 @@ export function isInlineSubWorkflowDefinition(
     !!value &&
     typeof value === "object" &&
     !Array.isArray(value) &&
+    !("_runtime" in value) &&
     (isPromptStep(value as object) || isScriptStep(value as object))
   );
 }

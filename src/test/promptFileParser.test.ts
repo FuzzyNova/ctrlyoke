@@ -12,6 +12,7 @@ import {
 import {
   CTRLYOKE_FILE_KINDS,
   FINAL_STEP_PHASES,
+  PRIOR_CONTEXT_KEYWORDS,
   WORKFLOW_VALIDATION_WARNING_CODES,
 } from "../types/DashboardConstants";
 
@@ -335,9 +336,24 @@ suite("PromptFileParser Tests", () => {
         { prompt: "child", sessionId: 2 },
         { prompt: "child", sessionId: FINAL_STEP_PHASES.FINAL_STEP },
         { prompt: "child", priorContext: [1] },
-        { prompt: "child", priorContext: "previous" },
+        { prompt: "child", priorContext: PRIOR_CONTEXT_KEYWORDS.ALL },
+        { prompt: "child", priorContext: PRIOR_CONTEXT_KEYWORDS.PREVIOUS },
         {
-          prompt: `use $previous and $step:1 and $all and $${FINAL_STEP_PHASES.FINAL_STEP}`,
+          prompt: "child",
+          priorContext: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
+        },
+        {
+          prompt: "child",
+          priorContext: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
+        },
+        { prompt: "child", priorContext: { previous: 2 } },
+        {
+          prompt: `use $previous and $step:1 and $all and $${FINAL_STEP_PHASES.FINAL_STEP} and $allFinalStep`,
+        },
+        { prompt: "child", endCondition: { retryPrompt: "again $previous" } },
+        {
+          prompt: "child",
+          endCondition: { passRetryPrompt: "again $allFinalStep" },
         },
       ];
       for (const workflow of cases) {
@@ -368,6 +384,28 @@ suite("PromptFileParser Tests", () => {
         !allowedRunAddress.issues.some((issue) =>
           /run boundary/i.test(issue.message)
         )
+      );
+      const ignoredReferences = parser.validateWorkflowText(
+        JSON.stringify({
+          steps: [
+            {
+              type: "workflow",
+              workflow: {
+                prompt: "price$previous ` $step:1 `\n```\n$all\n```",
+                endCondition: {
+                  retryPrompt: "price$allFinalStep ` $previous `",
+                },
+              },
+            },
+          ],
+        }),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+      );
+      assert.ok(
+        !ignoredReferences.issues.some((issue) =>
+          /run boundary/i.test(issue.message)
+        ),
+        JSON.stringify(ignoredReferences.issues)
       );
     });
 

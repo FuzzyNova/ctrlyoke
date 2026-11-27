@@ -53,6 +53,7 @@ import {
   USER_FEEDBACK_ACTIONS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
+  PRIOR_CONTEXT_KEYWORDS,
   SCRIPT_STEP_COPY_FIELDS,
   SUB_WORKFLOW_STEP_COPY_FIELDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
@@ -88,6 +89,10 @@ import {
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import {
+  getPromptReferenceTexts,
+  parseInlinePriorContextRefs,
+} from "../utils/FileReferenceParser";
 
 type ParallelValidationProperties = Pick<
   PromptFile,
@@ -136,11 +141,19 @@ function inlineRunBoundaryErrors(
       `${boundary}; numeric and final-pass sessionId references select parent-run sessions`
     );
   }
+  if ("_runtime" in inline) {
+    errors.push(
+      `${boundary}; inline definitions cannot author child runtime metadata`
+    );
+  }
   const priorContext =
     "priorContext" in inline ? inline.priorContext : undefined;
   if (
     Array.isArray(priorContext) ||
-    priorContext === "previous" ||
+    priorContext === PRIOR_CONTEXT_KEYWORDS.ALL ||
+    priorContext === PRIOR_CONTEXT_KEYWORDS.PREVIOUS ||
+    priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
+    priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS ||
     (priorContext !== null &&
       typeof priorContext === "object" &&
       "previous" in priorContext)
@@ -149,14 +162,12 @@ function inlineRunBoundaryErrors(
       `${boundary}; numeric or relative priorContext selectors cannot cross into the child run`
     );
   }
-  if (
-    "prompt" in inline &&
-    new RegExp(
-      `\\$(?:previous\\b|step:|all\\b|${FINAL_STEP_PHASES.FINAL_STEP}\\b)`
-    ).test(inline.prompt)
-  ) {
+  const hasRunLocalReferences = getPromptReferenceTexts(inline).some(
+    (text) => parseInlinePriorContextRefs(text).length > 0
+  );
+  if (hasRunLocalReferences) {
     errors.push(
-      `${boundary}; $previous, $step:, $all, and the final-step reference cannot select parent-run output`
+      `${boundary}; inline prior-context references cannot select parent-run output`
     );
   }
   return errors;
