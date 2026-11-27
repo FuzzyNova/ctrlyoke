@@ -53,10 +53,19 @@ export class TestWorkflowInstanceRegistryHost implements WorkflowInstanceRegistr
     address: WorkflowViewAddress | null;
   }[] = [];
 
-  /** `workspace` roots the instances the registry builds, for tests that run them. */
-  constructor(workspace?: string) {
+  /**
+   * `workspace` roots the instances the registry builds, for tests that run
+   * them; `executionIntegration` receives every prompt they send.
+   */
+  constructor(
+    workspace?: string,
+    executionIntegration?: MockHarnessIntegration
+  ) {
     this.platform = new MockPlatform(workspace);
-    this.integrationFactory = new MockIntegrationFactory(this.platform);
+    this.integrationFactory = new MockIntegrationFactory(
+      this.platform,
+      executionIntegration
+    );
     this.currentWorkspaceFolderPath = workspace;
   }
 

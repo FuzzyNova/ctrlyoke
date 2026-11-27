@@ -995,7 +995,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const openGroup = this.state.parallelGroups.find(
       (candidate) => head >= candidate.startIndex && head <= candidate.endIndex
     );
-    for (const group of [joinedGroup, openGroup]) {
+    // The group open at the head first: when it starts right after a joined
+    // group, the run had already advanced past that join into it.
+    for (const group of [openGroup, joinedGroup]) {
       if (!group) continue;
       const members: number[] = [];
       for (let member = group.startIndex; member <= group.endIndex; member++) {

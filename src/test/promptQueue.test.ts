@@ -2006,6 +2006,69 @@ suite("PromptQueue State Machine Tests", () => {
       }
     });
 
+    test("a run stopped inside a group that starts right after a joined group re-enters the open one", async () => {
+      const lane = (childRunRef: string) =>
+        ({
+          type: STEP_TYPES.WORKFLOW,
+          workflow: "child.ctrlyoke.yaml",
+          _runtime: { childWorkflowKey: "child-key", childRunRef },
+        }) as unknown as NonNullable<PromptFile["steps"]>[number];
+      const queue = new PromptQueue();
+      queue.loadPrompts({
+        steps: [
+          { prompt: "before" },
+          lane("run-2026-11-27T10-00-00-000Z"),
+          lane("run-2026-11-27T10-00-01-000Z"),
+          lane("run-2026-11-27T10-00-02-000Z"),
+          lane("run-2026-11-27T10-00-03-000Z"),
+          { prompt: "after" },
+        ],
+        parallelGroups: [
+          { id: "first", startIndex: 1, endIndex: 2, failFast: false },
+          { id: "second", startIndex: 3, endIndex: 4, failFast: false },
+        ],
+      });
+      await startQueueExecution(queue);
+      await queue.commitStepOutcomeAndAdvance({
+        target: queueTarget(0),
+        status: PROMPT_TERMINAL_STATUS.COMPLETED,
+      });
+      // The first group joined (with a cancelled lane it accepted) and the
+      // run moved into the second, whose lanes a restart then cancelled.
+      await queue.commitParallelGroupJoin(queue.getState().parallelGroups[0], [
+        { target: queueTarget(1), status: PROMPT_TERMINAL_STATUS.COMPLETED },
+        { target: queueTarget(2), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+      ]);
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      queue.getRuntimeStateMachine().requestStop();
+      for (const stepIndex of [3, 4]) {
+        await queue.persistStepOutcome({
+          target: queueTarget(stepIndex),
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+        });
+      }
+      queue.getRuntimeStateMachine().confirmStopped();
+      await queue.commitRuntimeTransition({ persist: false });
+
+      assert.strictEqual(
+        await queue.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = queue.getState();
+      assert.strictEqual(rewound.currentIndex, 3, "re-enters the open group");
+      assert.deepStrictEqual(
+        rewound.results.slice(0, 6).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.CANCELLED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+        ]
+      );
+    });
+
     test("a child continued by its parent rewinds every cancelled member of its group, prompt members included", async () => {
       // Joined: the child stopped at its group's join.
       const joined = await stoppedAtGroupJoin();

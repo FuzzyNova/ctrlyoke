@@ -198,12 +198,25 @@ export class WorkflowInstanceRegistry
     return this.launcherOwnedInstanceIds.has(workflowId);
   }
 
-  /** The launcher is done with a child: retire it as any finished instance. */
+  /**
+   * The launcher is done with a child: retire it as any finished instance.
+   * A child it leaves unfinished (IDLE after a failed launch, PAUSED after a
+   * failed resume) is retired too when no client views it, as closing the
+   * last viewer would have done had the launcher not owned it then; a viewed
+   * one stays for its viewer. Retiring a PAUSED run disposes only the
+   * instance: the pause stays on disk and the run stays continuable.
+   */
   private releaseLauncherOwnedInstance(child: SubWorkflowInstance): void {
     if (!this.launcherOwnedInstanceIds.delete(child.id)) return;
     const instance = this.instances.get(child.id);
     if (!instance || instance.isDisposed) return;
-    if (isSpentExecutionOwnerState(instance.getQueueState().status)) {
+    const status = instance.getQueueState().status;
+    const inFlight =
+      isExecutionOwnerState(status) && status !== EXECUTION_STATES.PAUSED;
+    if (
+      isSpentExecutionOwnerState(status) ||
+      (!inFlight && !this.isWorkflowViewedByAnyClient(instance.id))
+    ) {
       this.retireWorkflow(instance.id);
     }
   }

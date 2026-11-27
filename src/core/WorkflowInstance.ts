@@ -545,6 +545,12 @@ export class WorkflowInstance
   // ─────────────────────────────────────────────────────────────────────────
   private readonly disposeEmitter = new TypedEmitter<void>();
   private disposed = false;
+  /**
+   * The top-level execution context's `abortSignal`. Aborted only by a stop
+   * of a disposed instance: `dispose()` drops every integration listener, so
+   * an in-flight response wait would otherwise never wake.
+   */
+  private readonly disposedExecutionAbort = new AbortController();
   /** Fires once from `dispose()` (`SubWorkflowInstance`). */
   public readonly onDidDispose = this.disposeEmitter.event;
   private readonly executionCycleStartedEmitter = new TypedEmitter<void>();
@@ -2404,6 +2410,7 @@ export class WorkflowInstance
       },
       delegationChain: this.executionOptions.delegationChain,
       getExecutionLeaseOwnerToken: () => this.executionLease?.ownerToken,
+      abortSignal: this.disposedExecutionAbort.signal,
       statusReporter: this.statusMessageReporter,
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
@@ -3163,6 +3170,10 @@ export class WorkflowInstance
       // dispose() already ended every step resource, so no response is left
       // to wait for; the detector belongs to the host, not to this run.
       await confirmStopped();
+      // Its integrations' listeners went with them: wake a step still waiting
+      // on a response through the abort path, now that the stop is confirmed,
+      // so it settles as stopped and the executor finishes.
+      this.disposedExecutionAbort.abort();
       this.workflowExecutor.clearResponseWaitState();
       this.startPending = false;
       return;

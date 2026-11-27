@@ -297,7 +297,11 @@ export interface WorkflowExecutionContext {
   dynamicQueueConfig: DynamicQueueConfig;
   /** Allows coordinator tests to exercise fan-out while the production gate is closed. */
   parallelGroupFanOutEnabled?: boolean;
-  /** Group-scoped cancellation signal for target leaves. */
+  /**
+   * Cancellation signal for target leaves: a parallel group's or a
+   * sequential step's own, and at the top level the instance's, which only a
+   * stop of a disposed instance aborts.
+   */
   abortSignal?: AbortSignal;
   getIntegrationForPrompt: (
     prompt: PromptStep,
@@ -673,8 +677,23 @@ export class WorkflowExecutor {
   private fallbackRunStartView: RunStartView | undefined;
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
-  /** Run keys of parallel members whose child was stopped directly (D9). */
-  private readonly membersStoppingWorkflowAtJoin = new Set<string>();
+  /**
+   * Parallel members whose child was stopped directly (D9), by run key. A
+   * mark lives only until its member's outcome is handed to the group, the
+   * member is claimed again, or a new execution cycle finds the member no
+   * longer settled CANCELLED (see `pruneStaleJoinMarks`).
+   */
+  private readonly membersStoppingWorkflowAtJoin = new Map<
+    string,
+    ExecutionTarget
+  >();
+  /**
+   * Abort controllers of the sequential steps in flight, by run key. An
+   * ad-hoc promotion adopts such a step as a group member, and a group's
+   * fail-fast cancels it through this signal as it does a dispatched member
+   * through the group's.
+   */
+  private readonly sequentialStepAborts = new Map<string, AbortController>();
   private readonly noTurnStartedTargets = new Set<string>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
@@ -853,6 +872,7 @@ export class WorkflowExecutor {
   ): Promise<void> {
     this.clearResponseWaitState();
     this.fallbackRunStartView = undefined;
+    this.pruneStaleJoinMarks();
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -962,7 +982,7 @@ export class WorkflowExecutor {
                 `Cannot dispatch queue step ${state.currentIndex}: missing stepId`
               );
             }
-            const claim = await this.promptQueue.claimStepById(
+            const claim = await this.claimStepById(
               stepId,
               Date.now(),
               context.executionWorkspace.stateRoot
@@ -975,7 +995,7 @@ export class WorkflowExecutor {
                 `Cannot dispatch step ${stepId}: claim ${claim.status}`
               );
             }
-            const outcome = await this.executeWithSnapshot(
+            const outcome = await this.executeSequentialStep(
               { ...target, stepIndex: claim.stepIndex },
               claim.step,
               context,
@@ -1264,6 +1284,86 @@ export class WorkflowExecutor {
     return result;
   }
 
+  /**
+   * Claim a queue step for dispatch. A claimed step starts a fresh
+   * execution, so a join mark left by an earlier execution of it is stale.
+   */
+  private async claimStepById(
+    stepId: string,
+    startedAt: number,
+    stateRoot: string
+  ): ReturnType<PromptQueue["claimStepById"]> {
+    const claim = await this.promptQueue.claimStepById(
+      stepId,
+      startedAt,
+      stateRoot
+    );
+    if (
+      claim.status === STEP_CLAIM_OUTCOMES.CLAIMED &&
+      claim.stepIndex !== undefined
+    ) {
+      this.membersStoppingWorkflowAtJoin.delete(
+        getExecutionTargetRunKey({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex: claim.stepIndex,
+        })
+      );
+    }
+    return claim;
+  }
+
+  /**
+   * At the start of an execution cycle, keep only the join marks a group
+   * will still consume: those of members still settled CANCELLED (a promoted
+   * anchor whose run had not started, recovered by the group the loop starts
+   * next). A member reset since (a continue's rewind, a retry) re-runs, and
+   * its earlier direct stop no longer applies.
+   */
+  private pruneStaleJoinMarks(): void {
+    const steps = this.promptQueue.getState().steps;
+    for (const [key, target] of this.membersStoppingWorkflowAtJoin) {
+      const runtime =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? steps[target.stepIndex]?._runtime
+          : undefined;
+      if (
+        runtime?.completedAt === undefined ||
+        runtime.terminalStatus !== PROMPT_TERMINAL_STATUS.CANCELLED
+      ) {
+        this.membersStoppingWorkflowAtJoin.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Run one sequential step under its own abort signal, chained to the
+   * context's, so a group that adopts it (an ad-hoc promotion) can cancel it.
+   */
+  private async executeSequentialStep(
+    target: ExecutionTarget,
+    step: WorkflowStep,
+    context: WorkflowExecutionContext,
+    snapshotStrategy: "git" | "filesystem" | undefined
+  ): Promise<StepExecutionOutcome> {
+    const runKey = getExecutionTargetRunKey(target);
+    const controller = new AbortController();
+    const forward = () => controller.abort();
+    if (context.abortSignal?.aborted) controller.abort();
+    context.abortSignal?.addEventListener("abort", forward, { once: true });
+    this.sequentialStepAborts.set(runKey, controller);
+    try {
+      return await this.executeWithSnapshot(
+        target,
+        step,
+        withAbortSignal(context, controller.signal),
+        snapshotStrategy
+      );
+    } finally {
+      this.sequentialStepAborts.delete(runKey);
+      context.abortSignal?.removeEventListener("abort", forward);
+    }
+  }
+
   /** Whether `target` is a queue step inside a parallel group right now. */
   private isParallelGroupMemberTarget(target: ExecutionTarget): boolean {
     if (target.kind !== FINAL_STEP_PHASES.QUEUE) return false;
@@ -1503,7 +1603,7 @@ export class WorkflowExecutor {
         });
       },
       claimStepById: (stepId, startedAt, groupContext) =>
-        this.promptQueue.claimStepById(
+        this.claimStepById(
           stepId,
           startedAt,
           groupContext.executionWorkspace.stateRoot
@@ -1574,7 +1674,15 @@ export class WorkflowExecutor {
           );
         }
       },
-      cancelTarget: context.cancelTarget,
+      cancelTarget: async (target) => {
+        // An adopted member runs on the sequential path, outside the group's
+        // abort signal: abort its own first, so a response its cancel then
+        // completes reads as a cancellation rather than a finished turn.
+        this.sequentialStepAborts
+          .get(getExecutionTargetRunKey(target))
+          ?.abort();
+        await context.cancelTarget?.(target);
+      },
       releaseTargetResources: context.releaseTargetResources,
       getRuntimeStatus: () => this.getRuntime().status,
       subscribeToStop: (onStop) => this.subscribeToRuntimeStop(onStop),
@@ -2204,6 +2312,18 @@ export class WorkflowExecutor {
       }
       if (stepId) {
         this.activeParallelGroupRun?.reconcileMembers([stepId]);
+      }
+      // No group run exists to confirm a stop that reached this anchor (a
+      // promotion at width 1, or with no live context), and the loop will not
+      // start one while the run is stopping: confirm it here, as the
+      // sequential path does for a cancelled step.
+      if (
+        !promoted &&
+        this.getRuntime().status === EXECUTION_STATES.CANCELLING
+      ) {
+        this.getRuntime().confirmStopped();
+        await this.promptQueue.commitRuntimeTransition();
+        return false;
       }
       if (
         await this.confirmPauseAndStop("[WorkflowExecutor] Workflow paused")
@@ -3328,8 +3448,9 @@ export class WorkflowExecutor {
         groupMember &&
         cancelledBy === SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
       ) {
-        this.membersStoppingWorkflowAtJoin.add(
-          getExecutionTargetRunKey(target)
+        this.membersStoppingWorkflowAtJoin.set(
+          getExecutionTargetRunKey(target),
+          target
         );
       }
       return this.settleNonHarnessStep({
@@ -7371,4 +7492,26 @@ export class WorkflowExecutor {
       ...patch,
     });
   }
+}
+
+/**
+ * `context` with its own `abortSignal`. Property descriptors are copied, not
+ * values, so a getter (`dashboardProvider`) keeps reading the live value.
+ */
+function withAbortSignal(
+  context: WorkflowExecutionContext,
+  abortSignal: AbortSignal
+): WorkflowExecutionContext {
+  return Object.defineProperties(
+    {},
+    {
+      ...Object.getOwnPropertyDescriptors(context),
+      abortSignal: {
+        value: abortSignal,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      },
+    }
+  ) as WorkflowExecutionContext;
 }

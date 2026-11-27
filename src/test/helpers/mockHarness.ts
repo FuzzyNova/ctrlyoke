@@ -158,7 +158,29 @@ export class MockHarnessIntegration extends HarnessIntegration {
     return true;
   }
 
-  protected async cancelImplementation(): Promise<void> {}
+  /** When set, a cancel completes the pending response, as a killed CLI's does. */
+  public completeResponseOnCancel = false;
+
+  protected async cancelImplementation(): Promise<void> {
+    if (this.completeResponseOnCancel) {
+      this.responseCompleteEmitter.fire(undefined);
+    }
+  }
+}
+
+/**
+ * Sends each prompt but holds its response until the integration is
+ * cancelled, like a long AI turn: `sendPrompt` returns once the prompt is
+ * sent, and only a cancel completes the response.
+ */
+export class HeldResponseHarnessIntegration extends MockHarnessIntegration {
+  override completeResponseOnCancel = true;
+
+  override async sendPrompt(prompt: PromptStep): Promise<boolean> {
+    this.sentPrompts.push(prompt.prompt);
+    this.promptReadyEmitter.fire({ fullPrompt: prompt.prompt });
+    return true;
+  }
 }
 
 /**
