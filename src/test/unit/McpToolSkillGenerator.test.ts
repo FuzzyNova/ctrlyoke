@@ -57,7 +57,7 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes('"position":"parallelWithCurrent"'));
     assert.ok(
       reference.includes(
-        `node \"<mcp-server.js path>\" --tool workflow_status --args '{}' --workspace \"<path>\" --working-file \"<path>\"`
+        `node \"<mcp-server.js path>\" --tool workflow_status --args '{\"run\":{\"workflowKey\":\"example\",\"runRef\":\"example\"}}' --workspace \"<path>\" --working-file \"<path>\"`
       )
     );
   });

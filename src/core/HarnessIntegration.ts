@@ -396,7 +396,13 @@ function applySummaryBudget(
   for (const position of summaryPositions.slice(0, -1)) {
     if (total <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES) break;
     const bytes = utf8Bytes(positions[position].xml);
-    const stub = `<step ${priorContextStepAttributes(positions[position].item)} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
+    const item = positions[position].item;
+    const runHint = item.subWorkflow?.output
+      ? ` readOutput="${escapeXmlAttribute(
+          `read_output { run: { workflowKey: ${item.subWorkflow.output.childWorkflowKey}, runRef: ${item.subWorkflow.output.childRunRef} } }`
+        )}"`
+      : "";
+    const stub = `<step ${priorContextStepAttributes(item)}${runHint} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
     positions[position].replace(stub);
     total -= bytes - utf8Bytes(stub);
   }
@@ -452,7 +458,7 @@ function renderPriorContextStep(item: PriorContextItem): string {
       : "";
     const children =
       item.subWorkflow.children?.map(renderPriorContextStep).join("\n") ??
-      "<childRunUnavailable/>";
+      `<childRunUnavailable/> <!-- read_output { run: { workflowKey: ${escapeXmlAttribute(output.childWorkflowKey)}, runRef: ${escapeXmlAttribute(output.childRunRef)} } } -->`;
     return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
   }
   if (item.scriptOutput) {

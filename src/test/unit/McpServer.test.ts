@@ -45,6 +45,7 @@ import type {
   WorkingFileWorktreeRuntime,
   EndCondition,
 } from "../../types/CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 import {
   DEFAULT_MAX_STEPS,
   CLI_EVENT_TYPES,
@@ -195,6 +196,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       executionState?: ExecutionState;
       finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
       maxSteps?: number;
+      parentRun?: SubWorkflowParentLink;
     } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
@@ -264,7 +266,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         {
           workflowName: descriptor.workflowName,
           steps: workingFile.steps ?? [],
-        }
+        },
+        options.parentRun
       );
       await recorder.appendEvents(manifestPath, [
         {
@@ -1419,6 +1422,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "cursor",
       "indices",
       "limit",
+      "run",
       "tail",
     ]);
   });
@@ -1451,6 +1455,137 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(status.metadata.runDirectory.startsWith(".."), false);
     assert.strictEqual(output.workflowKey, own.workflowKey);
     assert.strictEqual(output.outputs[0].responseText, "own output");
+  });
+
+  test("reads child and grandchild output and status through run without changing paging", async () => {
+    const server = await setup();
+    const parent = await createRun("desc-parent", "2026-02-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = parent.runFilePath;
+    const child = await createRun("desc-child", "2026-02-02T00-00-00-000Z", {
+      responseText: "child response text",
+      stepCount: 2,
+      parentRun: {
+        workflowKey: parent.workflowKey,
+        runRef: parent.runRef,
+        phase: FINAL_STEP_PHASES.QUEUE,
+        stepId: "parent-step",
+      },
+    });
+    const grandchild = await createRun(
+      "desc-grandchild",
+      "2026-02-03T00-00-00-000Z",
+      {
+        responseText: "grandchild response",
+        parentRun: {
+          workflowKey: child.workflowKey,
+          runRef: child.runRef,
+          phase: FINAL_STEP_PHASES.QUEUE,
+          stepId: "child-step",
+        },
+      }
+    );
+
+    const status = responseJson(
+      await server.invokeTool("workflow_status", {
+        run: { workflowKey: child.workflowKey, runRef: child.runRef },
+      })
+    );
+    assert.strictEqual(status.metadata.workflowKey, child.workflowKey);
+    assert.strictEqual(status.steps.length, 2);
+
+    const childOutput = responseJson(
+      await server.invokeTool("read_output", {
+        run: { workflowKey: child.workflowKey, runRef: child.runRef },
+        indices: [0],
+        limit: 5,
+      })
+    );
+    assert.strictEqual(childOutput.outputs[0].responseText, "child");
+    assert.ok(childOutput.outputs[0].nextCursor);
+    const grandchildOutput = responseJson(
+      await server.invokeTool("read_output", {
+        run: { workflowKey: grandchild.workflowKey, runRef: grandchild.runRef },
+        indices: [0],
+        tail: 9,
+      })
+    );
+    assert.strictEqual(grandchildOutput.outputs[0].responseText, " response");
+  });
+
+  test("rejects non-descendant, invalid, and cyclic run addresses with scope guidance", async () => {
+    const server = await setup();
+    const parent = await createRun("scope-parent", "2026-03-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = parent.runFilePath;
+    const otherParent = await createRun(
+      "scope-other-parent",
+      "2026-03-02T00-00-00-000Z"
+    );
+    const sibling = await createRun(
+      "scope-sibling",
+      "2026-03-03T00-00-00-000Z",
+      {
+        parentRun: {
+          workflowKey: otherParent.workflowKey,
+          runRef: otherParent.runRef,
+          phase: FINAL_STEP_PHASES.QUEUE,
+          stepId: "other-step",
+        },
+      }
+    );
+    const unrelated = await createRun(
+      "scope-unrelated",
+      "2026-03-04T00-00-00-000Z"
+    );
+    for (const run of [sibling, unrelated]) {
+      await assert.rejects(
+        () =>
+          server.invokeTool("read_output", {
+            run: { workflowKey: run.workflowKey, runRef: run.runRef },
+          }),
+        /must be this workflow or a descendant started by one of its sub-workflow steps/
+      );
+    }
+    await assert.rejects(
+      () =>
+        server.invokeTool("workflow_status", {
+          run: { workflowKey: parent.workflowKey, runRef: "bad-run-ref" },
+        }),
+      /must be this workflow or a descendant started by one of its sub-workflow steps/
+    );
+    await assert.rejects(
+      () =>
+        server.invokeTool("read_output", {
+          run: {
+            workflowKey: parent.workflowKey,
+            runRef: "run-2026-03-07T00-00-00-000Z",
+          },
+        }),
+      /must be this workflow or a descendant started by one of its sub-workflow steps/
+    );
+
+    const first = await createRun("scope-cycle-a", "2026-03-05T00-00-00-000Z", {
+      parentRun: {
+        workflowKey: "mcp-scope-cycle-b-2026-01-01T00-00-00" as WorkflowKey,
+        runRef: "run-2026-03-06T00-00-00-000Z" as RunRef,
+        phase: FINAL_STEP_PHASES.QUEUE,
+        stepId: "b",
+      },
+    });
+    await createRun("scope-cycle-b", "2026-03-06T00-00-00-000Z", {
+      parentRun: {
+        workflowKey: first.workflowKey,
+        runRef: first.runRef,
+        phase: FINAL_STEP_PHASES.QUEUE,
+        stepId: "a",
+      },
+    });
+    await assert.rejects(
+      () =>
+        server.invokeTool("read_output", {
+          run: { workflowKey: first.workflowKey, runRef: first.runRef },
+        }),
+      /must be this workflow or a descendant started by one of its sub-workflow steps/
+    );
   });
 
   test("workflow_status reports each step's effective resumeSession", async () => {

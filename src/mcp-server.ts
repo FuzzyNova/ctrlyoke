@@ -40,6 +40,7 @@ import type {
   WorkingFile,
   CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
+import type { WorkflowRunManifest } from "./types/WorkflowTimelineTypes";
 import {
   assertNever,
   getStepType,
@@ -245,6 +246,7 @@ import {
   type McpEditStepArguments,
   type McpGlobalStatusArguments,
   type McpReadOutputArguments,
+  type McpWorkflowStatusArguments,
   type McpReadNotesArguments,
   type McpRemoveStepArguments,
   type McpReorderStepsArguments,
@@ -776,7 +778,7 @@ export class CtrlYokeMCPServer {
     const call = validateMcpToolCall(name, args);
     switch (call.name) {
       case MCP_WORKFLOW_STATUS_TOOL_NAME:
-        return this.handleWorkflowStatus();
+        return this.handleWorkflowStatus(call.args);
       case MCP_APPEND_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleAppendStep(call.args));
       case MCP_EDIT_STEP_TOOL_NAME:
@@ -1332,8 +1334,11 @@ export class CtrlYokeMCPServer {
    * Handle workflow_status tool invocation
    * Returns queue metadata and a one-row summary per step
    */
-  private async handleWorkflowStatus() {
-    const selected = await this.resolveRun(MCP_WORKFLOW_STATUS_TOOL_NAME);
+  private async handleWorkflowStatus(args: McpWorkflowStatusArguments) {
+    const selected = await this.resolveSelectedRun(
+      MCP_WORKFLOW_STATUS_TOOL_NAME,
+      args.run
+    );
     const workingFile = selected.filePath;
 
     const queueData = await this.readAttachedRun(
@@ -2104,7 +2109,10 @@ export class CtrlYokeMCPServer {
     args: McpReadOutputArguments,
     context: McpToolCallingContext
   ) {
-    const selected = await this.resolveRun(MCP_READ_OUTPUT_TOOL_NAME);
+    const selected = await this.resolveSelectedRun(
+      MCP_READ_OUTPUT_TOOL_NAME,
+      args.run
+    );
     const workingFile = selected.filePath;
 
     const queueData = await this.readAttachedRun(
@@ -2386,6 +2394,75 @@ export class CtrlYokeMCPServer {
       );
     }
     return { workflowKey: address.workflowKey, runRef: address.runRef };
+  }
+
+  /** Resolve either the attached run or a verified descendant shared by read tools. */
+  private async resolveSelectedRun(
+    operation: string,
+    requestedRun?: { workflowKey: string; runRef: string }
+  ): Promise<Awaited<ReturnType<CtrlYokeMCPServer["resolveRun"]>>> {
+    const attached = await this.resolveRun(operation);
+    if (!requestedRun) return attached;
+
+    const scopeMessage = `${operation}: run must be this workflow or a descendant started by one of its sub-workflow steps`;
+    let workflowKey = requestedRun.workflowKey as WorkflowKey;
+    let runRef = requestedRun.runRef as RunRef;
+    const addressKey = (key: string, ref: string) => `${key}\0${ref}`;
+    const seen = new Set<string>();
+    for (let depth = 0; depth < 128; depth++) {
+      const key = addressKey(workflowKey, runRef);
+      if (seen.has(key)) throw new Error(scopeMessage);
+      seen.add(key);
+      if (workflowKey === attached.workflowKey && runRef === attached.runRef) {
+        if (key === addressKey(requestedRun.workflowKey, requestedRun.runRef)) {
+          return attached;
+        }
+        const filePath = WorkflowPaths.runFilePath(
+          this.workspaceRoot,
+          requestedRun.workflowKey as WorkflowKey,
+          requestedRun.runRef as RunRef
+        );
+        let descriptorRevision: number;
+        try {
+          descriptorRevision = (
+            await lineageRepository.readDescriptor(
+              this.workspaceRoot,
+              requestedRun.workflowKey as WorkflowKey
+            )
+          ).revision;
+          await fs.access(filePath);
+        } catch {
+          throw new Error(scopeMessage);
+        }
+        return {
+          workflowKey: requestedRun.workflowKey as WorkflowKey,
+          runRef: requestedRun.runRef as RunRef,
+          filePath,
+          descriptorRevision,
+        };
+      }
+
+      let manifestPath: string;
+      let manifest: WorkflowRunManifest;
+      try {
+        manifestPath = WorkflowPaths.manifestPath(
+          this.workspaceRoot,
+          workflowKey,
+          runRef
+        );
+        manifest = JSON.parse(
+          await fs.readFile(manifestPath, "utf8")
+        ) as WorkflowRunManifest;
+      } catch {
+        throw new Error(scopeMessage);
+      }
+      if (manifest.workflowId !== workflowKey || !manifest.parentRun) {
+        throw new Error(scopeMessage);
+      }
+      workflowKey = manifest.parentRun.workflowKey;
+      runRef = manifest.parentRun.runRef;
+    }
+    throw new Error(scopeMessage);
   }
 
   private async resolveRun(operation: string): Promise<{

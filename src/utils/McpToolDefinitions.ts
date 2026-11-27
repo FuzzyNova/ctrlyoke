@@ -158,11 +158,28 @@ export interface McpReorderStepsArguments {
 }
 
 export interface McpReadOutputArguments {
+  run?: { workflowKey: string; runRef: string };
   indices?: number[];
   cursor?: string;
   limit?: number;
   tail?: number;
 }
+
+export interface McpWorkflowStatusArguments {
+  run?: { workflowKey: string; runRef: string };
+}
+
+const MCP_DESCENDANT_RUN_SCHEMA: McpToolInputSchema = {
+  type: "object",
+  description:
+    "Inspect a run started by one of this workflow's sub-workflow steps. Only descendants of this workflow, at any depth, are accepted.",
+  properties: {
+    workflowKey: { type: "string" },
+    runRef: { type: "string" },
+  },
+  required: ["workflowKey", "runRef"],
+  additionalProperties: false,
+};
 
 export interface McpGlobalStatusArguments {
   workflowKey?: string;
@@ -446,8 +463,11 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. metadata.conditionPresets lists the condition presets you can attach to a step as endCondition or preCondition { use: name }, with each one's script preview, required params, and retry limit; an empty list means the workflow declares none. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script.",
-    inputSchema: { type: "object", properties: {} },
+      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. metadata.conditionPresets lists the condition presets you can attach to a step as endCondition or preCondition { use: name }, with each one's script preview, required params, and retry limit; an empty list means the workflow declares none. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script. Pass run to inspect a child run started by one of this workflow's sub-workflow steps; descendants at any depth are accepted.",
+    inputSchema: {
+      type: "object",
+      properties: { run: MCP_DESCENDANT_RUN_SCHEMA },
+    },
   },
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
@@ -587,10 +607,11 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_READ_OUTPUT_TOOL_NAME,
     description:
-      "Read the full prompt of any step in your workflow, and what earlier steps produced. Use this to build on a previous step's conclusions instead of repeating its work, or to see exactly what a step was asked to do; for a large output, page one selected step with limit and cursor or inspect its tail.",
+      "Read the full prompt of any step in your workflow, and what earlier steps produced. Use this to build on a previous step's conclusions instead of repeating its work, or to see exactly what a step was asked to do; for a large output, page one selected step with limit and cursor or inspect its tail. Pass run to inspect a child run started by one of this workflow's sub-workflow steps; descendants at any depth are accepted.",
     inputSchema: {
       type: "object",
       properties: {
+        run: MCP_DESCENDANT_RUN_SCHEMA,
         indices: {
           type: "array",
           items: { type: "number" },
@@ -793,7 +814,7 @@ export type McpToolName =
   | typeof MCP_RELEASE_PATHS_TOOL_NAME;
 
 export interface McpToolArgumentsByName {
-  [MCP_WORKFLOW_STATUS_TOOL_NAME]: Record<string, unknown>;
+  [MCP_WORKFLOW_STATUS_TOOL_NAME]: McpWorkflowStatusArguments;
   [MCP_APPEND_STEP_TOOL_NAME]: McpAppendStepArguments;
   [MCP_LIST_HARNESSES_TOOL_NAME]: Record<string, unknown>;
   [MCP_READ_OUTPUT_TOOL_NAME]: McpReadOutputArguments;

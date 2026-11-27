@@ -104,3 +104,27 @@ steps:
 
 The `:summary` form shares the existing summary budget with other summarized
 prior context.
+
+## Inspecting a child run from an agent
+
+When a step needs more detail than prior context includes, call MCP
+`read_output` with the child's `workflowKey` and `runRef` from the workflow
+step metadata. `workflow_status` accepts the same `run` object to list the
+child's steps first. Both tools accept only runs started by this workflow's
+sub-workflow steps, including descendants at any depth; `indices`, `cursor`,
+`limit`, and `tail` work as usual.
+
+```json
+{
+  "run": { "workflowKey": "<childWorkflowKey>", "runRef": "<childRunRef>" },
+  "indices": [1],
+  "tail": 4000
+}
+```
+
+From a shell, use the main checkout as the CLI directory, especially when the
+step runs in a managed worktree:
+
+```sh
+ctrlyoke history show --workflow <childWorkflowKey> --run <childRunRef> -d <main checkout>
+```
