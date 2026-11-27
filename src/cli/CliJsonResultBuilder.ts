@@ -36,6 +36,7 @@ import {
   getFinalStepPassCount,
   getStepType,
   isScriptStep,
+  isSubWorkflowStep,
 } from "../types/CtrlYokeTypes";
 import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
@@ -236,6 +237,13 @@ export interface CliJsonError {
   attempt: number | null;
 }
 
+/** Direct child runs launched by this workflow. Final-step links use pass. */
+export type CliJsonSubWorkflowRun = {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  status: string | null;
+} & ({ stepId: string; pass?: never } | { pass: number; stepId?: never });
+
 export interface CliJsonResult {
   schemaVersion: 1;
   success: boolean;
@@ -253,6 +261,7 @@ export interface CliJsonResult {
   summary: CliJsonSummary;
   steps: CliJsonStepResult[];
   finalStep: CliJsonFinalStep | null;
+  subWorkflowRuns?: CliJsonSubWorkflowRun[];
   error: CliJsonError | null;
 }
 
@@ -298,6 +307,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
       summary: emptySummary(),
       steps: [],
       finalStep: null,
+      subWorkflowRuns: [],
       error: createSetupError(input.error),
     });
   }
@@ -317,6 +327,36 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     input.outputProjection?.finalStep,
     input
   );
+  const subWorkflowRuns: CliJsonSubWorkflowRun[] = state.steps.flatMap(
+    (step) => {
+      if (!isSubWorkflowStep(step)) return [];
+      const runtime = step._runtime;
+      return runtime?.childWorkflowKey && runtime.childRunRef && runtime.stepId
+        ? [
+            {
+              stepId: runtime.stepId,
+              workflowKey: runtime.childWorkflowKey,
+              runRef: runtime.childRunRef,
+              status: runtime.terminalStatus ?? null,
+            },
+          ]
+        : [];
+    }
+  );
+  const finalStepDefinition = promptFile?.finalStep;
+  const finalRuntime =
+    finalStepDefinition && isSubWorkflowStep(finalStepDefinition)
+      ? finalStepDefinition._runtime
+      : undefined;
+  if (finalRuntime?.childWorkflowKey && finalRuntime.childRunRef) {
+    const pass = Math.max(1, getFinalStepPassCount(input.finalStepRuntime));
+    subWorkflowRuns.push({
+      pass,
+      workflowKey: finalRuntime.childWorkflowKey,
+      runRef: finalRuntime.childRunRef,
+      status: finalRuntime.terminalStatus ?? null,
+    });
+  }
   const startedAt = toIso(state.startTime);
   const completedAt = toIso(state.executionEndTime);
 
@@ -331,6 +371,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     summary: buildSummary(state.steps, state.results),
     steps,
     finalStep,
+    subWorkflowRuns,
     error: selectTopLevelError(state, steps, finalStep, input.finalStepRuntime),
   });
 }

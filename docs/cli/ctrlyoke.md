@@ -213,7 +213,9 @@ to stdout when the run ends. It is a versioned envelope (`schemaVersion: 1`)
 with the overall `success`, `status`, `workflowKey`, `runRef`, `harness`,
 `model`, timing, a `summary` of step counts, a `steps` array (status, attempts,
 session ID, pre/end-condition results, files changed, script output, error),
-the `finalStep` result, and a top-level `error`. The `workflowKey` and `runRef`
+the `finalStep` result, `subWorkflowRuns` for direct child runs, and a top-level
+`error`. Queue children use `stepId`; a final-step child uses its 1-based
+`pass`. This field is additive within schema version 1. The `workflowKey` and `runRef`
 feed directly into `history show`, `rerun`, `append`, `continue`, and the
 `step` commands. Diagnostics go to `.ctrlyoke/logs/ctrlyoke-cli-<timestamp>.log`,
 never to stdout.

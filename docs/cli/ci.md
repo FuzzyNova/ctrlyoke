@@ -83,10 +83,15 @@ Exit code `3` means only that the harness's executable wasn't found.
 | `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`, `noTurnStarted`                                                                                                                                                                 |
 | `steps[]`                  | Per step: `status` (including `noTurnStarted` when a TUI handles the input without starting an AI turn), `success`, `attempts`, `sessionId`, `preCondition`, `endCondition`, `filesChanged`, `script` output, `failureKind` and `error` |
 | `finalStep`                | The final step's result, `passCount`, and its last pass (`lastPass`), or `null`                                                                                                                                                         |
+| `subWorkflowRuns`          | Direct child runs, with queue children addressed by `stepId` and a `finalStep` child by its 1-based `pass`; each includes its `workflowKey`, `runRef` and status                                                                        |
 | `error`                    | `{ step, pass, attempt, message }` for the failure that ended the run, or `null`; `pass` is the 1-based final-step pass (as in `--step final:N`)                                                                                        |
 
 Secret values are redacted from the result. Check `success` rather than parsing `status` or
 `error.message`, since message text can change.
+
+`subWorkflowRuns` is additive in schema version 1 and is omitted only when unavailable; it is
+empty when the run has no recorded direct children. Nested descendants appear in their direct
+parent's result.
 
 Example: fail the job with a readable summary.
 

@@ -518,6 +518,34 @@ suite("CliJsonResultBuilder", () => {
     }
   });
 
+  test("includes direct child run addresses using the parent link identity", () => {
+    const childKey = "child-workflow" as WorkflowKey;
+    const childRun = "child-run" as RunRef;
+    const child: WorkflowStep = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "child.ctrlyoke.json",
+      _runtime: {
+        stepId: "parent-step-id",
+        terminalStatus: "completed",
+        childWorkflowKey: childKey,
+        childRunRef: childRun,
+      },
+    };
+    const result = build({
+      steps: [child],
+      results: [],
+      status: EXECUTION_STATES.COMPLETED,
+    });
+    assert.deepStrictEqual(result.subWorkflowRuns, [
+      {
+        stepId: "parent-step-id",
+        workflowKey: childKey,
+        runRef: childRun,
+        status: "completed",
+      },
+    ]);
+  });
+
   test("serializes each guardrail stop reason at the run level", () => {
     const reasons = [
       [GUARDRAIL_STOP_CODES.QUEUE_SIZE_LIMIT, "steps"],
