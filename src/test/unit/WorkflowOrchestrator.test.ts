@@ -46,7 +46,15 @@ import {
   PtySession,
 } from "../../core/harness/PtyProcessManager";
 import { MockPlatform } from "../helpers/mockHarness";
-import { subWorkflowUnresolvedMessage } from "../../core/SubWorkflowReferenceStep";
+import {
+  resolveSubWorkflowReference,
+  subWorkflowUnresolvedMessage,
+} from "../../core/SubWorkflowReferenceStep";
+import {
+  buildPromptFileResolutionOptions,
+  type PromptFileResolutionInput,
+} from "../../core/PromptFileResolutionOptions";
+import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import {
   ACTION_TYPES,
   APPEND_MODES,
@@ -6549,6 +6557,18 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     const childPath = () =>
       path.join(workspace, "flows", "child.ctrlyoke.yaml");
 
+    /**
+     * What an instance that has not prepared a worktree resolves from: the
+     * default execution workspace every instance starts with.
+     */
+    const idleResolutionInput = (): PromptFileResolutionInput => ({
+      executionWorkspace: createNoWorktreeExecutionWorkspace(
+        new MockPlatform(workspace),
+        workspace
+      ),
+      workspaceFolderPath: workspace,
+    });
+
     async function patchRun(
       workingFilePath: string,
       patch: (file: any) => void
@@ -6617,6 +6637,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
           "draft",
           {
             getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+            getPromptFileResolutionInput: idleResolutionInput,
             appendFromFile: async (...args: unknown[]) => {
               appended.push(args);
             },
@@ -6669,6 +6690,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
                 runRef: run.runRef,
                 status,
               }),
+              getPromptFileResolutionInput: idleResolutionInput,
               appendFromFile: async (...args: unknown[]) => {
                 appended.push(args);
               },
@@ -6807,6 +6829,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
             "draft",
             {
               getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+              getPromptFileResolutionInput: idleResolutionInput,
               appendFromFile: async (...args: unknown[]) => {
                 appended.push(args);
               },
@@ -6864,6 +6887,202 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         assert.strictEqual(wasContinued(), true);
         const written = await readRun(run.workingFilePath);
         assert.strictEqual(written.steps[1].workflow, outsidePath());
+      });
+
+      test("the step editor's pick is built and refused exactly as a queued file is", async () => {
+        const { orchestrator, internal } = await outsideHarness();
+        internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "draft"]]);
+        internal.instances = new Map([
+          [
+            "draft",
+            {
+              getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+              getPromptFileResolutionInput: idleResolutionInput,
+            },
+          ],
+        ]);
+
+        assert.deepStrictEqual(
+          await orchestrator.buildSubWorkflowStepReferenceForClient(
+            childPath(),
+            PANEL_CLIENT_ID
+          ),
+          { ok: true, workflow: "flows/child.ctrlyoke.yaml" }
+        );
+        // A client bound to nothing is checked as a fresh instance would be.
+        assert.deepStrictEqual(
+          await orchestrator.buildSubWorkflowStepReferenceForClient(
+            outsidePath(),
+            "browser:unbound"
+          ),
+          { ok: false, message: subWorkflowUnresolvedMessage(outsidePath()) }
+        );
+      });
+    });
+
+    suite("a worktree run", () => {
+      let worktree: string;
+
+      setup(async () => {
+        worktree = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-worktree-")
+        );
+      });
+
+      teardown(async () => {
+        await fs.rm(worktree, { recursive: true, force: true });
+      });
+
+      /**
+       * A RUNNING instance executing in `worktree`, a linked checkout of
+       * `workspace`: the execution workspace a managed worktree run holds.
+       */
+      function worktreeResolutionInput(): PromptFileResolutionInput {
+        return {
+          executionWorkspace: {
+            stateRoot: workspace,
+            executionRoot: worktree,
+            sourceCheckoutRoot: workspace,
+            executionCheckoutRoot: worktree,
+            workspaceRoots: [worktree],
+            namedWorkspaceRoots: [
+              { name: path.basename(workspace), fsPath: worktree },
+            ],
+            approvedExternalRoots: [],
+          },
+          workspaceFolderPath: workspace,
+        };
+      }
+
+      test("resolves a file that so far exists only on the run's branch, as its launch will, and stores it against the workspace root", async () => {
+        const branchOnly = path.join(worktree, "flows", "new.ctrlyoke.yaml");
+        await fs.mkdir(path.dirname(branchOnly), { recursive: true });
+        await fs.writeFile(branchOnly, "steps:\n  - prompt: c\n");
+        const run = await createRun(workspace);
+        const { orchestrator, internal } = createHarness(
+          workspace,
+          run.workflowKey,
+          run.runRef
+        );
+        internal.platform.getWorkspaceRoots = () => [workspace];
+        internal.platform.getNamedWorkspaceRoots = () => [];
+        stubParser(internal, { steps: [{ prompt: "c" }] });
+        const appended: unknown[][] = [];
+        internal.instances = new Map([
+          [
+            "live",
+            {
+              getQueueState: () => ({
+                workflowKey: run.workflowKey,
+                runRef: run.runRef,
+                status: EXECUTION_STATES.RUNNING,
+              }),
+              getPromptFileResolutionInput: worktreeResolutionInput,
+              appendFromFile: async (...args: unknown[]) => {
+                appended.push(args);
+              },
+            },
+          ],
+        ]);
+
+        // The main checkout's resolver, which queue time used to build,
+        // refuses it: the file is in neither the workspace nor an approved
+        // root. The run's launch resolves from its own checkout.
+        const mainCheckout = buildPromptFileResolutionOptions(
+          idleResolutionInput(),
+          () => []
+        );
+        assert.strictEqual(
+          (
+            await resolveSubWorkflowReference(
+              branchOnly,
+              mainCheckout.promptFileResolver
+            )
+          ).ok,
+          false
+        );
+
+        await orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          branchOnly,
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        );
+
+        // Named where the source checkout keeps it, so the reference outlives
+        // the worktree; the launch finds it in the worktree first.
+        assert.deepStrictEqual(appended, [
+          [
+            branchOnly,
+            QUEUE_POSITION.END,
+            { type: STEP_TYPES.WORKFLOW, workflow: "flows/new.ctrlyoke.yaml" },
+          ],
+        ]);
+        const launch = buildPromptFileResolutionOptions(
+          worktreeResolutionInput(),
+          () => []
+        );
+        assert.deepStrictEqual(
+          await resolveSubWorkflowReference(
+            "flows/new.ctrlyoke.yaml",
+            launch.promptFileResolver
+          ),
+          { ok: true, path: branchOnly }
+        );
+      });
+
+      test("still refuses a file outside both checkouts", async () => {
+        const outside = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-wt-outside-")
+        );
+        try {
+          const outsideFile = path.join(outside, "child.ctrlyoke.yaml");
+          await fs.writeFile(outsideFile, "steps:\n  - prompt: c\n");
+          const run = await createRun(workspace);
+          const { orchestrator, internal } = createHarness(
+            workspace,
+            run.workflowKey,
+            run.runRef
+          );
+          internal.platform.getWorkspaceRoots = () => [workspace];
+          internal.platform.getNamedWorkspaceRoots = () => [];
+          stubParser(internal, { steps: [{ prompt: "c" }] });
+          const appended: unknown[][] = [];
+          internal.instances = new Map([
+            [
+              "live",
+              {
+                getQueueState: () => ({
+                  workflowKey: run.workflowKey,
+                  runRef: run.runRef,
+                  status: EXECUTION_STATES.RUNNING,
+                }),
+                getPromptFileResolutionInput: worktreeResolutionInput,
+                appendFromFile: async (...args: unknown[]) => {
+                  appended.push(args);
+                },
+              },
+            ],
+          ]);
+
+          await assert.rejects(
+            orchestrator.appendFromFileForClient(
+              await runMutation(run),
+              outsideFile,
+              PANEL_CLIENT_ID,
+              QUEUE_POSITION.END,
+              APPEND_MODES.SUB_WORKFLOW
+            ),
+            (error: unknown) =>
+              error instanceof Error &&
+              error.message ===
+                `${subWorkflowUnresolvedMessage(outsideFile)}; nothing was queued.`
+          );
+          assert.deepStrictEqual(appended, []);
+        } finally {
+          await fs.rm(outside, { recursive: true, force: true });
+        }
       });
     });
 
@@ -7021,6 +7240,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
               status: EXECUTION_STATES.RUNNING,
             }),
             getExecutionRoot: () => workspace,
+            getPromptFileResolutionInput: idleResolutionInput,
           },
         ],
       ]);

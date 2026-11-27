@@ -8,6 +8,9 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import { workspaceRelativeReference } from "./WorkflowStepPathRebaser";
 import type { PromptFileResolver } from "./PromptFileResolver";
 
+/** A sub-workflow step that names its child by file path, not inline (D13). */
+export type SubWorkflowFileStep = SubWorkflowStep & { workflow: string };
+
 /** Why a sub-workflow step's `workflow` path did not resolve (D5). */
 export function subWorkflowUnresolvedMessage(workflowPath: string): string {
   return `Sub-workflow could not resolve '${workflowPath}'`;
@@ -44,7 +47,7 @@ export function buildSubWorkflowReferenceStep(
   filePath: string,
   workspaceRoot: string,
   namedRoots: readonly ResolverWorkspaceFolder[] = []
-): SubWorkflowStep {
+): SubWorkflowFileStep {
   return {
     type: STEP_TYPES.WORKFLOW,
     workflow: workspaceRelativeReference(

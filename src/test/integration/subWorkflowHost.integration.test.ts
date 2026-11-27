@@ -40,6 +40,7 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   isSubWorkflowStep,
+  type SubWorkflowStep,
   type WorkingFile,
   type WorkingFileWorktreeRuntime,
   type WorkflowStep,
@@ -3439,6 +3440,13 @@ suite("Sub-workflow host end to end", () => {
     workflow: { type: "script", script, ...extra },
   });
 
+  /** `inlineLane` as a typed step, for the queue and executor seams. */
+  const inlineLaneStep = (name: string, script: string): SubWorkflowStep => ({
+    type: STEP_TYPES.WORKFLOW,
+    name,
+    workflow: { type: STEP_TYPES.SCRIPT, script },
+  });
+
   test("runs inline script lanes side by side and records each on its own member target", async () => {
     const workspace = makeTempDir("ctrlyoke-parallel-lanes-");
     const { createInstance, instances, concurrentLaunches } =
@@ -3722,12 +3730,12 @@ suite("Sub-workflow host end to end", () => {
    */
   async function promoteBesideRunningStep(
     parent: WorkflowInstance,
-    step: Record<string, unknown>,
+    step: WorkflowStep,
     failFast: boolean
   ): Promise<void> {
     const insertion = await parent.promptQueue.promoteStepToParallelGroup(
       parent.promptQueue.getState().currentIndex,
-      step as unknown as WorkflowStep,
+      step,
       { failFast }
     );
     const join = await parent.workflowExecutor.joinRunningParallelGroup(
@@ -4651,7 +4659,7 @@ suite("Sub-workflow host end to end", () => {
       await waitForLanesRunning(workspace, instances, parent, { 0: "a" });
       await promoteBesideRunningStep(
         parent,
-        inlineLane("Sibling lane", "node gate.js b"),
+        inlineLaneStep("Sibling lane", "node gate.js b"),
         false
       );
       await waitForLanesRunning(workspace, instances, parent, {
@@ -4746,7 +4754,7 @@ suite("Sub-workflow host end to end", () => {
       await promoteBesideRunningStep(
         parent,
         {
-          type: "script",
+          type: STEP_TYPES.SCRIPT,
           name: "Failing sibling",
           script: 'node -e "process.exit(1)"',
         },
@@ -4814,7 +4822,7 @@ suite("Sub-workflow host end to end", () => {
       await promoteBesideRunningStep(
         parent,
         {
-          type: "script",
+          type: STEP_TYPES.SCRIPT,
           name: "Failing sibling",
           script: 'node -e "process.exit(1)"',
         },
@@ -4861,7 +4869,7 @@ suite("Sub-workflow host end to end", () => {
       await promoteBesideRunningStep(
         parent,
         {
-          type: "script",
+          type: STEP_TYPES.SCRIPT,
           name: "Failing sibling",
           script: 'node -e "process.exit(1)"',
         },
@@ -4942,7 +4950,7 @@ suite("Sub-workflow host end to end", () => {
       await waitForFile(path.join(workspace, "a-runs"));
       await promoteBesideRunningStep(
         parent,
-        { type: "script", name: "Sibling", script: WRITE_C_RAN },
+        { type: STEP_TYPES.SCRIPT, name: "Sibling", script: WRITE_C_RAN },
         false
       );
 
@@ -7291,6 +7299,160 @@ suite("Sub-workflow host end to end", () => {
       }
     });
   }
+
+  test("a member dispatched behind maxParallelSteps whose edited child names a running member's named branch fails alone with WORKTREE_COLLISION under onFail: continue", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    // Two slots for three members: the third is dispatched only once the
+    // quick member frees its slot, long after the group preflight.
+    configService.setCliOverlay({ queue: { maxParallelSteps: 2 } });
+    const workspace = makeTempDir("ctrlyoke-width-late-collision-");
+    // Gate files live outside the repository, so the holder's worktree and
+    // the parent's checkout stay clean.
+    const gates = makeTempDir("ctrlyoke-width-late-collision-gates-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(
+        path.join(workspace, "gate.js"),
+        [
+          "const fs = require('fs');",
+          "const path = require('path');",
+          "const [dir, name] = process.argv.slice(2);",
+          "fs.writeFileSync(path.join(dir, name + '-runs'), 'ran');",
+          "const timer = setInterval(() => {",
+          "  if (fs.existsSync(path.join(dir, name + '-go'))) {",
+          "    clearInterval(timer);",
+          "    process.exit(0);",
+          "  }",
+          "}, 25);",
+        ].join("\n")
+      );
+      const latePath = path.join(workspace, "flows", "late.ctrlyoke.json");
+      await fs.mkdir(path.dirname(latePath), { recursive: true });
+      // Clean at group preflight: no worktree, so nothing collides yet.
+      await writeJson(latePath, {
+        name: "Late",
+        steps: [{ type: "script", script: "node --version" }],
+      });
+      const gate = (name: string) =>
+        `node gate.js ${JSON.stringify(gates)} ${name}`;
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        name: "Width-held collision",
+        steps: [
+          {
+            parallel: [
+              inlineLane("Holder", gate("holder"), {
+                worktree: "lane/shared",
+              }),
+              inlineLane("Quick", gate("quick")),
+              {
+                type: STEP_TYPES.WORKFLOW,
+                name: "Late",
+                workflow: "flows/late.ctrlyoke.json",
+                onFail: "continue",
+              },
+            ],
+          },
+        ],
+      });
+      commitAll(workspace, "add workflows");
+
+      const parent = createInstance();
+      instances.push(parent);
+      const cancellations = recordAttemptCancellations(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(gates, "holder-runs"));
+      await waitForFile(path.join(gates, "quick-runs"));
+      await waitFor(
+        "the holder lane running",
+        () =>
+          laneChildOf(instances, parent, 0)?.promptQueue.getState().status ===
+          EXECUTION_STATES.RUNNING,
+        25000,
+        () => JSON.stringify(parent.promptQueue.getState().results)
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().steps[2]?._runtime?.startedAt,
+        undefined,
+        "the third member waits for a slot"
+      );
+      const launchesBeforeDispatch = instances.length;
+
+      // Edited while it waits: its dispatch preflight parses it again and
+      // finds the branch the running holder already leases.
+      await writeJson(latePath, {
+        name: "Late",
+        worktree: { mode: "named", branch: "refs/heads/lane/shared" },
+        steps: [{ type: "script", script: "node --version" }],
+      });
+      await fs.writeFile(path.join(gates, "quick-go"), "");
+      await waitFor(
+        "the width-held member to settle",
+        () =>
+          parent.promptQueue.getState().steps[2]?._runtime?.completedAt !==
+          undefined,
+        25000,
+        () => JSON.stringify(parent.promptQueue.getState().results)
+      );
+      const holderStatus = laneChildOf(
+        instances,
+        parent,
+        0
+      )?.promptQueue.getState().status;
+      await fs.writeFile(path.join(gates, "holder-go"), "");
+      await execution;
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        holderStatus,
+        EXECUTION_STATES.RUNNING,
+        "the holder kept running while the late member failed"
+      );
+      // D9: onFail: continue records the failure on a COMPLETED step.
+      assert.strictEqual(
+        state.steps[2]?._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+      assert.match(
+        state.steps[2]?._runtime?.failureMessage ?? "",
+        /use the same named worktree "lane\/shared" in one parallel group/
+      );
+      assert.strictEqual(
+        childRunRefOf(state.steps[2]),
+        undefined,
+        "the late member never launched a child"
+      );
+      assert.strictEqual(
+        instances.length,
+        launchesBeforeDispatch,
+        "no child instance was created for the late member"
+      );
+      // Neither sibling was cancelled, under the group's default fail-fast.
+      assert.deepStrictEqual(cancellations(), []);
+      assert.deepStrictEqual(
+        state.steps.slice(0, 2).map((step) => step._runtime?.terminalStatus),
+        [PROMPT_TERMINAL_STATUS.COMPLETED, PROMPT_TERMINAL_STATUS.COMPLETED]
+      );
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+    } finally {
+      configService.setCliOverlay({});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(gates);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
 
   /**
    * The staging-plan pattern (spec "Parallel Sub-workflow Steps"): wave 1 of

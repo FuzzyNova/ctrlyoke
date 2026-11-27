@@ -14,6 +14,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { DashboardMessageRouter } from "../../ui/DashboardMessageRouter";
+import type { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
@@ -308,12 +309,56 @@ suite("DashboardMessageRouter — run bundle import", () => {
 });
 
 suite("DashboardMessageRouter — sub-workflow step file picker", () => {
-  test("replies with the picked file as a workspace-relative workflow reference", async () => {
-    const root = path.join(os.tmpdir(), "sub-workflow-picker-root");
-    const requests: Array<{ kind: string; title?: string }> = [];
-    const emitted: unknown[] = [];
-    const router = buildRouter(
-      {},
+  type StepReferenceBuilder = Pick<
+    WorkflowOrchestrator,
+    "buildSubWorkflowStepReferenceForClient"
+  >;
+
+  /**
+   * Records what the router asks the orchestrator to build and answers with
+   * `answer`: the orchestrator owns the reference build and its check
+   * (covered against real files in WorkflowOrchestrator.test.ts).
+   */
+  class RecordingReferenceBuilder implements StepReferenceBuilder {
+    readonly calls: Array<{ filePath: string; clientId: string }> = [];
+    constructor(
+      private readonly answer: (
+        filePath: string
+      ) => Awaited<
+        ReturnType<
+          StepReferenceBuilder["buildSubWorkflowStepReferenceForClient"]
+        >
+      >
+    ) {}
+    async buildSubWorkflowStepReferenceForClient(
+      filePath: string,
+      clientId: string
+    ) {
+      this.calls.push({ filePath, clientId });
+      return this.answer(filePath);
+    }
+  }
+
+  const root = path.join(os.tmpdir(), "sub-workflow-picker-root");
+  const relativeTo = (filePath: string) =>
+    path.relative(root, filePath).split(path.sep).join("/");
+  /** Inside the workspace: its relative path; outside: the launch's refusal. */
+  const workspaceRelative = (
+    filePath: string
+  ): Awaited<
+    ReturnType<StepReferenceBuilder["buildSubWorkflowStepReferenceForClient"]>
+  > =>
+    filePath.startsWith(root)
+      ? { ok: true, workflow: relativeTo(filePath) }
+      : { ok: false, message: `Sub-workflow could not resolve '${filePath}'` };
+
+  function pickerRouter(
+    orchestrator: StepReferenceBuilder,
+    picked: string | undefined,
+    requests: Array<{ kind: string; title?: string }> = []
+  ): DashboardMessageRouter {
+    return buildRouter(
+      orchestrator,
       () => undefined,
       undefined,
       {
@@ -323,15 +368,26 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
           title?: string;
         }) => {
           requests.push(request);
-          return path.join(root, "workflows", "verify.ctrlyoke.yaml");
+          return picked;
         },
       },
       () => [{ name: "workspace", fsPath: root }]
     );
+  }
+
+  test("replies with the orchestrator's workspace-relative reference for the native pick", async () => {
+    const requests: Array<{ kind: string; title?: string }> = [];
+    const emitted: unknown[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const picked = path.join(root, "workflows", "verify.ctrlyoke.yaml");
+    const router = pickerRouter(orchestrator, picked, requests);
 
     await router.route(
       { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
-      { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+      {
+        clientTag: "browser:editor",
+        postMessage: (message) => emitted.push(message),
+      }
     );
 
     assert.deepStrictEqual(requests, [
@@ -339,6 +395,10 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
         kind: PATH_SELECTION_KINDS.FILE,
         title: PATH_SELECTION_TITLES.SUB_WORKFLOW_STEP_FILE,
       },
+    ]);
+    // Built for the workflow this client edits, not the panel's.
+    assert.deepStrictEqual(orchestrator.calls, [
+      { filePath: picked, clientId: "browser:editor" },
     ]);
     assert.deepStrictEqual(emitted, [
       {
@@ -348,23 +408,111 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
     ]);
   });
 
+  test("refuses a pick the launch would refuse, through WORKFLOW_ACTION_FAILED", async () => {
+    const emitted: any[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const outside = path.join(os.tmpdir(), "elsewhere", "child.ctrlyoke.yaml");
+    const router = pickerRouter(orchestrator, outside);
+
+    await router.route(
+      { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
+      { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+    );
+
+    assert.strictEqual(
+      emitted.some(
+        (message) =>
+          message.type === MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED
+      ),
+      false
+    );
+    const failure = emitted.find(
+      (message) => message.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.deepStrictEqual(
+      { action: failure?.action, error: failure?.error },
+      {
+        action: "use the workflow file for this step",
+        error: `Sub-workflow could not resolve '${outside}'`,
+      }
+    );
+  });
+
+  test("normalizes a hosted modal's pick the same way, resolving a workspace-relative path first", async () => {
+    const emitted: unknown[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    // The hosted dashboard never opens the native picker.
+    const router = pickerRouter(orchestrator, undefined);
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+        filePath: path.join(root, "flows", "absolute.ctrlyoke.yaml"),
+      },
+      {
+        clientTag: "browser:hosted",
+        postMessage: (message) => emitted.push(message),
+      }
+    );
+    await router.route(
+      {
+        type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+        filePath: "flows/typed.ctrlyoke.yaml",
+      },
+      {
+        clientTag: "browser:hosted",
+        postMessage: (message) => emitted.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(
+      orchestrator.calls.map((call) => call.filePath),
+      [
+        path.join(root, "flows", "absolute.ctrlyoke.yaml"),
+        path.join(root, "flows", "typed.ctrlyoke.yaml"),
+      ]
+    );
+    assert.deepStrictEqual(emitted, [
+      {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: "flows/absolute.ctrlyoke.yaml",
+      },
+      {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: "flows/typed.ctrlyoke.yaml",
+      },
+    ]);
+  });
+
+  test("refuses an empty hosted pick without asking the orchestrator", async () => {
+    const emitted: any[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const router = pickerRouter(orchestrator, undefined);
+
+    await router.route(
+      { type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE, filePath: "  " },
+      { clientTag: "browser:hosted", postMessage: (m) => emitted.push(m) }
+    );
+
+    assert.deepStrictEqual(orchestrator.calls, []);
+    assert.strictEqual(
+      emitted.filter(
+        (message) => message.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      ).length,
+      1
+    );
+  });
+
   test("replies nothing when the picker is cancelled", async () => {
     const emitted: unknown[] = [];
-    const router = buildRouter(
-      {},
-      () => undefined,
-      undefined,
-      {
-        openWorkspaceTarget: async () => ({ status: "unsupported" }),
-        selectWorkspacePath: async () => undefined,
-      },
-      () => [{ name: "workspace", fsPath: os.tmpdir() }]
-    );
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const router = pickerRouter(orchestrator, undefined);
     await router.route(
       { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
       { clientTag: "panel", postMessage: (message) => emitted.push(message) }
     );
     assert.deepStrictEqual(emitted, []);
+    assert.deepStrictEqual(orchestrator.calls, []);
   });
 });
 

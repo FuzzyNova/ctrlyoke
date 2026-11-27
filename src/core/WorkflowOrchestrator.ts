@@ -79,8 +79,12 @@ import {
 import {
   buildSubWorkflowReferenceStep,
   resolveSubWorkflowReference,
+  type SubWorkflowFileStep,
 } from "./SubWorkflowReferenceStep";
-import { PromptFileResolver } from "./PromptFileResolver";
+import {
+  buildPromptFileResolutionOptions,
+  type PromptFileResolutionInput,
+} from "./PromptFileResolutionOptions";
 import { classifySubWorkflowWorktree } from "../utils/WorktreeConfigShape";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -181,7 +185,11 @@ import {
 } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
-import type { PlatformAdapter } from "../platform/PlatformAdapter";
+import {
+  createNoWorktreeExecutionWorkspace,
+  type PlatformAdapter,
+} from "../platform/PlatformAdapter";
+import { mapExecutionPathToSourceCheckout } from "../platform/WorkspaceRootResolver";
 import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { notifyUserFeedback } from "./UserFeedbackSink";
@@ -2292,18 +2300,29 @@ export class WorkflowOrchestrator {
       ? this.findLiveInstanceForRun(runAddress)
       : undefined;
     if (!runAddress || live) {
+      const target = live ?? this.getInstanceForClient(clientId);
       // The instance parses the file and reports a failure as feedback.
-      await (live ?? this.getInstanceForClient(clientId)).appendFromFile(
+      await target.appendFromFile(
         filePath,
         position,
-        await this.subWorkflowReferenceStepFor(filePath)
+        await this.subWorkflowReferenceStepFor(filePath, target)
       );
       return;
     }
     await this.parseSubWorkflowChildFile(filePath);
+    // A settled run's continuation launches from the instance that holds
+    // it, when one is resident; otherwise from a fresh one.
     await this.appendAndContinueAtRun(
       runAddress,
-      [await this.subWorkflowReferenceStepFor(filePath)],
+      [
+        await this.subWorkflowReferenceStepFor(
+          filePath,
+          this.findResidentInstanceForRun(
+            runAddress.workflowKey,
+            runAddress.runRef
+          )
+        ),
+      ],
       mutation!.expectedDefinitionRevision,
       mutation!.expectedDescriptorRevision,
       clientId
@@ -2355,7 +2374,7 @@ export class WorkflowOrchestrator {
         workspaceRoot,
         address.workflowKey,
         address.runRef,
-        [await this.subWorkflowReferenceStepFor(filePath)],
+        [await this.subWorkflowReferenceStepFor(filePath, resident)],
         definitionRevision,
         ConfigurationUtils.getGlobalMaxSteps(),
         this.lineageRepository,
@@ -2404,37 +2423,87 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * The one place the dashboard, explorer and in-memory appends build a
-   * queued file's reference step: relative to the workspace root a launch
-   * resolves it from (D5), never to the file's own folder. The step is
-   * resolved here as its launch resolves it, so a file the launch would
-   * refuse (outside the workspace and its approved external roots) is
-   * refused now, with the launch's message, instead of failing the step.
+   * The one place the dashboard, explorer, in-memory appends and the step
+   * editor's pickers build a file's reference step: relative to the
+   * workspace root a launch resolves it from (D5), never to the file's own
+   * folder. A file inside the target's worktree checkout is named where the
+   * source checkout keeps it, so the reference outlives that checkout.
+   *
+   * The step is then resolved with the resolver its launch will build
+   * (`buildPromptFileResolutionOptions`), from `target`'s execution workspace
+   * and definition: a running worktree run resolves from its checkout, then
+   * the source checkout. With no target, or one that holds no execution
+   * workspace yet, that is the default workspace a fresh instance starts
+   * with. A file the launch would refuse (outside the workspace and its
+   * approved external roots) is refused now, with the launch's message.
    */
   private async subWorkflowReferenceStepFor(
-    filePath: string
+    filePath: string,
+    target: WorkflowInstance | undefined
   ): Promise<SubWorkflowStep> {
-    const workspaceRoot = this.requireWorkspaceRoot();
-    const namedRoots = this.platform.getNamedWorkspaceRoots();
-    const step = buildSubWorkflowReferenceStep(
-      filePath,
-      workspaceRoot,
-      namedRoots
-    );
-    const resolution = await resolveSubWorkflowReference(
-      step.workflow as string,
-      new PromptFileResolver({
-        workspaceRoot,
-        namedRoots,
-        trustedRoots: this.platform.getWorkspaceRoots(),
-        approvedExternalRoots:
-          this.platform.getApprovedExternalFileRoots?.(workspaceRoot) ?? [],
-      })
-    );
-    if (!resolution.ok) {
-      throw new Error(`${resolution.message}; nothing was queued.`);
+    const checked = await this.checkSubWorkflowReference(filePath, target);
+    if (!checked.ok) {
+      throw new Error(`${checked.message}; nothing was queued.`);
     }
-    return step;
+    return checked.step;
+  }
+
+  /**
+   * The step editor's Workflow mode: `filePath`, picked natively or in the
+   * hosted modal, as the `workflow` reference a step of the workflow
+   * `clientId` is editing stores, built and checked exactly as a queued
+   * sub-workflow's (`subWorkflowReferenceStepFor`), and checked against the
+   * instance the client is bound to, whose launch will resolve it.
+   * `filePath` is absolute, resolved at the transport edge as a queued
+   * file's is.
+   */
+  async buildSubWorkflowStepReferenceForClient(
+    filePath: string,
+    clientId: string
+  ): Promise<{ ok: true; workflow: string } | { ok: false; message: string }> {
+    const checked = await this.checkSubWorkflowReference(
+      filePath,
+      this.getBoundInstance(clientId) ?? undefined
+    );
+    return checked.ok ? { ok: true, workflow: checked.step.workflow } : checked;
+  }
+
+  private async checkSubWorkflowReference(
+    filePath: string,
+    target: WorkflowInstance | undefined
+  ): Promise<
+    { ok: true; step: SubWorkflowFileStep } | { ok: false; message: string }
+  > {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const input: PromptFileResolutionInput =
+      target?.getPromptFileResolutionInput() ?? {
+        executionWorkspace: createNoWorktreeExecutionWorkspace(
+          this.platform,
+          workspaceRoot
+        ),
+        workspaceFolderPath: workspaceRoot,
+      };
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      input.executionWorkspace;
+    const step = buildSubWorkflowReferenceStep(
+      mapExecutionPathToSourceCheckout(
+        filePath,
+        sourceCheckoutRoot,
+        executionCheckoutRoot
+      ),
+      workspaceRoot,
+      this.platform.getNamedWorkspaceRoots()
+    );
+    const { promptFileResolver, sourceDefinitionPath } =
+      buildPromptFileResolutionOptions(input, () =>
+        this.platform.getNamedWorkspaceRoots()
+      );
+    const resolution = await resolveSubWorkflowReference(
+      step.workflow,
+      promptFileResolver,
+      sourceDefinitionPath
+    );
+    return resolution.ok ? { ok: true, step } : resolution;
   }
 
   /**

@@ -143,7 +143,11 @@ import {
   secretGrantsTrustStore,
   type SecretGrantsTrustStore,
 } from "../config/SecretGrantsTrustStore";
-import { PromptFileResolver } from "./PromptFileResolver";
+import {
+  buildPromptFileResolutionOptions,
+  type PromptFileResolutionInput,
+  type PromptFileResolutionOptions,
+} from "./PromptFileResolutionOptions";
 import type {
   PreparedSubWorkflowLaunch,
   SubWorkflowControl,
@@ -255,7 +259,7 @@ export interface TargetStreamingChunkData extends TargetStreamingOutput {
   chunk: string;
 }
 
-export interface WorkflowExecutionContext {
+export interface WorkflowExecutionContext extends PromptFileResolutionInput {
   /** Immutable state/execution roots for this workflow run. */
   executionWorkspace: ExecutionWorkspace;
   /**
@@ -6772,46 +6776,12 @@ export class WorkflowExecutor {
         };
   }
 
-  private getPromptFileResolutionOptions(context: WorkflowExecutionContext): {
-    promptFileResolver: PromptFileResolver;
-    sourceDefinitionPath?: string;
-  } {
-    const executionWorkspace = context.executionWorkspace;
-    const usesLegacyNoWorktreeContext =
-      !executionWorkspace.sourceCheckoutRoot &&
-      !executionWorkspace.executionCheckoutRoot &&
-      context.workspaceFolderPath !== undefined &&
-      !pathsEqual(
-        path.resolve(context.workspaceFolderPath),
-        path.resolve(executionWorkspace.executionRoot)
-      );
-    const executionRoot = usesLegacyNoWorktreeContext
-      ? context.workspaceFolderPath!
-      : executionWorkspace.executionRoot;
-    const workspaceRoots = usesLegacyNoWorktreeContext
-      ? [executionRoot]
-      : executionWorkspace.workspaceRoots;
-    const namedRoots = usesLegacyNoWorktreeContext
-      ? (context.namedWorkspaceRoots ?? this.platform.getNamedWorkspaceRoots())
-      : executionWorkspace.namedWorkspaceRoots;
-    const definitionPath = mapSourceDefinitionPathToExecution(
-      context.sourceDefinitionPath,
-      executionWorkspace.sourceCheckoutRoot,
-      executionWorkspace.executionCheckoutRoot
+  private getPromptFileResolutionOptions(
+    context: WorkflowExecutionContext
+  ): PromptFileResolutionOptions {
+    return buildPromptFileResolutionOptions(context, () =>
+      this.platform.getNamedWorkspaceRoots()
     );
-    const resolver = new PromptFileResolver({
-      workspaceRoot: executionRoot,
-      namedRoots,
-      trustedRoots: workspaceRoots,
-      sourceCheckoutRoot: executionWorkspace.sourceCheckoutRoot,
-      approvedExternalRoots: executionWorkspace.approvedExternalRoots,
-      allowWorkflowRelativeReferences:
-        definitionPath.allowWorkflowRelativeReferences,
-    });
-    return {
-      promptFileResolver: resolver,
-      sourceDefinitionPath: definitionPath.executionPath,
-    };
   }
 
   private getParallelGroupStartBoundary(stepIndex: number): number {

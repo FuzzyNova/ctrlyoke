@@ -717,11 +717,18 @@ suite("ParallelGroupRun", () => {
   });
 });
 
+/** Wait for `stepId` to settle; fail by name if it has not within ~1 s. */
 async function waitForOutcome(
   run: ParallelGroupRun<TestContext>,
   stepId: string
 ): Promise<void> {
-  for (let i = 0; i < 200 && !run.outcomes.has(stepId); i++) {
+  for (let i = 0; i < 200; i++) {
+    if (run.outcomes.has(stepId)) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+  assert.fail(
+    `Timed out waiting for member "${stepId}" to settle; settled: [${[
+      ...run.outcomes.keys(),
+    ].join(", ")}]`
+  );
 }

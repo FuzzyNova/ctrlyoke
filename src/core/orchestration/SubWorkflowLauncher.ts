@@ -732,23 +732,26 @@ export class SubWorkflowLauncher implements SubWorkflowHost {
 }
 
 /**
- * The harness and model of the last queue prompt step that started with a
- * known harness (`_runtime.harness` set): an inline lane's one step, or a
- * file child's latest. A final step is not consulted. The steps may come from
- * disk, so the pair goes through `readSubWorkflowRanWith`; a step whose
- * recorded harness is unknown does not count as started.
+ * The harness and model of the last queue prompt step that started (its
+ * `_runtime` records a start time or a harness): an inline lane's one step,
+ * or a file child's latest. A final step is not consulted. The steps may come
+ * from disk, so the pair goes through `readSubWorkflowRanWith`. That latest
+ * step alone answers: when its harness is unknown (unrecorded, or not a
+ * harness id) only its model is reported, never an earlier step's harness,
+ * which the child did not end on.
  */
 export function recordedRanWith(
   steps: readonly WorkflowStep[] | undefined
 ): SubWorkflowRanWith | undefined {
   for (let i = (steps?.length ?? 0) - 1; i >= 0; i--) {
     const step = steps![i];
-    if (!isPromptStep(step) || !step._runtime?.harness) continue;
-    const ranWith = readSubWorkflowRanWith({
-      harness: step._runtime.harness,
-      model: step._runtime.model,
+    if (!isPromptStep(step)) continue;
+    const runtime = step._runtime;
+    if (runtime?.startedAt === undefined && !runtime?.harness) continue;
+    return readSubWorkflowRanWith({
+      harness: runtime.harness,
+      model: runtime.model,
     });
-    if (ranWith?.harness) return ranWith;
   }
   return undefined;
 }

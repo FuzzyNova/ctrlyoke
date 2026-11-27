@@ -5,6 +5,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
+import type { PromptFileResolutionInput } from "./PromptFileResolutionOptions";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
@@ -1650,6 +1651,21 @@ export class WorkflowInstance
   /** Filesystem root whose coordination board belongs to this instance. */
   getExecutionRoot(): string {
     return this.executionWorkspace.executionRoot;
+  }
+
+  /**
+   * What this instance's next launch resolves references from: the execution
+   * workspace it holds now (a running worktree run's checkout; the default
+   * workspace once that has settled) and its authored definition, exactly as
+   * the execution context carries them (`createWorkflowStartupContextPort`).
+   */
+  getPromptFileResolutionInput(): PromptFileResolutionInput {
+    return {
+      executionWorkspace: this.executionWorkspace,
+      workspaceFolderPath: this.workspaceFolderPath,
+      namedWorkspaceRoots: this.executionWorkspace.namedWorkspaceRoots,
+      sourceDefinitionPath: this.sourceDefinitionPath,
+    };
   }
 
   getSummary(): WorkflowSummary {

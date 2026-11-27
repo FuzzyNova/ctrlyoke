@@ -11,6 +11,7 @@ import {
   resolveReferencePath,
   resolveEffectiveAbsoluteReferences,
   mapSourceDefinitionPathToExecution,
+  mapExecutionPathToSourceCheckout,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
 
@@ -553,6 +554,47 @@ suite("WorkspaceRootResolver Tests", () => {
 
     test("single-root falls back to the user setting (on)", () => {
       assert.strictEqual(resolveEffectiveAbsoluteReferences(true, false), true);
+    });
+  });
+
+  suite("mapExecutionPathToSourceCheckout", () => {
+    const sourceCheckout = path.resolve("/repo");
+    const executionCheckout = path.resolve("/repo.worktrees/run");
+
+    test("renames a path inside the execution checkout to the source checkout's", () => {
+      assert.strictEqual(
+        mapExecutionPathToSourceCheckout(
+          path.join(executionCheckout, "flows", "child.yaml"),
+          sourceCheckout,
+          executionCheckout
+        ),
+        path.join(sourceCheckout, "flows", "child.yaml")
+      );
+    });
+
+    test("leaves a path outside the execution checkout, or with no distinct pair, unchanged", () => {
+      const outside = path.resolve("/elsewhere/child.yaml");
+      assert.strictEqual(
+        mapExecutionPathToSourceCheckout(
+          outside,
+          sourceCheckout,
+          executionCheckout
+        ),
+        outside
+      );
+      const inSource = path.join(sourceCheckout, "child.yaml");
+      assert.strictEqual(
+        mapExecutionPathToSourceCheckout(inSource, sourceCheckout, undefined),
+        inSource
+      );
+      assert.strictEqual(
+        mapExecutionPathToSourceCheckout(
+          inSource,
+          sourceCheckout,
+          sourceCheckout
+        ),
+        inSource
+      );
     });
   });
 

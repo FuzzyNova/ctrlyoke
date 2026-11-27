@@ -2743,6 +2743,36 @@ export interface AppendFileMessage {
   position?: QueuePosition;
 }
 
+/**
+ * Webview → Extension: open the native picker for the step editor's Workflow
+ * mode (VS Code panel only). Answered by `SubWorkflowStepFileSelectedMessage`,
+ * or by `WorkflowActionFailedMessage` when the launch would refuse the file.
+ */
+export interface SelectSubWorkflowStepFileMessage {
+  type: typeof MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE;
+}
+
+/**
+ * Webview → Extension: a file the hosted `WorkflowFilePickerModal` picked for
+ * the step editor's Workflow mode (absolute, or workspace-relative from its
+ * manual field), built into a `workflow` reference and checked exactly as the
+ * native pick is. Answered the same way.
+ */
+export interface NormalizeSubWorkflowStepFileMessage {
+  type: typeof MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE;
+  filePath: string;
+}
+
+/**
+ * Extension → Webview: the picked file as the `workflow` reference a step
+ * stores: relative to the workspace root (folder-name prefixed outside the
+ * primary folder of a multi-root workspace), else absolute.
+ */
+export interface SubWorkflowStepFileSelectedMessage {
+  type: typeof MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED;
+  path: string;
+}
+
 /** Context-menu origin carried back only when a queued-step steer fails. */
 export interface QueuedStepSteerOrigin {
   kind: typeof STEER_ORIGIN_KINDS.QUEUED_STEP;

@@ -57,7 +57,6 @@ import {
 import { RunBundleImporter } from "../core/orchestration/RunBundleImporter";
 import { RunImportPreviewService } from "../core/orchestration/RunImportPreview";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
-import { buildSubWorkflowReferenceStep } from "../core/SubWorkflowReferenceStep";
 import { CTRLYOKE_VERSION } from "../utils/BuildConfig";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
@@ -132,6 +131,9 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
+  NormalizeSubWorkflowStepFileMessage,
+  SelectSubWorkflowStepFileMessage,
+  SubWorkflowStepFileSelectedMessage,
   WorkflowVariantCreatedMessage,
   WorkflowVariantFailedMessage,
 } from "../types/WebviewMessageTypes";
@@ -188,6 +190,9 @@ function isValidOutputExecutionTarget(
       (target.loopIndex as number) >= 0)
   );
 }
+
+/** The action a refused sub-workflow step file is reported under. */
+const SUB_WORKFLOW_STEP_FILE_ACTION = "use the workflow file for this step";
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -1187,6 +1192,42 @@ export class DashboardMessageRouter {
   }
 
   /**
+   * Answer a step-editor workflow-file pick with the reference the
+   * orchestrator builds for the workflow this client edits, or report the
+   * refusal as every other picker failure is reported.
+   */
+  private async replySubWorkflowStepFile(
+    filePath: string,
+    ctx: DashboardClientContext
+  ): Promise<void> {
+    try {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) {
+        throw new Error(
+          "ctrlyoke is still starting up — try again in a moment"
+        );
+      }
+      const reference =
+        await orchestrator.buildSubWorkflowStepReferenceForClient(
+          filePath,
+          ctx.clientId
+        );
+      if (!reference.ok) throw new Error(reference.message);
+      const reply: SubWorkflowStepFileSelectedMessage = {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: reference.workflow,
+      };
+      ctx.emit(reply);
+    } catch (error) {
+      this.mutationCoordinator.showRunActionFailure(
+        ctx,
+        SUB_WORKFLOW_STEP_FILE_ACTION,
+        error
+      );
+    }
+  }
+
+  /**
    * Resolve a workflow file path supplied by a dashboard client.
    *
    * Client-supplied paths are not guaranteed absolute: `WorkflowFilePickerModal`
@@ -1194,8 +1235,9 @@ export class DashboardMessageRouter {
    * and nothing downstream resolves one — `PromptFileParser.parsePromptFile`
    * does a bare `fs.readFile`, so a relative path would silently resolve
    * against the extension host's cwd and fail (or worse, hit an unrelated
-   * file). Both file-addressed actions — LOAD_WORKFLOW and APPEND_FILE —
-   * therefore resolve here, at the transport edge, so they cannot drift apart.
+   * file). Every file-addressed action — LOAD_WORKFLOW, APPEND_FILE and
+   * NORMALIZE_SUB_WORKFLOW_STEP_FILE — therefore resolves here, at the
+   * transport edge, so they cannot drift apart.
    * Folder-name-prefixed multi-root paths (`otherFolder/flows/x.yaml`, the form
    * workflow discovery reports) go through the same resolver as `@`-references.
    */
@@ -1234,13 +1276,15 @@ export class DashboardMessageRouter {
       );
     });
 
-    // The step editor's Workflow mode: pick the file a sub-workflow step
-    // runs and hand back its `workflow` reference, built exactly as the
-    // "queue as sub-workflow" entries build theirs. The hosted browser picks
-    // through its own modal and never sends this.
+    // The step editor's Workflow mode: the file a sub-workflow step runs,
+    // picked natively here or in the hosted browser's own modal (which sends
+    // NORMALIZE_SUB_WORKFLOW_STEP_FILE), handed back as its `workflow`
+    // reference. The orchestrator builds and checks it exactly as the
+    // "queue as sub-workflow" entries do, so a file the launch would refuse
+    // is refused at pick time.
     table.set(
       MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
-      async (_message, ctx) => {
+      async (_message: SelectSubWorkflowStepFileMessage, ctx) => {
         const selectPath = this.hostDependencies.actions.selectWorkspacePath;
         if (!selectPath) return;
         const filePath = await selectPath.call(this.hostDependencies.actions, {
@@ -1248,15 +1292,27 @@ export class DashboardMessageRouter {
           title: PATH_SELECTION_TITLES.SUB_WORKFLOW_STEP_FILE,
         });
         if (!filePath) return;
-        const { workflow } = buildSubWorkflowReferenceStep(
-          filePath,
-          this.getWorkspaceRoot(),
-          this.hostDependencies.getNamedRoots()
+        await this.replySubWorkflowStepFile(
+          this.resolveClientWorkflowFilePath(filePath),
+          ctx
         );
-        ctx.emit({
-          type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
-          path: workflow,
-        });
+      }
+    );
+    table.set(
+      MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+      async (message: NormalizeSubWorkflowStepFileMessage, ctx) => {
+        if (typeof message.filePath !== "string" || !message.filePath.trim()) {
+          this.mutationCoordinator.showRunActionFailure(
+            ctx,
+            SUB_WORKFLOW_STEP_FILE_ACTION,
+            new Error("No workflow file was named")
+          );
+          return;
+        }
+        await this.replySubWorkflowStepFile(
+          this.resolveClientWorkflowFilePath(message.filePath.trim()),
+          ctx
+        );
       }
     );
 

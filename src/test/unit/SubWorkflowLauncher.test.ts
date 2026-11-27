@@ -5,7 +5,10 @@ import { suite, test } from "mocha";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
-import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
+import {
+  recordedRanWith,
+  SubWorkflowLauncher,
+} from "../../core/orchestration/SubWorkflowLauncher";
 import { TypedEmitter } from "../../utils/TypedEmitter";
 import type {
   SubWorkflowInstance,
@@ -19,18 +22,35 @@ import {
 import type {
   ParsedPromptFile,
   PromptFile,
+  PromptStep,
   QueueState,
   RunRef,
   WorkflowKey,
+  WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  HARNESS_IDS,
   PROMPT_TERMINAL_STATUS,
+  STEP_TYPES,
   STEP_STATUS,
   SUB_WORKFLOW_CANCELLATION_SOURCES,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
+
+/** A settled child's run file holding `steps`. */
+function settledRunFile(steps: WorkflowStep[]): WorkingFile {
+  return {
+    steps,
+    startedAt: 1,
+    definitionRevision: 1,
+    _runtime: {
+      currentIndex: steps.length,
+      executionState: EXECUTION_STATES.COMPLETED,
+    },
+  };
+}
 
 type Scenario =
   | "completed"
@@ -539,11 +559,7 @@ suite("SubWorkflowLauncher", () => {
     const launcher = new SubWorkflowLauncher(
       factory.create,
       undefined,
-      async () =>
-        ({
-          steps: [{ prompt: "lane", _runtime: {} }],
-          _runtime: { currentIndex: 0 },
-        }) as unknown as WorkingFile
+      async () => settledRunFile([{ prompt: "lane", _runtime: {} }])
     );
 
     const result = await (await launcher.launch(request())).done;
@@ -551,14 +567,18 @@ suite("SubWorkflowLauncher", () => {
     assert.deepStrictEqual(result.ranWith, { harness: "claude-cli" });
   });
 
-  test("drops an unknown harness id a run file records", async () => {
-    const factory = new FakeFactory();
-    factory.child.workingFilePath = "/tmp/tampered/workflow.ctrlyoke.json";
-    const launcher = new SubWorkflowLauncher(
-      factory.create,
-      undefined,
-      async () =>
-        ({
+  test("reports only the latest started step's model when its recorded harness is unknown", async () => {
+    // Written as JSON: a tampered harness id is not a HarnessId to build.
+    const directory = makeTempDir("ctrlyoke-launcher-tampered-");
+    try {
+      const factory = new FakeFactory();
+      factory.child.workingFilePath = path.join(
+        directory,
+        "workflow.ctrlyoke.json"
+      );
+      await fs.writeFile(
+        factory.child.workingFilePath,
+        JSON.stringify({
           steps: [
             {
               prompt: "earlier",
@@ -569,17 +589,53 @@ suite("SubWorkflowLauncher", () => {
               _runtime: { harness: "not-a-harness", model: "opus" },
             },
           ],
-          _runtime: { currentIndex: 2 },
-        }) as unknown as WorkingFile
+          _runtime: {
+            currentIndex: 2,
+            executionState: EXECUTION_STATES.COMPLETED,
+          },
+        })
+      );
+
+      const result = await (
+        await new SubWorkflowLauncher(factory.create).launch(request())
+      ).done;
+
+      // Never the earlier step's harness: the child did not end on it.
+      assert.deepStrictEqual(result.ranWith, { model: "opus" });
+    } finally {
+      removeTempDir(directory);
+    }
+  });
+
+  test("recordedRanWith answers from the latest started prompt step alone", () => {
+    const earlier: PromptStep = {
+      prompt: "earlier",
+      _runtime: { harness: HARNESS_IDS.CODEX_CLI, model: "gpt" },
+    };
+    // Started, with no harness recorded: its model alone, or nothing.
+    assert.deepStrictEqual(
+      recordedRanWith([
+        earlier,
+        { prompt: "latest", _runtime: { startedAt: 2, model: "opus" } },
+      ]),
+      { model: "opus" }
     );
-
-    const result = await (await launcher.launch(request())).done;
-
-    // The step naming an unknown harness does not count as started.
-    assert.deepStrictEqual(result.ranWith, {
-      harness: "codex-cli",
-      model: "gpt",
-    });
+    assert.strictEqual(
+      recordedRanWith([
+        earlier,
+        { prompt: "latest", _runtime: { startedAt: 2 } },
+      ]),
+      undefined
+    );
+    // A later step that never started, and any script step, are passed over.
+    assert.deepStrictEqual(
+      recordedRanWith([
+        earlier,
+        { type: STEP_TYPES.SCRIPT, script: "true", _runtime: { startedAt: 3 } },
+        { prompt: "pending", _runtime: {} },
+      ]),
+      { harness: HARNESS_IDS.CODEX_CLI, model: "gpt" }
+    );
   });
 
   test("a reattached COMPLETED child whose run path cannot be built settles COMPLETED", async () => {

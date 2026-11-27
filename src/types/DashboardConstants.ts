@@ -914,7 +914,8 @@ export const MESSAGE_TYPES = {
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
   SELECT_SUB_WORKFLOW_STEP_FILE: "selectSubWorkflowStepFile", // Webview -> Extension: native file picker for the step editor's workflow file (VS Code panel only)
-  SUB_WORKFLOW_STEP_FILE_SELECTED: "subWorkflowStepFileSelected", // Extension -> Webview: { path } — the picked file as a step's `workflow` reference
+  NORMALIZE_SUB_WORKFLOW_STEP_FILE: "normalizeSubWorkflowStepFile", // Webview -> Extension: { filePath } — a file the hosted WorkflowFilePickerModal picked, to be built and checked as SELECT_SUB_WORKFLOW_STEP_FILE's pick is
+  SUB_WORKFLOW_STEP_FILE_SELECTED: "subWorkflowStepFileSelected", // Extension -> Webview: { path } — the picked file as a step's `workflow` reference (a refused file replies WORKFLOW_ACTION_FAILED instead)
   REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
   RUN_EXPORT_INFO: "runExportInfo",
   EXPORT_RUN: "exportRun",

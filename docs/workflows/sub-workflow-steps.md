@@ -408,7 +408,10 @@ file is outside the first folder), and absolute otherwise. A file outside the
 workspace must be in a trusted external root (`permissions.trustedExternalRoots`),
 as the step needs one to start. ctrlyoke reads the file when you queue it, so a
 file that does not parse, or that the step could not start from, is refused
-right away instead of failing when the step starts.
+right away instead of failing when the step starts. Queued onto a run that
+executes in a worktree, the file is looked up from that worktree, as the step
+will be, so a file that so far exists only on the run's branch can be queued;
+it is written relative to the workspace, like any other file in it.
 
 ## In the step editor
 
@@ -420,7 +423,9 @@ panel to edit it. The editor shows:
   pick it: VS Code opens its file picker, and the browser dashboard lists the
   workspace's workflow files. A picked file is written the way **Queue as
   Sub-workflow** writes it: relative to the workspace when it is inside it,
-  else absolute.
+  else absolute. VS Code's picker refuses a file the step could not start
+  from, such as one outside the workspace and its trusted external roots,
+  with the message the step would fail with.
 - **On Fail**: **Stop Workflow** (the default) or **Continue**, as `onFail`
   above.
 - The step colour, when step colours are on. The step's name and its enable
