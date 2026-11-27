@@ -8,7 +8,10 @@ import {
   createDiffFileFixture,
   flattenDiffFileFixture,
 } from "../../fixtures/diffFileFixture";
-import { installElementLayout } from "../../fixtures/elementLayout";
+import {
+  installElementLayout,
+  stubBoundingClientRect,
+} from "../../fixtures/elementLayout";
 
 const SCROLLER_CLASS = "diff-lazy-fixture-scroller";
 const { tokenizeMock } = vi.hoisted(() => ({
@@ -27,8 +30,7 @@ vi.mock("react-diff-view", async (importOriginal) => {
 });
 
 let restoreElementLayout: (() => void) | undefined;
-const originalGetBoundingClientRect =
-  HTMLElement.prototype.getBoundingClientRect;
+let restoreBoundingClientRect: (() => void) | undefined;
 
 class NoopResizeObserver implements ResizeObserver {
   observe(_target: Element): void {}
@@ -45,9 +47,13 @@ beforeEach(() => {
       element.classList.contains(SCROLLER_CLASS) ? 180 : 120,
     width: () => 800,
   });
-  HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
-    const isScroller = this.classList.contains(SCROLLER_CLASS);
-    const height = isScroller ? 180 : this.matches("[data-index]") ? 120 : 40;
+  restoreBoundingClientRect = stubBoundingClientRect((element) => {
+    const isScroller = element.classList.contains(SCROLLER_CLASS);
+    const height = isScroller
+      ? 180
+      : element.matches("[data-index]")
+        ? 120
+        : 40;
     return {
       width: 800,
       height,
@@ -59,12 +65,12 @@ beforeEach(() => {
       left: 0,
       toJSON: () => ({}),
     } as DOMRect;
-  };
+  });
 });
 
 afterEach(() => {
   restoreElementLayout?.();
-  HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+  restoreBoundingClientRect?.();
 });
 
 function FixtureHost(): ReactElement {
