@@ -419,13 +419,15 @@ Choose **Workflow** in the step editor's **Prompt** / **Script** / **Workflow**
 switch to write a sub-workflow step, or click a workflow step in the steps
 panel to edit it. The editor shows:
 
-- **Workflow file**: the path the step runs. Type it, or use **Browse…** to
-  pick it: VS Code opens its file picker, and the browser dashboard lists the
-  workspace's workflow files. A picked file is written the way **Queue as
-  Sub-workflow** writes it: relative to the workspace when it is inside it,
-  else absolute. VS Code's picker refuses a file the step could not start
-  from, such as one outside the workspace and its trusted external roots,
-  with the message the step would fail with.
+- **Workflow file**: the path the step runs. Type it (backslashes become
+  forward slashes), or use **Browse…** to pick it: VS Code opens its file
+  picker, and the browser dashboard lists the workspace's workflow files.
+  Either way a picked file is written the way **Queue as Sub-workflow** writes
+  it: relative to the workspace when it is inside it, else absolute. A file
+  the step could not start from, such as one outside the workspace and its
+  trusted external roots, is refused with the message the step would fail
+  with. A pick that finishes after you have moved to another step is
+  ignored.
 - **On Fail**: **Stop Workflow** (the default) or **Continue**, as `onFail`
   above.
 - The step colour, when step colours are on. The step's name and its enable
@@ -439,7 +441,8 @@ step when it starts, under its `onFail`.
 
 A step whose `workflow` is an [inline definition](#inline-definitions) opens
 read-only in the editor, with a note. Edit the workflow file to change it.
-**Move to Editor** is unavailable for such a step.
+**Move to Editor** is unavailable for such a step, and, as with a script
+draft, while the new-step editor holds an unsaved workflow file path.
 
 ## Outcomes, Stop, and Pause
 

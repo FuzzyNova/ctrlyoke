@@ -38,9 +38,9 @@ import type { PromptEditorInsertRequest } from "@root/types/WebviewMessageTypes"
 import { useUiStore } from "./uiStore";
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import {
+  getEditorOnlyDraftKind,
   getStepDraftContent,
   isPromptEditorStepType,
-  isScriptEditorStepType,
 } from "@utils/stepDraftContent";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
 import { useWorkflowStore } from "./workflowStore";
@@ -245,6 +245,18 @@ export function selectionTargetKey(target: EditorSelectionTarget): string {
   return "";
 }
 
+/**
+ * A key naming any editor target, the new-step draft included (which
+ * `selectionTargetKey` leaves empty). A picker request carries it and its
+ * reply echoes it, so a reply that returns after the editor moved to another
+ * target is dropped instead of landing there.
+ */
+export function editorTargetKey(target: EditorSelectionTarget): string {
+  return target.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
+    ? EDITOR_TARGET_KINDS.NEW_PROMPT
+    : selectionTargetKey(target);
+}
+
 export type EditorSelectionTarget =
   | { kind: typeof EDITOR_TARGET_KINDS.NEW_PROMPT }
   | { kind: typeof FINAL_STEP_PHASES.QUEUE; index: number }
@@ -421,8 +433,8 @@ function readPersistedNewStepDraft(
 
 /**
  * Keep unsent prompt text the editor is about to replace in Recent Prompts.
- * Script drafts are preserved by their caller because prompt history stores
- * prompt text only.
+ * Script and workflow drafts are preserved by their caller
+ * (`getEditorOnlyDraftKind`) because prompt history stores prompt text only.
  */
 function rememberReplacedPromptDraft(
   draft: Pick<NewStepDraftFields, "promptText" | "stepType"> | null
@@ -474,13 +486,15 @@ interface EditorActions {
    * Make a queued step the new-step draft: its text, name and properties,
    * including unsaved edits made to it in the editor. The caller removes the
    * step from the queue. Unsent prompt text in the draft it replaces is kept
-   * in Recent Prompts.
+   * in Recent Prompts; a script or workflow draft, which Recent Prompts cannot
+   * hold, stays in the editor instead (the moved step's prompt goes to Recent
+   * Prompts), and its kind is returned.
    */
   moveStepToNewStepDraft: (
     index: number,
     step: WorkflowStep,
     restorePendingEdit?: boolean
-  ) => boolean;
+  ) => WorkflowStepType | undefined;
   /**
    * Replace the editor's prompt text with a Recent Prompts entry. Unsent text
    * in a new prompt is kept in Recent Prompts first; dirty edits to an
@@ -972,17 +986,15 @@ export const useEditorStore = create<
         : (before.savedNewPromptState ??
           readPersistedNewStepDraft(getVsCodeApi()));
     rememberReplacedPromptDraft(replacedDraft);
-    const preservedScriptDraft =
-      replacedDraft !== null &&
-      replacedDraft !== undefined &&
-      isScriptEditorStepType(replacedDraft.stepType) &&
-      replacedDraft.scriptCommand.trim().length > 0
+    const keptDraftKind = replacedDraft
+      ? getEditorOnlyDraftKind(replacedDraft)
+      : undefined;
+    const preservedDraft =
+      replacedDraft && keptDraftKind !== undefined
         ? restoreNewStepDraft(replacedDraft)
         : null;
-    if (preservedScriptDraft) {
-      if ("prompt" in step) {
-        usePromptHistoryStore.getState().rememberDraft(step.prompt);
-      }
+    if (preservedDraft && "prompt" in step) {
+      usePromptHistoryStore.getState().rememberDraft(step.prompt);
     }
 
     // Loading the step through edit mode reuses its step-to-editor mapping
@@ -996,7 +1008,7 @@ export const useEditorStore = create<
       ];
     }
     set({
-      ...(preservedScriptDraft ?? {}),
+      ...(preservedDraft ?? {}),
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null,
       originalPromptData: null,
@@ -1005,7 +1017,7 @@ export const useEditorStore = create<
       pendingEdits,
     });
     expandPromptEditorIfCollapsed();
-    return preservedScriptDraft !== null;
+    return preservedDraft ? keptDraftKind : undefined;
   },
 
   loadRecentPrompt: (text) => {

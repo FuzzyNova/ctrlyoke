@@ -25,7 +25,7 @@ import {
   type WorkflowProperties,
 } from "@store/settingsStore";
 import { useUiStore, type TemplateInfo } from "@store/uiStore";
-import { useEditorStore } from "@store/editorStore";
+import { editorTargetKey, useEditorStore } from "@store/editorStore";
 import { isSubWorkflowEditorStepType } from "@utils/stepDraftContent";
 import { useRunSummaryCacheStore } from "@store/runSummaryCacheStore";
 import { useLanguageServerStore } from "@store/languageServerStore";
@@ -1996,14 +1996,17 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
-  // SUB_WORKFLOW_STEP_FILE_SELECTED - native picker result for the step
-  // editor's Workflow mode. Dropped once the editor has left a file-reference
-  // workflow step, so a slow pick cannot land on another kind of step.
+  // SUB_WORKFLOW_STEP_FILE_SELECTED - the step editor's Workflow-mode pick
+  // (native picker or hosted modal), as the reference the step stores.
+  // Dropped unless the editor is still on the target the pick was asked for
+  // (the echoed `targetKey`) and that target is still a file-reference
+  // workflow step, so a slow pick cannot land on another step.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED] = (message) => {
     if (typeof message.path !== "string") return;
     const editor = useEditorStore.getState();
     if (
+      message.targetKey !== editorTargetKey(editor.selectionTarget) ||
       !isSubWorkflowEditorStepType(editor.stepType) ||
       editor.subWorkflowInline !== null
     ) {

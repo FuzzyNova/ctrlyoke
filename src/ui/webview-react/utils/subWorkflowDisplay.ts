@@ -142,10 +142,11 @@ export function resolveEffectiveStepHarness(
     ? getInlinePromptStep(step)
     : undefined;
   if (!inlinePrompt) return undefined;
-  return (getRecordedLaneRanWith(step, recorded, status ?? step.status)
-    ?.harness ??
+  return (
+    getRecordedLaneRanWith(step, recorded, status ?? step.status)?.harness ??
     inlinePrompt.harness ??
-    inheritedHarness) as HarnessId | undefined;
+    inheritedHarness
+  );
 }
 
 /** True when an inline definition declares its own worktree (a lane). */

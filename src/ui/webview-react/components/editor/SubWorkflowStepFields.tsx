@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { useEditorStore } from "@store/editorStore";
+import { editorTargetKey, useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useWorkflowFilePicker } from "@hooks/useSubWorkflowFilePicker";
@@ -13,11 +13,16 @@ import {
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import { MESSAGE_TYPES } from "../../types/messages";
+import type {
+  NormalizeSubWorkflowStepFileMessage,
+  SelectSubWorkflowStepFileMessage,
+} from "@root/types/WebviewMessageTypes";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { CustomSelect } from "../shared/CustomSelect";
 import { Button } from "../shared/Button";
 import { Icon } from "../shared/Icon";
 import { WorkflowVariableValue } from "../shared/WorkflowVariableValue";
+import { toForwardSlashPath } from "../shared/fileBrowserShared";
 import { StepColorField } from "./StepColorField";
 
 /**
@@ -44,9 +49,10 @@ interface SubWorkflowStepFieldsProps {
 
 /**
  * The step editor's Workflow mode: a file-reference sub-workflow step's
- * `workflow` path (typed or picked), its `onFail`, and its color. Name and
- * enabled live in the editor header, shared with every step kind. A step
- * whose workflow is defined inline is shown read-only.
+ * `workflow` path (typed, with `/` separators, or picked), its `onFail`,
+ * and its color. Name and enabled live in the editor header, shared with
+ * every step kind. A step whose workflow is defined inline is shown
+ * read-only.
  */
 export const SubWorkflowStepFields: React.FC<SubWorkflowStepFieldsProps> = ({
   disabled,
@@ -60,19 +66,37 @@ export const SubWorkflowStepFields: React.FC<SubWorkflowStepFieldsProps> = ({
   const setSubWorkflowOnFail = useEditorStore((s) => s.setSubWorkflowOnFail);
   const stepColorMode = useSettingsStore((s) => s.globalSettings.stepColorMode);
 
+  // Both pickers answer through the backend, which builds the reference the
+  // step stores exactly as the queue entries build theirs (workspace-relative,
+  // refused outside the workspace), so the panel and the hosted browser save
+  // the same path. The request names the editor target it was made for; the
+  // reply echoes it and is dropped if the editor has moved on
+  // (SUB_WORKFLOW_STEP_FILE_SELECTED in the inbound router).
   const requestNativePick = useCallback(
-    () =>
-      vscode.postMessage({ type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE }),
+    (targetKey: string) => {
+      const message: SelectSubWorkflowStepFileMessage = {
+        type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+        targetKey,
+      };
+      vscode.postMessage(message);
+    },
     [vscode]
   );
   const { requestWorkflowFile, workflowFilePickerModal } =
-    useWorkflowFilePicker<void>({
+    useWorkflowFilePicker<string>({
       requestNativePick,
       modalLabels: () => ({
         title: SUB_WORKFLOW_EDITOR_LABELS.pickerTitle,
         actionLabel: SUB_WORKFLOW_EDITOR_LABELS.pickerAction,
       }),
-      onHostedSelect: (filePath) => setSubWorkflowPath(filePath),
+      onHostedSelect: (filePath, targetKey) => {
+        const message: NormalizeSubWorkflowStepFileMessage = {
+          type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+          filePath,
+          targetKey,
+        };
+        vscode.postMessage(message);
+      },
     });
 
   const colorField = stepColorMode !== STEP_COLOR_MODES.NONE && (
@@ -126,7 +150,9 @@ export const SubWorkflowStepFields: React.FC<SubWorkflowStepFieldsProps> = ({
             )}
             aria-invalid={pathError ? true : undefined}
             value={subWorkflowPath}
-            onChange={(event) => setSubWorkflowPath(event.target.value)}
+            onChange={(event) =>
+              setSubWorkflowPath(toForwardSlashPath(event.target.value))
+            }
             placeholder={SUB_WORKFLOW_EDITOR_LABELS.filePlaceholder}
             disabled={disabled}
             spellCheck={false}
@@ -136,7 +162,11 @@ export const SubWorkflowStepFields: React.FC<SubWorkflowStepFieldsProps> = ({
             id={SUB_WORKFLOW_EDITOR_CONTROL_IDS.browse}
             variant="secondary"
             size="sm"
-            onClick={() => requestWorkflowFile()}
+            onClick={() =>
+              requestWorkflowFile(
+                editorTargetKey(useEditorStore.getState().selectionTarget)
+              )
+            }
             disabled={disabled}
             title={SUB_WORKFLOW_EDITOR_LABELS.browseTitle}
           >

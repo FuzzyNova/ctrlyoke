@@ -10,6 +10,7 @@ import {
   isPromptStep,
   isSubWorkflowStep,
   type ParallelGroupDefinition,
+  type WorkflowStepType,
 } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
@@ -20,7 +21,7 @@ import {
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
-import { isScriptEditorStepType } from "@utils/stepDraftContent";
+import { getEditorOnlyDraftKind } from "@utils/stepDraftContent";
 import { executionOwnsCurrentStep, getStepKindLabel } from "./status";
 import { getStepAssistantTextForCopy } from "./outputUtils";
 import {
@@ -279,6 +280,11 @@ export function buildLiveStepControlMenuItems({
   return items;
 }
 
+/** Why Move to Editor waits for an unsaved draft of `kind` to be dealt with. */
+function formatDraftBlocksMoveReason(kind: WorkflowStepType): string {
+  return `Save or clear the ${getStepKindLabel(kind).toLowerCase()} draft before moving a step into the editor`;
+}
+
 export interface QueuedStepHandoffMenuItemsInput {
   step: WorkflowStep;
   /** Absolute queue index of the step. */
@@ -317,11 +323,11 @@ export function buildQueuedStepHandoffMenuItems({
     editorState.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
       ? editorState
       : editorState.savedNewPromptState;
-  const scriptDraftWouldBeReplaced =
-    replacedDraft !== null &&
-    replacedDraft !== undefined &&
-    isScriptEditorStepType(replacedDraft.stepType) &&
-    replacedDraft.scriptCommand.trim().length > 0;
+  // Recent Prompts keeps a replaced prompt draft; a script or workflow
+  // draft it cannot hold would be lost, so it blocks the move instead.
+  const replacedDraftKind = replacedDraft
+    ? getEditorOnlyDraftKind(replacedDraft)
+    : undefined;
   // The editor has no inline sub-workflow form yet, so moving such a step
   // would remove it from the queue and leave a draft that cannot be sent.
   const isInlineSubWorkflow =
@@ -330,8 +336,8 @@ export function buildQueuedStepHandoffMenuItems({
     removeDisabledReason ??
     (isInlineSubWorkflow
       ? SUB_WORKFLOW_EDITOR_LABELS.inlineMoveDisabled
-      : scriptDraftWouldBeReplaced
-        ? "Save or clear the script draft before moving a step into the editor"
+      : replacedDraftKind !== undefined
+        ? formatDraftBlocksMoveReason(replacedDraftKind)
         : undefined);
   const moveToEditor: ContextMenuItem = {
     label: "Move to Editor",

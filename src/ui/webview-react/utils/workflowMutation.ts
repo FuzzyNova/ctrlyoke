@@ -124,15 +124,46 @@ export function postRunLifecycleMutation(
   return true;
 }
 
-export interface SubWorkflowAppendOptions {
+export interface AppendFileOptions {
   filePath?: string;
-  position?: QueuePosition;
   /**
    * The mutation context captured when the user chose the action; omit to use
    * the displayed view's at post time. An explicit `undefined` (nothing was
    * displayed then) posts none rather than reading the view again.
    */
   mutation?: WorkflowDefinitionMutation;
+}
+
+export interface SubWorkflowAppendOptions extends AppendFileOptions {
+  position?: QueuePosition;
+}
+
+/** The mutation `options` captured, else the displayed view's now. */
+function appendMutation(
+  options: AppendFileOptions
+): WorkflowDefinitionMutation | undefined {
+  return "mutation" in options
+    ? options.mutation
+    : getWorkflowDefinitionMutation();
+}
+
+/**
+ * Queue a workflow file's steps onto the displayed workflow (`APPEND_FILE`).
+ * Without a `filePath` the extension opens its native file picker; hosted
+ * callers pick through `WorkflowFilePickerModal` first and pass the path.
+ */
+export function postAppendFile(
+  target: MessageTarget,
+  options: AppendFileOptions = {}
+): void {
+  postWithMutation(
+    target,
+    {
+      type: MESSAGE_TYPES.APPEND_FILE,
+      ...(options.filePath ? { filePath: options.filePath } : {}),
+    },
+    appendMutation(options)
+  );
 }
 
 /**
@@ -153,6 +184,6 @@ export function postSubWorkflowAppend(
       appendMode: APPEND_MODES.SUB_WORKFLOW,
       position: options.position ?? QUEUE_POSITION.END,
     },
-    "mutation" in options ? options.mutation : getWorkflowDefinitionMutation()
+    appendMutation(options)
   );
 }

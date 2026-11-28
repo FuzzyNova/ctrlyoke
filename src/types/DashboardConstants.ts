@@ -913,9 +913,9 @@ export const MESSAGE_TYPES = {
   WORKFLOW_VARIANT_FAILED: "workflowVariantFailed",
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
-  SELECT_SUB_WORKFLOW_STEP_FILE: "selectSubWorkflowStepFile", // Webview -> Extension: native file picker for the step editor's workflow file (VS Code panel only)
-  NORMALIZE_SUB_WORKFLOW_STEP_FILE: "normalizeSubWorkflowStepFile", // Webview -> Extension: { filePath } — a file the hosted WorkflowFilePickerModal picked, to be built and checked as SELECT_SUB_WORKFLOW_STEP_FILE's pick is
-  SUB_WORKFLOW_STEP_FILE_SELECTED: "subWorkflowStepFileSelected", // Extension -> Webview: { path } — the picked file as a step's `workflow` reference (a refused file replies WORKFLOW_ACTION_FAILED instead)
+  SELECT_SUB_WORKFLOW_STEP_FILE: "selectSubWorkflowStepFile", // Webview -> Extension: native file picker for the step editor's workflow file (VS Code panel only); { targetKey? } echoed on the reply
+  NORMALIZE_SUB_WORKFLOW_STEP_FILE: "normalizeSubWorkflowStepFile", // Webview -> Extension: { filePath, targetKey? } — a file the hosted WorkflowFilePickerModal picked, to be built and checked as SELECT_SUB_WORKFLOW_STEP_FILE's pick is
+  SUB_WORKFLOW_STEP_FILE_SELECTED: "subWorkflowStepFileSelected", // Extension -> Webview: { path, targetKey? } — the picked file as a step's `workflow` reference (a refused file replies WORKFLOW_ACTION_FAILED instead)
   REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
   RUN_EXPORT_INFO: "runExportInfo",
   EXPORT_RUN: "exportRun",
@@ -5513,9 +5513,26 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
  * (`type: workflow`, `workflow: <path>`). Inline definitions are shown
  * read-only until the editor gains an inline form.
  */
+/** The step editor's Prompt / Script / Workflow switch: each kind's label and tooltip. */
+export const STEP_EDITOR_MODE_LABELS = {
+  [STEP_TYPES.PROMPT]: {
+    label: "Prompt",
+    title: "Prompt step — sends text to an AI harness",
+  },
+  [STEP_TYPES.SCRIPT]: {
+    label: "Script",
+    title: "Script step — runs a shell command with no AI interaction",
+  },
+  [STEP_TYPES.WORKFLOW]: {
+    label: "Workflow",
+    title: "Workflow step — runs another workflow file as a child run",
+  },
+} as const satisfies Record<
+  (typeof STEP_TYPES)[keyof typeof STEP_TYPES],
+  { label: string; title: string }
+>;
+
 export const SUB_WORKFLOW_EDITOR_LABELS = {
-  mode: "Workflow",
-  modeTitle: "Workflow step — runs another workflow file as a child run",
   newStep: "New Workflow Step",
   editing: "Editing: Workflow Step",
   editingFinal: "Editing: Final Workflow Step",
@@ -5916,9 +5933,18 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
 } as const;
 
 /** File-picker modes used by workflow load and queue actions. */
+/** The New split button's menu items (`SplitButtonOption.value`, also their React key). */
+export const WORKFLOW_CONTROLS_MENU_VALUES = {
+  FROM_TEMPLATE: "from-template",
+  LOAD_FILE: "load-file",
+  IMPORT_RUN: "import-run",
+  QUEUE_FILE: "queue-file",
+  QUEUE_SUB_WORKFLOW: "queue-sub-workflow",
+  DUPLICATE_WORKFLOW: "duplicate-workflow",
+} as const;
+
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
-  QUEUE: "queue",
   IMPORT_RUN: "import-run",
 } as const;
 

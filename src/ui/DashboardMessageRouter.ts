@@ -1198,6 +1198,7 @@ export class DashboardMessageRouter {
    */
   private async replySubWorkflowStepFile(
     filePath: string,
+    targetKey: string | undefined,
     ctx: DashboardClientContext
   ): Promise<void> {
     try {
@@ -1216,6 +1217,7 @@ export class DashboardMessageRouter {
       const reply: SubWorkflowStepFileSelectedMessage = {
         type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
         path: reference.workflow,
+        ...(typeof targetKey === "string" ? { targetKey } : {}),
       };
       ctx.emit(reply);
     } catch (error) {
@@ -1284,7 +1286,7 @@ export class DashboardMessageRouter {
     // is refused at pick time.
     table.set(
       MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
-      async (_message: SelectSubWorkflowStepFileMessage, ctx) => {
+      async (message: SelectSubWorkflowStepFileMessage, ctx) => {
         const selectPath = this.hostDependencies.actions.selectWorkspacePath;
         if (!selectPath) return;
         const filePath = await selectPath.call(this.hostDependencies.actions, {
@@ -1294,6 +1296,7 @@ export class DashboardMessageRouter {
         if (!filePath) return;
         await this.replySubWorkflowStepFile(
           this.resolveClientWorkflowFilePath(filePath),
+          message.targetKey,
           ctx
         );
       }
@@ -1311,6 +1314,7 @@ export class DashboardMessageRouter {
         }
         await this.replySubWorkflowStepFile(
           this.resolveClientWorkflowFilePath(message.filePath.trim()),
+          message.targetKey,
           ctx
         );
       }

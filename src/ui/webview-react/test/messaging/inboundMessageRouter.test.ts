@@ -188,9 +188,9 @@ describe("WORKSPACE_STATS_UPDATED", () => {
 });
 
 describe("SUB_WORKFLOW_STEP_FILE_SELECTED", () => {
-  const handle = (path: unknown) =>
+  const handle = (path: unknown, targetKey: string = "newPrompt") =>
     createMessageHandlers(false)[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED](
-      { path } as never
+      { path, targetKey } as never
     );
 
   it("fills the Workflow-mode file field with the picked reference", () => {
@@ -206,12 +206,40 @@ describe("SUB_WORKFLOW_STEP_FILE_SELECTED", () => {
     expect(useEditorStore.getState().subWorkflowPath).toBe("");
   });
 
+  it("lands a pick only on the target it was asked for", () => {
+    const fileStep = (workflow: string) => ({
+      type: STEP_TYPES.WORKFLOW,
+      workflow,
+    });
+    useEditorStore
+      .getState()
+      .enterEditMode(1, fileStep("workflows/one.ctrlyoke.yaml"));
+    // Asked for step 2; the user has since selected step 1, another file step.
+    handle("workflows/picked.ctrlyoke.yaml", "queue:2");
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/one.ctrlyoke.yaml"
+    );
+
+    handle("workflows/picked.ctrlyoke.yaml", "queue:1");
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/picked.ctrlyoke.yaml"
+    );
+  });
+
+  it("drops a reply that names no target", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    createMessageHandlers(false)[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED](
+      { path: "workflows/verify.ctrlyoke.yaml" } as never
+    );
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+  });
+
   it("never turns an inline workflow step into a file reference", () => {
     useEditorStore.getState().enterEditMode(0, {
       type: STEP_TYPES.WORKFLOW,
       workflow: { prompt: "Inline lane" },
     });
-    handle("workflows/verify.ctrlyoke.yaml");
+    handle("workflows/verify.ctrlyoke.yaml", "queue:0");
     expect(useEditorStore.getState().subWorkflowPath).toBe("");
   });
 });

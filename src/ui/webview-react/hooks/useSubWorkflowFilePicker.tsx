@@ -9,6 +9,7 @@ import {
 import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
 import {
   getWorkflowDefinitionMutation,
+  postAppendFile,
   postSubWorkflowAppend,
 } from "@utils/workflowMutation";
 
@@ -69,10 +70,56 @@ export function useWorkflowFilePicker<TRequest>({
   return { requestWorkflowFile, workflowFilePickerModal };
 }
 
-interface PendingSubWorkflowQueue {
-  position: QueuePosition;
+/** A queue action's target, captured when the user chose the action. */
+interface PendingQueueTarget {
   /** The view the user chose the action on, captured before the modal opens. */
   mutation: WorkflowDefinitionMutation | undefined;
+}
+
+interface PendingSubWorkflowQueue extends PendingQueueTarget {
+  position: QueuePosition;
+}
+
+/**
+ * Capture the view a queue action was chosen on. Only the hosted modal needs
+ * it; the native branch posts at once and reads the view then.
+ */
+function captureQueueTarget(): PendingQueueTarget {
+  return {
+    mutation: isStandalone ? getWorkflowDefinitionMutation() : undefined,
+  };
+}
+
+/** The hosted modal's labels for "Queue from File". */
+const QUEUE_FILE_PICKER_LABELS = {
+  title: "Queue Workflow File",
+  actionLabel: "Queue File",
+} as const;
+
+/**
+ * Pick a workflow file and queue its steps onto the displayed workflow
+ * (New → Queue from File…), through `useWorkflowFilePicker`. Like
+ * `useSubWorkflowFilePicker`, the hosted modal posts the address and
+ * revisions captured when the item was chosen.
+ */
+export function useQueueFilePicker(): {
+  requestQueueFile: () => void;
+  queueFilePickerModal: React.ReactNode;
+} {
+  const vscode = useVsCodeApi();
+  const requestNativePick = useCallback(() => postAppendFile(vscode), [vscode]);
+  const { requestWorkflowFile, workflowFilePickerModal } =
+    useWorkflowFilePicker<PendingQueueTarget>({
+      requestNativePick,
+      modalLabels: () => QUEUE_FILE_PICKER_LABELS,
+      onHostedSelect: (filePath, { mutation }) =>
+        postAppendFile(vscode, { filePath, mutation }),
+    });
+  const requestQueueFile = useCallback(
+    () => requestWorkflowFile(captureQueueTarget()),
+    [requestWorkflowFile]
+  );
+  return { requestQueueFile, queueFilePickerModal: workflowFilePickerModal };
 }
 
 /**
@@ -113,11 +160,7 @@ export function useSubWorkflowFilePicker(): {
 
   const requestSubWorkflowFile = useCallback(
     (position: QueuePosition) =>
-      requestWorkflowFile({
-        position,
-        // Only the hosted modal needs it; the native branch posts at once.
-        mutation: isStandalone ? getWorkflowDefinitionMutation() : undefined,
-      }),
+      requestWorkflowFile({ position, ...captureQueueTarget() }),
     [requestWorkflowFile]
   );
 

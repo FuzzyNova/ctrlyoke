@@ -761,6 +761,21 @@ describe("useStepContextMenu", () => {
       );
     });
 
+    it("disables Move to Editor while a non-empty workflow draft would be replaced", () => {
+      useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+      useEditorStore
+        .getState()
+        .setSubWorkflowPath("workflows/verify.ctrlyoke.yaml");
+      openMenuOnQueuedStep();
+
+      const move = screen.getByRole("menuitem", { name: "Move to Editor" });
+      expect(move).toBeDisabled();
+      expect(move).toHaveAttribute(
+        "title",
+        "Save or clear the workflow draft before moving a step into the editor"
+      );
+    });
+
     it("disables Move to Editor for a step with an inline workflow definition", () => {
       openMenuOnQueuedStep({
         type: STEP_TYPES.WORKFLOW,

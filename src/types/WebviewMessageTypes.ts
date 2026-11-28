@@ -2750,6 +2750,11 @@ export interface AppendFileMessage {
  */
 export interface SelectSubWorkflowStepFileMessage {
   type: typeof MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE;
+  /**
+   * The editor target the pick was asked for (`editorTargetKey`), echoed on
+   * the reply so a pick that returns after the editor moved on is dropped.
+   */
+  targetKey?: string;
 }
 
 /**
@@ -2761,6 +2766,8 @@ export interface SelectSubWorkflowStepFileMessage {
 export interface NormalizeSubWorkflowStepFileMessage {
   type: typeof MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE;
   filePath: string;
+  /** Echoed on the reply, as `SelectSubWorkflowStepFileMessage.targetKey`. */
+  targetKey?: string;
 }
 
 /**
@@ -2771,6 +2778,8 @@ export interface NormalizeSubWorkflowStepFileMessage {
 export interface SubWorkflowStepFileSelectedMessage {
   type: typeof MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED;
   path: string;
+  /** The request's `targetKey`, when it named one. */
+  targetKey?: string;
 }
 
 /** Context-menu origin carried back only when a queued-step steer fails. */

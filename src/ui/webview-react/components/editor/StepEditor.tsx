@@ -76,7 +76,11 @@ import {
 import type { ExecutePromptErrorMessage } from "@root/types/WebviewMessageTypes";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
-import { isExecutionBusy, isWorkflowRunning } from "../../utils/status";
+import {
+  getStepKindLabel,
+  isExecutionBusy,
+  isWorkflowRunning,
+} from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import { getPriorContextStepCount } from "@utils/parallelGroups";
 import { notifyUser, showWebviewToast } from "@utils/notifyUser";
@@ -880,12 +884,12 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         pendingNewWorkflowToastRef.current = null;
         const { origin } = event.data as ExecutePromptErrorMessage;
         if (origin?.kind === STEER_ORIGIN_KINDS.QUEUED_STEP) {
-          const keptScriptDraft = useEditorStore
+          const keptDraftKind = useEditorStore
             .getState()
             .moveStepToNewStepDraft(origin.stepIndex, origin.step, false);
-          if (keptScriptDraft) {
+          if (keptDraftKind !== undefined) {
             notifyUser(
-              "Your script draft is still in the editor. The steered prompt was saved in Recent Prompts.",
+              `Your ${getStepKindLabel(keptDraftKind).toLowerCase()} draft is still in the editor. The steered prompt was saved in Recent Prompts.`,
               USER_FEEDBACK_SEVERITY.INFO
             );
           }

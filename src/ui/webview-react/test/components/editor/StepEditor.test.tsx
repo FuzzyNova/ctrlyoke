@@ -1849,6 +1849,7 @@ describe("StepEditor — Workflow (sub-workflow step) mode", () => {
 
     expect(findMessage(MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE)).toEqual({
       type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+      targetKey: EDITOR_TARGET_KINDS.NEW_PROMPT,
     });
   });
 });

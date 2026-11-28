@@ -30,6 +30,7 @@ import {
   EDITOR_PLACEHOLDER_TEXT,
   PROMPT_PROPERTIES,
   BULK_EDIT_DISABLED_REASONS,
+  STEP_EDITOR_MODE_LABELS,
   SUB_WORKFLOW_EDITOR_LABELS,
 } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
@@ -70,20 +71,17 @@ const STEP_TYPE_OPTIONS: ReadonlyArray<{
   {
     type: STEP_TYPES.PROMPT,
     icon: "comment",
-    label: "Prompt",
-    title: "Prompt step — sends text to an AI harness",
+    ...STEP_EDITOR_MODE_LABELS[STEP_TYPES.PROMPT],
   },
   {
     type: STEP_TYPES.SCRIPT,
     icon: "terminal-powershell",
-    label: "Script",
-    title: "Script step — runs a shell command with no AI interaction",
+    ...STEP_EDITOR_MODE_LABELS[STEP_TYPES.SCRIPT],
   },
   {
     type: STEP_TYPES.WORKFLOW,
     icon: getStepKindIconClass(STEP_TYPES.WORKFLOW),
-    label: SUB_WORKFLOW_EDITOR_LABELS.mode,
-    title: SUB_WORKFLOW_EDITOR_LABELS.modeTitle,
+    ...STEP_EDITOR_MODE_LABELS[STEP_TYPES.WORKFLOW],
   },
 ];
 

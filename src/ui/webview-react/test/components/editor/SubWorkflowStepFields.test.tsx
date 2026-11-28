@@ -1,8 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SubWorkflowStepFields } from "@components/editor/SubWorkflowStepFields";
-import { useEditorStore } from "@store/editorStore";
 import {
+  SUB_WORKFLOW_EDITOR_CONTROL_IDS,
+  SubWorkflowStepFields,
+} from "@components/editor/SubWorkflowStepFields";
+import { useEditorStore } from "@store/editorStore";
+import { hostedFetch } from "@utils/hostedApi";
+import { createMessageHandlers } from "@/messaging/inboundMessageRouter";
+import {
+  EDITOR_TARGET_KINDS,
+  MESSAGE_TYPES,
   STEP_TYPES,
   SUB_WORKFLOW_EDITOR_LABELS,
 } from "@root/types/DashboardConstants";
@@ -42,32 +49,103 @@ afterEach(() => {
   host.standalone = false;
 });
 
+/** Answer a pick as the extension does (`SUB_WORKFLOW_STEP_FILE_SELECTED`). */
+function replyWithReference(path: string, targetKey: string | undefined) {
+  createMessageHandlers(false)[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED]({
+    path,
+    targetKey,
+  } as never);
+}
+
 describe("SubWorkflowStepFields", () => {
-  it("picks the file through the hosted modal in the browser", async () => {
+  // The schema round-trip suite's content-control guard relies on this test:
+  // a source scan sees the id constants, only a render sees them on controls.
+  it("renders the file field and Browse button under their registered ids", () => {
+    render(<SubWorkflowStepFields disabled={false} />);
+
+    const file = document.getElementById(SUB_WORKFLOW_EDITOR_CONTROL_IDS.file);
+    expect(file).toBe(screen.getByRole("textbox", { name: /Workflow file/ }));
+    const browse = document.getElementById(
+      SUB_WORKFLOW_EDITOR_CONTROL_IDS.browse
+    );
+    expect(browse).toBe(
+      screen.getByRole("button", { name: SUB_WORKFLOW_EDITOR_LABELS.browse })
+    );
+  });
+
+  it("sends a hosted modal list pick to the extension and stores the reference it returns", async () => {
     host.standalone = true;
+    vi.mocked(hostedFetch).mockResolvedValueOnce({
+      files: [
+        {
+          path: "/home/me/repo/workflows/verify.ctrlyoke.yaml",
+          relativePath: "workflows/verify.ctrlyoke.yaml",
+        },
+      ],
+      isGitRepo: false,
+    });
     render(<SubWorkflowStepFields disabled={false} />);
 
     fireEvent.click(
       screen.getByRole("button", { name: SUB_WORKFLOW_EDITOR_LABELS.browse })
     );
-    await waitFor(() =>
-      expect(
-        screen.getByText(SUB_WORKFLOW_EDITOR_LABELS.pickerTitle)
-      ).toBeInTheDocument()
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "workflows/verify.ctrlyoke.yaml",
+      })
     );
-    fireEvent.change(screen.getByLabelText("Or enter a path"), {
-      target: { value: "workflows/verify.ctrlyoke.yaml" },
-    });
     fireEvent.click(
       screen.getByRole("button", {
         name: SUB_WORKFLOW_EDITOR_LABELS.pickerAction,
       })
     );
 
-    expect(useEditorStore.getState().subWorkflowPath).toBe(
-      "workflows/verify.ctrlyoke.yaml"
+    // The modal's absolute path goes to the backend, never into the step.
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+      filePath: "/home/me/repo/workflows/verify.ctrlyoke.yaml",
+      targetKey: EDITOR_TARGET_KINDS.NEW_PROMPT,
+    });
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+
+    replyWithReference(
+      "workflows/verify.ctrlyoke.yaml",
+      EDITOR_TARGET_KINDS.NEW_PROMPT
     );
-    expect(postMessage).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", { name: /Workflow file/ })
+      ).toHaveValue("workflows/verify.ctrlyoke.yaml")
+    );
+  });
+
+  it("asks the native picker for the target being edited", () => {
+    useEditorStore.getState().enterEditMode(2, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/old.ctrlyoke.yaml",
+    });
+    render(<SubWorkflowStepFields disabled={false} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: SUB_WORKFLOW_EDITOR_LABELS.browse })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+      targetKey: "queue:2",
+    });
+  });
+
+  it("spells a typed path with forward slashes", () => {
+    render(<SubWorkflowStepFields disabled={false} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: /Workflow file/ }), {
+      target: { value: "workflows\\nested\\verify.ctrlyoke.yaml" },
+    });
+
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/nested/verify.ctrlyoke.yaml"
+    );
   });
 
   it("edits onFail through the script step's action options", () => {

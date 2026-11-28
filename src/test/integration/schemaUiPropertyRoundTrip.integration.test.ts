@@ -1,7 +1,7 @@
 import { suite, test, teardown } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
-import { readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
@@ -133,7 +133,7 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["script", "step content carried by the message's `text`"],
   [
     "workflow",
-    "a sub-workflow step's content: the file path travels in the message's `text` like a command (its editor control is checked by `CONTENT_CONTROL_IDS`); the inline-definition form has no editor yet",
+    "a sub-workflow step's content: the file path travels in the message's `text` like a command (its editor controls are checked by `CONTENT_CONTROLS`); the inline-definition form has no editor yet",
   ],
   [
     "name",
@@ -546,9 +546,24 @@ const UI_CONTROL_OPTOUTS = new Map<string, string>();
  * Editor controls for step content keys, which are `NOT_AUTHORABLE` above
  * because they travel in the message's `text`. Only the newest content key
  * is listed; prompt and script content controls predate this guard.
+ *
+ * A source scan cannot tell a rendered control from an unused id constant,
+ * so each entry also names the Vitest suite that renders the editor and
+ * asserts every id sits on its control. This guard proves only what it can:
+ * the key is a content key, its ids are still declared in production
+ * source, and the render suite that checks them still exists.
  */
-const CONTENT_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
-  ["workflow", ["sub-workflow-step-file", "sub-workflow-step-browse"]],
+const CONTENT_CONTROLS: ReadonlyMap<
+  string,
+  { readonly ids: readonly string[]; readonly renderSuite: string }
+> = new Map([
+  [
+    "workflow",
+    {
+      ids: ["sub-workflow-step-file", "sub-workflow-step-browse"],
+      renderSuite: "components/editor/SubWorkflowStepFields.test.tsx",
+    },
+  ],
 ]);
 
 const UI_ENUM_META = [
@@ -809,21 +824,27 @@ suite("Schema -> dashboard property round trip", () => {
       );
     });
 
-    test("every registered step content key has a live editor control", () => {
+    test("every registered step content key declares its control ids and keeps its render suite", () => {
       const source = webviewSource();
       const failures: string[] = [];
-      for (const [contentKey, controlIds] of CONTENT_CONTROL_IDS) {
+      for (const [contentKey, { ids, renderSuite }] of CONTENT_CONTROLS) {
         if (!NOT_AUTHORABLE.has(contentKey)) {
           failures.push(
             `${contentKey}: not a NOT_AUTHORABLE content key; register it in UI_CONTROL_IDS instead`
           );
         }
-        for (const controlId of controlIds) {
+        for (const controlId of ids) {
           if (!source.includes(controlId)) {
             failures.push(
               `${contentKey}: content control id "${controlId}" is absent from src/ui/webview-react`
             );
           }
+        }
+        const suitePath = path.join(WEBVIEW_SOURCE_ROOT, "test", renderSuite);
+        if (!existsSync(suitePath)) {
+          failures.push(
+            `${contentKey}: render suite ${renderSuite} (which asserts the ids are on rendered controls) is missing`
+          );
         }
       }
       assert.deepStrictEqual(failures, []);

@@ -23,6 +23,22 @@ export function getStepDraftContent(draft: StepDraftContentFields): string {
   }
 }
 
+/**
+ * The kind of a new-step draft whose content only the editor can keep:
+ * Recent Prompts stores prompt text alone, so a non-empty script or workflow
+ * draft that something replaces is lost. `undefined` for a prompt draft and
+ * an empty one. The one check behind Move to Editor's guard and the store
+ * keeping such a draft.
+ */
+export function getEditorOnlyDraftKind(
+  draft: StepDraftContentFields
+): WorkflowStepType | undefined {
+  if (isPromptEditorStepType(draft.stepType)) return undefined;
+  return getStepDraftContent(draft).trim().length > 0
+    ? draft.stepType
+    : undefined;
+}
+
 /** Test script mode while keeping editor step kinds exhaustive. */
 export function isScriptEditorStepType(stepType: WorkflowStepType): boolean {
   switch (stepType) {

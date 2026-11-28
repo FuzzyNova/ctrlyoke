@@ -346,7 +346,7 @@ describe("moveStepToNewStepDraft", () => {
       false
     );
 
-    expect(preservedScriptDraft).toBe(true);
+    expect(preservedScriptDraft).toBe(STEP_TYPES.SCRIPT);
     expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
     expect(store().scriptCommand).toBe("npm run deploy -- --prod");
     expect(store().savedNewPromptState).toBeNull();
@@ -361,6 +361,37 @@ describe("moveStepToNewStepDraft", () => {
     expect(store().scriptCommand).toBe("npm run deploy -- --prod");
     expect(store().promptText).toBe("");
     expect(store().savedNewPromptState).toBeNull();
+  });
+});
+
+describe("moveStepToNewStepDraft over a workflow draft", () => {
+  beforeEach(() => {
+    usePromptHistoryStore.setState({ entries: [] });
+  });
+
+  it("keeps a replaced workflow draft, which Recent Prompts cannot hold", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowPath("workflows/verify.ctrlyoke.yaml");
+
+    const keptDraftKind = store().moveStepToNewStepDraft(
+      0,
+      makePromptStep(),
+      false
+    );
+
+    expect(keptDraftKind).toBe(STEP_TYPES.WORKFLOW);
+    expect(store().stepType).toBe(STEP_TYPES.WORKFLOW);
+    expect(store().subWorkflowPath).toBe("workflows/verify.ctrlyoke.yaml");
+    expect(usePromptHistoryStore.getState().entries).toMatchObject([
+      { text: "Do something useful", kind: PROMPT_HISTORY_KINDS.DRAFT },
+    ]);
+  });
+
+  it("replaces an empty workflow draft", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    expect(store().moveStepToNewStepDraft(0, makePromptStep())).toBeUndefined();
+    expect(store().stepType).toBe(STEP_TYPES.PROMPT);
+    expect(store().promptText).toBe("Do something useful");
   });
 });
 

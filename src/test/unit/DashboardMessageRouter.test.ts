@@ -383,7 +383,10 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
     const router = pickerRouter(orchestrator, picked, requests);
 
     await router.route(
-      { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
+      {
+        type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+        targetKey: "queue:2",
+      },
       {
         clientTag: "browser:editor",
         postMessage: (message) => emitted.push(message),
@@ -404,6 +407,8 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
       {
         type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
         path: "workflows/verify.ctrlyoke.yaml",
+        // Echoed so the editor drops a pick that returns after it moved on.
+        targetKey: "queue:2",
       },
     ]);
   });
@@ -448,6 +453,7 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
       {
         type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
         filePath: path.join(root, "flows", "absolute.ctrlyoke.yaml"),
+        targetKey: "newPrompt",
       },
       {
         clientTag: "browser:hosted",
@@ -476,6 +482,7 @@ suite("DashboardMessageRouter — sub-workflow step file picker", () => {
       {
         type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
         path: "flows/absolute.ctrlyoke.yaml",
+        targetKey: "newPrompt",
       },
       {
         type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,

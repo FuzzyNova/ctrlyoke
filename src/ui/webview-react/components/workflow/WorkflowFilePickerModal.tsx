@@ -10,6 +10,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
 import { Icon } from "../shared/Icon";
+import { normalizeWorkflowFilePath } from "../shared/fileBrowserShared";
 
 interface WorkflowFilesResponse {
   files?: WorkflowFileEntry[];
@@ -17,10 +18,6 @@ interface WorkflowFilesResponse {
 }
 
 const WORKFLOW_PATH_PLACEHOLDER = "path/to/workflow.ctrlyoke.yaml";
-
-function normalizeWorkflowPath(filePath: string): string {
-  return filePath.trim().replace(/\\/g, "/");
-}
 
 interface WorkflowFilePickerModalProps {
   isOpen: boolean;
@@ -75,8 +72,8 @@ export const WorkflowFilePickerModal: React.FC<
         }
         const nextFiles = (data.files ?? []).map((file) => ({
           ...file,
-          path: normalizeWorkflowPath(file.path),
-          relativePath: normalizeWorkflowPath(file.relativePath),
+          path: normalizeWorkflowFilePath(file.path),
+          relativePath: normalizeWorkflowFilePath(file.relativePath),
         }));
         setFiles(nextFiles);
         setIsGitRepo(data.isGitRepo ?? false);
@@ -136,7 +133,9 @@ export const WorkflowFilePickerModal: React.FC<
   )
     ? selectedPath
     : (filteredFiles[0]?.path ?? "");
-  const chosenPath = normalizeWorkflowPath(manualPath || effectiveSelectedPath);
+  const chosenPath = normalizeWorkflowFilePath(
+    manualPath || effectiveSelectedPath
+  );
 
   const handleSubmit = () => {
     if (!chosenPath) {
