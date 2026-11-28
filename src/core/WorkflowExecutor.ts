@@ -3613,6 +3613,7 @@ export class WorkflowExecutor {
 
     let handle: SubWorkflowHandle | undefined;
     let completedChild = false;
+    let childSettlementRecorded = false;
     try {
       try {
         const parent = {
@@ -3710,7 +3711,9 @@ export class WorkflowExecutor {
       await this.promptQueue.persistRuntimeMetadata(runtimeIndex, {
         childWorkflowKey: handle.workflowKey,
         childRunRef: handle.runRef,
-        ...(filePath !== undefined ? { resolvedWorkflowPath: filePath } : {}),
+        // Runtime metadata merges, so an inline launch clears the file an
+        // earlier file launch of this step recorded (D6 matches on it).
+        resolvedWorkflowPath: filePath,
       });
       const result = this.asStepOutcome(await handle.done, control);
       const settlementAlreadyRecorded =
@@ -3750,6 +3753,7 @@ export class WorkflowExecutor {
           }
         );
       }
+      childSettlementRecorded = true;
       if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
         return settleCancelled(
           result.cancelledBy ?? SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
@@ -3773,10 +3777,29 @@ export class WorkflowExecutor {
         terminalStatus: STEP_STATUS.COMPLETED,
       });
     } catch (error) {
-      return settleFailure(
-        error instanceof Error ? error.message : String(error),
-        handle !== undefined
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      // A child that exists but never settled (its run threw) still gives
+      // the step output, addressed to that child (D12a).
+      if (handle !== undefined && !childSettlementRecorded) {
+        await this.recordSubWorkflowSettlement(
+          context,
+          target,
+          attemptIndex,
+          stepId,
+          {
+            ...(filePath !== undefined
+              ? { resolvedWorkflowPath: filePath }
+              : {}),
+            childWorkflowKey: handle.workflowKey,
+            childRunRef: handle.runRef,
+            outcome: {
+              status: PROMPT_TERMINAL_STATUS.FAILED,
+              failureMessage: message,
+            },
+          }
+        );
+      }
+      return settleFailure(message, handle !== undefined);
     }
   }
 
@@ -4195,7 +4218,8 @@ export class WorkflowExecutor {
    * completed child settles the step without a launch; any other state is
    * continued. A missing, unreadable or foreign child launches fresh, and so
    * does a file child recorded for a different file than the step now names
-   * (its `workflow` path was edited since the stop).
+   * (its `workflow` path was edited since the stop), or for a file when the
+   * step is now an inline definition.
    */
   private async resolveRecordedChildRun(
     authoredStep: SubWorkflowStep,
@@ -4210,16 +4234,20 @@ export class WorkflowExecutor {
     const runRef = authoredStep._runtime?.childRunRef;
     const history = context.outputHistoryManager;
     if (!workflowKey || !runRef || !history) return undefined;
+    const recordedPath = authoredStep._runtime?.resolvedWorkflowPath;
+    // An inline launch records no file, so a recorded file under a step that
+    // is now inline means the step was edited from a file into an inline one.
     if (
-      currentResolvedPath !== undefined &&
-      !this.isSameSubWorkflowFile(
-        context,
-        authoredStep._runtime?.resolvedWorkflowPath,
-        currentResolvedPath
-      )
+      currentResolvedPath === undefined
+        ? recordedPath !== undefined
+        : !this.isSameSubWorkflowFile(
+            context,
+            recordedPath,
+            currentResolvedPath
+          )
     ) {
       Log.warn(
-        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} ran ${authoredStep._runtime?.resolvedWorkflowPath ?? "no recorded file"}, not ${currentResolvedPath}; launching fresh`
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} ran ${recordedPath ?? "no recorded file"}, not ${currentResolvedPath ?? "an inline definition"}; launching fresh`
       );
       return undefined;
     }

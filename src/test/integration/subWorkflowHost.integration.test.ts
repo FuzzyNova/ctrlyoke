@@ -3426,7 +3426,8 @@ suite("Sub-workflow host end to end", () => {
       for (const step of state.steps) {
         assert.ok(isSubWorkflowStep(step));
         assert.ok(step._runtime?.childRunRef);
-        assert.ok(!("resolvedWorkflowPath" in (step._runtime ?? {})));
+        // Cleared to undefined (dropped on write), never a path.
+        assert.strictEqual(step._runtime?.resolvedWorkflowPath, undefined);
       }
       const events = await new TimelineRecorder().readEvents(
         parent.outputHistoryManager.getHistoryFilePath(

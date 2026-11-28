@@ -31,6 +31,7 @@ import {
   type ScriptProperties,
   type WorkflowKey,
   type WorkflowStep,
+  type SubWorkflowStep,
   isSubWorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import {
@@ -6581,6 +6582,40 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     );
   });
 
+  test("records a failed settlement addressed to a launched child whose run throws", async () => {
+    const run = await setupRun();
+    const recorded: unknown[][] = [];
+    run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    run.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          recorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    const crashed = Promise.reject(new Error("child host crashed"));
+    // Handled by the executor's await; this only keeps Node from flagging it
+    // as unhandled before the step reaches it.
+    crashed.catch(() => undefined);
+    run.context.subWorkflowHost = fakeHost(crashed);
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(
+      run.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+    assert.strictEqual(recorded.length, 1);
+    const payload = recorded[0][4] as SubWorkflowOutput;
+    assert.strictEqual(payload.childWorkflowKey, "child-key");
+    assert.strictEqual(payload.childRunRef, "run-child");
+    assert.deepStrictEqual(payload.outcome, {
+      status: PROMPT_TERMINAL_STATUS.FAILED,
+      failureMessage: "child host crashed",
+    });
+  });
+
   test("fails by default for a failed child and continues with failure metadata when requested", async () => {
     const stopped = await setupRun();
     stopped.context.subWorkflowHost = fakeHost(
@@ -7316,8 +7351,11 @@ suite("WorkflowExecutor sub-workflow steps", () => {
      */
     async function setupRecordedRun(
       finalStep = false,
-      /** The file the step names now, when it was edited since the stop. */
-      currentWorkflowPath = path.join(tempRoot, "child.ctrlyoke.yaml"),
+      /** What the step names now, when it was edited since the stop. */
+      currentWorkflowPath: SubWorkflowStep["workflow"] = path.join(
+        tempRoot,
+        "child.ctrlyoke.yaml"
+      ),
       /** `null`: the launch recorded no file (an inline step, say). */
       recordedWorkflowPath: string | null = path.join(
         tempRoot,
@@ -7640,6 +7678,44 @@ suite("WorkflowExecutor sub-workflow steps", () => {
           force: true,
         });
       }
+    });
+
+    test("a file child under a step since edited to an inline definition launches fresh", async () => {
+      const run = await setupRecordedRun(false, { prompt: "inline now" });
+      await writeChildManifest(EXECUTION_STATES.STOPPED, run.queueParent);
+      const host = new RecordingSubWorkflowHost();
+      run.context.subWorkflowHost = host;
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(host.requests.length, 1);
+      const [request] = host.requests;
+      assert.strictEqual(request?.resumeChildRun, undefined);
+      assert.strictEqual(request?.source.kind, "inline");
+      const step = run.queue.getState().steps[0];
+      assert.ok(step && isSubWorkflowStep(step));
+      assert.strictEqual(step._runtime?.childRunRef, freshRunRef);
+      // The inline launch clears the old file so a later Continue reattaches.
+      assert.strictEqual(step._runtime?.resolvedWorkflowPath, undefined);
+    });
+
+    test("an inline child recorded with no resolved path reattaches", async () => {
+      const run = await setupRecordedRun(
+        false,
+        { prompt: "inline child" },
+        null
+      );
+      await writeChildManifest(EXECUTION_STATES.STOPPED, run.queueParent);
+      const host = new RecordingSubWorkflowHost();
+      run.context.subWorkflowHost = host;
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(host.requests.length, 1);
+      assert.deepStrictEqual(host.requests[0]?.resumeChildRun, {
+        workflowKey: childKey,
+        runRef: childRunRef,
+      });
     });
 
     test("a file child recorded with no resolved path cannot be confirmed and launches fresh", async () => {

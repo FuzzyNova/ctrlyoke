@@ -190,6 +190,7 @@ import {
   type PlatformAdapter,
 } from "../platform/PlatformAdapter";
 import { mapExecutionPathToSourceCheckout } from "../platform/WorkspaceRootResolver";
+import type { SubWorkflowQueueTarget } from "../platform/QueueAsSubWorkflowCommand";
 import { SettingsPropertyResolver } from "../utils/SettingsPropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { notifyUserFeedback } from "./UserFeedbackSink";
@@ -327,7 +328,7 @@ const snapshotContentRequests = new Map<
   >
 >();
 
-export class WorkflowOrchestrator {
+export class WorkflowOrchestrator implements SubWorkflowQueueTarget {
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry
   // ─────────────────────────────────────────────────────────────────────────
