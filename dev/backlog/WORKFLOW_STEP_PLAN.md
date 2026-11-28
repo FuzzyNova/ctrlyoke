@@ -2,10 +2,10 @@
 
 ## Status (2026-11-27)
 
-**Nearly complete. Every section is implemented (rounds 1–16; see [Progress](#progress)); a
-requirement-by-requirement audit after round 16 found a handful of gaps, queued as round 17.
-Every open question is settled (see [Revision 5](#revision-5-decisions)), apart from the two
-questions for Nathan under Decisions.**
+**Nearly complete. Every section is implemented (rounds 1–17; see [Progress](#progress)); the
+gaps found by the audit after round 16 were closed in round 17 and its review. One small CLI
+polish item is queued as round 18. Every open question is settled (see
+[Revision 5](#revision-5-decisions)), apart from the two questions for Nathan under Decisions.**
 
 Shipped:
 
@@ -59,9 +59,9 @@ Shipped:
   (source checkout and main-checkout worktrees root) with D4d rule 1 for merge leases,
   `MERGE_INTO_SHARED_ROOT`, and D6 recovery of in-flight lanes after a reload.
 
-Not shipped (everything else in this plan): member presentation, entry points, D14 agent lanes
-and `worktreePresets`, the sibling merge wait (`purpose: "merge"`), and D4d rule 2 (sibling
-delegation).
+- **Rounds 10–17:** member presentation, entry points, D14 agent lanes and `worktreePresets`,
+  the sibling merge wait (`purpose: "merge"`), D4d rule 2 (sibling delegation), the dashboard
+  editor, preview, completions and the audit gaps (see [Progress](#progress)).
 
 Line numbers were re-verified on 2026-11-26 wherever this revision touched a passage, and are
 otherwise pointers; re-locate by symbol. Every symbol and path named below was re-checked on
@@ -2962,23 +2962,46 @@ keep: true }`; `managedWorktreeConfig.base` has `minLength: 1`, so the file no l
       checkout" preview test loops over `false`, which is the main checkout, and never asserts
       the child's checkout.
 
+- **Round 17** (reviewed 2026-11-27; `npm test` green: 8979 extension, 5067 UI; every step gated
+  by the `committed` preset, `claude-cli` with `sonnet`/`haiku`):
+  - `c140a7b8e`: D10 compares in the source-checkout frame (`toSourceCheckoutFrame` via
+    `mapExecutionPathToSourceCheckout`), and `ancestorPathsForChild` hands each child the chain in
+    its own source checkout's frame, so nested worktrees hold too (two real-git tests: inheriting
+    and own worktree). D6 reattaches a file child only when `_runtime.resolvedWorkflowPath`
+    matches the step's current file (unit tests; no end-to-end stop/edit/Continue test). The
+    carry-on `pauseConfirmed` test, and the `ancestorPaths` comment (in `src/types/`).
+  - `f04363564`: CLI `--var` reaches every file child (`src/cli/CliVarOverrides.ts`,
+    `cliVarOverrides` → a child-only `prepareParsedWorkflow` hook in `WorkflowInstance`); an
+    undeclared name is added as for the root. Docs and CHANGELOG updated. The root-only
+    "`--var` is unused" warning still fires for a var only a child references (round 18).
+  - `bea069949`: a pre-child failure writes `subWorkflowSettled` with no child identity
+    (`failedToStart`, `failureMessage`; `childWorkflowKey`/`childRunRef` optional in every
+    reader); prior context renders `<failure>`; the dashboard row shows the reason; `run --json`
+    `subWorkflowRuns` skips childless entries. Field-level truncation markers in child steps carry
+    `readOutput` (single `readOutputCall`), with `tail: N` only for an end cut.
+  - `b3b174975`: lane metadata through `$step:a-b`/`:summary`, schema accepts workflow members in
+    `parallel`, completions decide a typeless step by its `workflow` key, a disabled inline child
+    previews with `previewDisabledChildNote` (the launch runs it and it does nothing), and the
+    split parent's-checkout preview test.
+  - `579257d84`: real-git merge conflict test (parent COMPLETED, `worktree.mergeOutcome:
+    "conflict"`, branch kept), a CLI two-lane group test, and the explorer command's handler
+    moved to `src/platform/QueueAsSubWorkflowCommand.ts` with tests. Run Workflow Alongside was
+    already covered (`WorkflowOrchestrator.test.ts`, `DashboardMessageRouter.test.ts`).
+  - Review fix `d09a8ad70`: a launched child whose run threw (its `done` rejected) settled with
+    no event, because the catch counted any handle as recorded; it now records a failed
+    settlement addressed to that child. A step edited from a file into an inline definition
+    reattached the old file child; it now launches fresh, and an inline launch clears the
+    recorded path. `WorkflowOrchestrator implements SubWorkflowQueueTarget`.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 17 (queued 2026-11-27): audit gaps.** On `claude-cli`, `sonnet` for the core steps and
-  `haiku` for tests and polish (Nathan asked for cheaper models), sequential, each gated by the
-  `committed` preset.
-  1. D10 cycle identity across checkouts, D6 reattach on an edited path, the carry-on
-     `pauseConfirmed` test, the stale `SubWorkflowTypes.ts` comment.
-  2. D11 CLI `--var` reaching file children.
-  3. D12a output for a workflow step that fails before its child exists; D12c hints on
-     field-level truncation markers inside child steps.
-  4. Missing unit/schema tests (lane ranges, schema parallel member) and small polish
-     (completions undecided step, disabled inline preview, preview test).
-  5. Missing integration tests (merge conflict end to end, CLI two-lane group, queue-as-sub-workflow
-     command, Run Workflow Alongside).
-- **Round 18:** review round 17; if nothing is left, mark the spec complete and `git mv` it to
+- **Round 18 (queued 2026-11-27): last polish.** One `sonnet` step on `claude-cli`, gated by
+  `committed`: the CLI "`--var` is unused" warning counts placeholders in every file child the run
+  can reach (and inline children), so a var only a child uses no longer warns; plus an
+  end-to-end D6 test (real stop, edit `workflow`, Continue launches the new file).
+- **Round 19:** review round 18; if nothing is left, mark the spec complete and `git mv` it to
   `dev/implemented/`.
 
 ### Decisions
@@ -3239,4 +3262,13 @@ Coarse roadmap; re-planned every pass.
 - **A workflow step that fails before its child exists still has output** (round 17, D12a): its
   `subWorkflowSettled` is written without a child identity, with outcome `failed` and the
   failure message, and renders as metadata with that message and no children. Sub-workflow steps
-  are unreleased, so the event change needs no format bump; read it tolerantly anyway.
+  are unreleased, so the event change needs no format bump; read it tolerantly anyway. A child
+  that launched but whose run threw settles with its identity and outcome `failed` (round 17
+  review).
+- **A step edited between file and inline never reattaches across the change** (round 17
+  review): a recorded file under an inline step launches fresh, and an inline launch clears the
+  recorded file. A file child with no recorded path cannot be confirmed and launches fresh.
+- **`run --json` `subWorkflowRuns` lists only children that exist** (round 17); a step that
+  failed before its child existed reports the failure in its own result.
+- **The `tail: N` hint on a child truncation marker appears only for an end cut** (round 17,
+  D12c): when the start was cut, reading the whole step is the rest.
