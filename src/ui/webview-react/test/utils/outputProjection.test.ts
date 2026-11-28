@@ -42,6 +42,30 @@ describe("outputProjection", () => {
     });
   });
 
+  it("shows the failure message of a step that failed before a child run existed", () => {
+    const messages = mapOrderedHistoryEntriesToMessages([
+      {
+        kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        timestampMs: 1200,
+        sequence: 4,
+        subWorkflowOutput: {
+          outcome: {
+            status: "failed",
+            failedToStart: true,
+            failureMessage: "Sub-workflow cycle detected",
+          },
+        } as never,
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.data).toMatchObject({
+      message: "Outcome: failed · Failure: Sub-workflow cycle detected",
+      severity: "warning",
+    });
+  });
+
   it("warns about a lane whose merge conflicted and lists its files", () => {
     const messages = mapOrderedHistoryEntriesToMessages([
       {

@@ -37,7 +37,7 @@ export function toSubWorkflowSettlement(
  * so two children of different workflows can share one; the pair cannot.
  */
 export function subWorkflowChildKey(
-  child: Pick<SubWorkflowOutput, "childWorkflowKey" | "childRunRef">
+  child: Required<Pick<SubWorkflowOutput, "childWorkflowKey" | "childRunRef">>
 ): string {
   return JSON.stringify([child.childWorkflowKey, child.childRunRef]);
 }
@@ -46,9 +46,20 @@ function linksChild(
   runtime: SubWorkflowRuntimeMetadata | undefined,
   output: SubWorkflowOutput
 ): boolean {
+  // A settlement with no child identity (the step failed before a child run
+  // existed) links nothing: two absent identities are not the same child.
   return (
+    output.childWorkflowKey !== undefined &&
+    output.childRunRef !== undefined &&
     runtime?.childWorkflowKey === output.childWorkflowKey &&
     runtime.childRunRef === output.childRunRef
+  );
+}
+
+/** A settlement written for a step that failed before any child run existed. */
+export function hasNoChildRun(output: SubWorkflowOutput): boolean {
+  return (
+    output.childWorkflowKey === undefined || output.childRunRef === undefined
   );
 }
 
@@ -72,7 +83,8 @@ function predatesCurrentExecution(
 ): boolean {
   return (
     isExecuting(window) &&
-    linksChild(runtime, settlement.output) &&
+    (linksChild(runtime, settlement.output) ||
+      hasNoChildRun(settlement.output)) &&
     settlement.timestampMs < window.startedAt
   );
 }

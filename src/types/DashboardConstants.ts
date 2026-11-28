@@ -5495,6 +5495,7 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
   startedBy: "Started by",
   unavailable: "unavailable",
   outcome: "Outcome",
+  failure: "Failure",
   branch: "Branch",
   merge: "Merge",
   conflictFiles: "Conflicts",

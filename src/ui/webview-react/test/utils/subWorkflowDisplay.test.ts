@@ -189,6 +189,22 @@ describe("subWorkflowDisplay", () => {
     ]);
   });
 
+  it("skips a settlement from a step that failed before a child run existed", () => {
+    const index = indexSubWorkflowRanWith([
+      {
+        outcome: {
+          status: PROMPT_TERMINAL_STATUS.FAILED,
+          failedToStart: true,
+          failureMessage: "Sub-workflow cycle detected",
+        },
+      },
+      settled("run-1", { harness: HARNESS_IDS.CLAUDE_CLI }),
+    ]);
+    expect([...index]).toEqual([
+      ["run-1", { harness: HARNESS_IDS.CLAUDE_CLI }],
+    ]);
+  });
+
   it("applies a recorded harness to an inline prompt child's current run only", () => {
     const index = indexSubWorkflowRanWith([
       settled("run-1", { harness: HARNESS_IDS.CLAUDE_CLI }),

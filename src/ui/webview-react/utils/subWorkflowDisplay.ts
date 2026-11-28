@@ -81,6 +81,8 @@ export function indexSubWorkflowRanWith(
 ): Map<string, SubWorkflowRanWith> {
   const index = new Map<string, SubWorkflowRanWith>();
   for (const output of outputs) {
+    // A step that failed before a child run existed has nothing to index.
+    if (output.childRunRef === undefined) continue;
     if (output.ranWith) index.set(output.childRunRef, output.ranWith);
     else index.delete(output.childRunRef);
   }

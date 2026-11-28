@@ -1571,6 +1571,8 @@ export class RunOutputResolver {
     for (const item of items) {
       if (!item.subWorkflow) continue;
       const { childWorkflowKey, childRunRef } = item.subWorkflow.output;
+      // A step that failed before a child run existed has no child to read.
+      if (childWorkflowKey === undefined || childRunRef === undefined) continue;
       try {
         const address = subWorkflowVisitKey(childWorkflowKey, childRunRef);
         if (visited.has(address)) {

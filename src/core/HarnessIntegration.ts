@@ -398,11 +398,7 @@ function applySummaryBudget(
     if (total <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES) break;
     const bytes = utf8Bytes(positions[position].xml);
     const item = positions[position].item;
-    const runHint = item.containingRun
-      ? ` readOutput="${escapeXmlAttribute(
-          `read_output { run: { workflowKey: ${item.containingRun.workflowKey}, runRef: ${item.containingRun.runRef} }, indices: [${item.index}] }`
-        )}"`
-      : "";
+    const runHint = readOutputAttribute(item);
     const stub = `<step ${priorContextStepAttributes(item)}${runHint} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
     positions[position].replace(stub);
     total -= bytes - utf8Bytes(stub);
@@ -410,6 +406,28 @@ function applySummaryBudget(
   return steps.map(({ item }, position) =>
     item.subWorkflow ? renderPriorContextStep(item) : rendered[position]
   );
+}
+
+/**
+ * The `read_output` call that reads a child-run step back in full (D12c), or
+ * undefined for a step of the parent's own run, whose markers stay bare.
+ * `tail` asks for only the last N bytes, which is where a field cut from its
+ * end (`omitted="end"`) lives.
+ */
+function readOutputCall(
+  item: PriorContextItem,
+  tail?: number
+): string | undefined {
+  if (!item.containingRun) return undefined;
+  const { workflowKey, runRef } = item.containingRun;
+  const tailArgument = tail === undefined ? "" : `, tail: ${tail}`;
+  return `read_output { run: { workflowKey: ${workflowKey}, runRef: ${runRef} }, indices: [${item.index}]${tailArgument} }`;
+}
+
+/** ` readOutput="…"` for a marker inside a child-run step, else nothing. */
+function readOutputAttribute(item: PriorContextItem, tail?: number): string {
+  const call = readOutputCall(item, tail);
+  return call ? ` readOutput="${escapeXmlAttribute(call)}"` : "";
 }
 
 function renderPriorContextStep(item: PriorContextItem): string {
@@ -461,18 +479,25 @@ function renderPriorContextStep(item: PriorContextItem): string {
       const merge = output.worktree?.mergeOutcome
         ? `<merge result="${escapeXmlAttribute(output.worktree.mergeOutcome)}">${(output.worktree.conflictFiles ?? []).map(escapeXmlAttribute).join("\n")}</merge>\n`
         : "";
+      // A step that failed before any child run existed (D12a) has no
+      // children to render and none to read: its failure message is its output.
       const children =
-        item.subWorkflow.children?.map(renderPriorContextStep).join("\n") ??
-        // The child's history is gone or unreadable, so no read_output hint:
-        // that call would fail against the same missing run.
-        "<childRunUnavailable/>";
+        output.childWorkflowKey === undefined ||
+        output.childRunRef === undefined
+          ? `<failure>${escapeXmlAttribute(output.outcome.failureMessage ?? "Sub-workflow failed before a child run existed")}</failure>`
+          : (item.subWorkflow.children
+              ?.map(renderPriorContextStep)
+              .join("\n") ??
+            // The child's history is gone or unreadable, so no read_output hint:
+            // that call would fail against the same missing run.
+            "<childRunUnavailable/>");
       return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
     }
     case STEP_TYPES.SCRIPT: {
       if (item.scriptOutput) {
-        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand, item) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
         const stdoutSection = item.scriptOutput.stdout.trim()
-          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput, item) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
           : "";
         const stderrSection = item.scriptOutput.stderr.trim()
           ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
@@ -495,10 +520,12 @@ function renderPriorContextStep(item: PriorContextItem): string {
       assertNever(item.stepKind, "renderPriorContextStep");
   }
   const promptSection = item.prompt
-    ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
+    ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt, item) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
     : "";
   const transcript = item.transcript
-    ? item.transcript.map(renderPriorContextEntry).join("\n")
+    ? item.transcript
+        .map((entry) => renderPriorContextEntry(entry, item))
+        .join("\n")
     : item.text !== undefined
       ? item.text.trim()
       : "";
@@ -507,7 +534,7 @@ function renderPriorContextStep(item: PriorContextItem): string {
       ? renderFilesChanged(item.filesChanged)
       : ""
     : "";
-  const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse) : ""}>\n${transcript}\n</response>\n`;
+  const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse, item) : ""}>\n${transcript}\n</response>\n`;
   return `<step ${attributes}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
 }
 
@@ -525,17 +552,36 @@ function renderFilesChanged(
   return `<filesChanged>\n${lines.join("\n")}\n</filesChanged>`;
 }
 
-function omittedAttributes(value: PriorContextText): string {
-  return value.omitted
-    ? ` omitted="${value.omitted}" omittedBytes="${value.omittedBytes ?? 0}"`
+/**
+ * A field's truncation marker. Inside a child-run step it also names the
+ * `read_output` call for the rest (D12c); a field cut from its end names the
+ * omitted tail's size.
+ */
+function omittedAttributes(
+  value: PriorContextText,
+  owner?: PriorContextItem
+): string {
+  if (!value.omitted) return "";
+  const omittedBytes = value.omittedBytes ?? 0;
+  const hint = owner
+    ? readOutputAttribute(
+        owner,
+        value.omitted === PRIOR_CONTEXT_TRUNCATION.OMITTED_END
+          ? omittedBytes
+          : undefined
+      )
     : "";
+  return ` omitted="${value.omitted}" omittedBytes="${omittedBytes}"${hint}`;
 }
 
 function failedAttribute(entry: { failed?: true }): string {
   return entry.failed ? ' failed="true"' : "";
 }
 
-function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
+function renderPriorContextEntry(
+  entry: PriorContextTranscriptEntry,
+  owner?: PriorContextItem
+): string {
   const failed = failedAttribute(entry);
   switch (entry.kind) {
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT:
@@ -544,21 +590,21 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
       return `<thinking${failed}>\n${entry.text}\n</thinking>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT: {
       const diff = entry.diff ? `\n\`\`\`diff\n${entry.diff.text}\n\`\`\`` : "";
-      const omitted = entry.diff ? omittedAttributes(entry.diff) : "";
+      const omitted = entry.diff ? omittedAttributes(entry.diff, owner) : "";
       return `<edit path="${escapeXmlAttribute(entry.path)}" added="${entry.added}" removed="${entry.removed}"${failed}${omitted}>${diff}\n</edit>`;
     }
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE:
-      return `<create path="${escapeXmlAttribute(entry.path)}" added="${entry.added}"${failed}${omittedAttributes(entry.diff)}>\n\`\`\`diff\n${entry.diff.text}\n\`\`\`\n</create>`;
+      return `<create path="${escapeXmlAttribute(entry.path)}" added="${entry.added}"${failed}${omittedAttributes(entry.diff, owner)}>\n\`\`\`diff\n${entry.diff.text}\n\`\`\`\n</create>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE:
       return `<delete path="${escapeXmlAttribute(entry.path)}"${failed}/>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND:
-      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}>\n${entry.command}\n<output${omittedAttributes(entry.output)}>\n${entry.output.text}\n</output>\n</command>`;
+      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}>\n${entry.command}\n<output${omittedAttributes(entry.output, owner)}>\n${entry.output.text}\n</output>\n</command>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ:
       return `<read path="${escapeXmlAttribute(entry.path)}"${entry.lineStart === undefined ? "" : ` lines="${entry.lineStart}-${entry.lineEnd ?? entry.lineStart}"`}${failed}/>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL:
-      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}>\n<arguments${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n</arguments>\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
+      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}>\n<arguments${omittedAttributes(entry.arguments, owner)}>\n${entry.arguments.text}\n</arguments>\n<output${omittedAttributes(entry.result, owner)}>\n${entry.result.text}\n</output>\n</tool>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH:
-      return `<search query="${escapeXmlAttribute(entry.query)}"${entry.url ? ` url="${escapeXmlAttribute(entry.url)}"` : ""}${failed}>\n${entry.output ? `<output${omittedAttributes(entry.output)}>\n${entry.output.text}\n</output>\n` : ""}${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
+      return `<search query="${escapeXmlAttribute(entry.query)}"${entry.url ? ` url="${escapeXmlAttribute(entry.url)}"` : ""}${failed}>\n${entry.output ? `<output${omittedAttributes(entry.output, owner)}>\n${entry.output.text}\n</output>\n` : ""}${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
       return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER:

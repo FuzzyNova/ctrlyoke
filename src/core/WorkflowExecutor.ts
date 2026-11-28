@@ -96,7 +96,11 @@ import {
 } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
 import type { WorkflowRunManifest } from "../types/WorkflowTimelineTypes";
-import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  SubWorkflowOutput,
+  WorkflowKey,
+} from "../types/CtrlYokeTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import {
   SettingsPropertyResolver,
@@ -3451,7 +3455,29 @@ export class WorkflowExecutor {
     ) as SubWorkflowStep;
     const onFail = resolvedStep.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
 
-    const settleFailure = async (message: string): Promise<boolean> => {
+    const settleFailure = async (
+      message: string,
+      childSettlementRecorded = false
+    ): Promise<boolean> => {
+      // A failure before any child run exists still has output (D12a): the
+      // settled event is written without a child identity, so a later
+      // `$previous` sees the failure even under `onFail: continue`. A failure
+      // after the child settled already wrote its own event.
+      if (!childSettlementRecorded) {
+        await this.recordSubWorkflowSettlement(
+          context,
+          target,
+          attemptIndex,
+          authoredStep._runtime?.stepId,
+          {
+            outcome: {
+              status: PROMPT_TERMINAL_STATUS.FAILED,
+              failedToStart: true,
+              failureMessage: message,
+            },
+          }
+        );
+      }
       const shouldContinue = onFail === CONDITION_ACTIONS.CONTINUE;
       if (shouldContinue) {
         Log.warn(
@@ -3540,7 +3566,10 @@ export class WorkflowExecutor {
       readonly attemptIndex: number;
       readonly host: SubWorkflowHost;
       readonly control: SubWorkflowControlRelay;
-      readonly settleFailure: (message: string) => Promise<boolean>;
+      readonly settleFailure: (
+        message: string,
+        childSettlementRecorded?: boolean
+      ) => Promise<boolean>;
       readonly settleCancelled: (
         cancelledBy?: SubWorkflowCancellationSource
       ) => Promise<boolean>;
@@ -3692,49 +3721,34 @@ export class WorkflowExecutor {
               handle.runRef
             )
           : false;
-      if (
-        !settlementAlreadyRecorded &&
-        context.historyFilePath &&
-        context.outputHistoryManager
-      ) {
-        const settledOutput = {
-          ...(filePath !== undefined ? { resolvedWorkflowPath: filePath } : {}),
-          childWorkflowKey: handle.workflowKey,
-          childRunRef: handle.runRef,
-          outcome: {
-            status: result.status,
-            ...(result.failedToStart !== undefined
-              ? { failedToStart: result.failedToStart }
+      if (!settlementAlreadyRecorded) {
+        await this.recordSubWorkflowSettlement(
+          context,
+          target,
+          attemptIndex,
+          stepId,
+          {
+            ...(filePath !== undefined
+              ? { resolvedWorkflowPath: filePath }
               : {}),
-            ...(result.cancelledBy ? { cancelledBy: result.cancelledBy } : {}),
-            ...(result.failureMessage
-              ? { failureMessage: result.failureMessage }
-              : {}),
-          },
-          ...(result.worktree ? { worktree: result.worktree } : {}),
-          ...(result.ranWith ? { ranWith: result.ranWith } : {}),
-        };
-        const eventAddress =
-          await context.outputHistoryManager.recordSubWorkflowSettled(
-            context.historyFilePath,
-            this.toOutputExecutionTarget(target),
-            this.getRunIndexForTarget(context, target),
-            attemptIndex,
-            settledOutput,
-            context.getDefinitionRevisionContext?.(),
-            undefined,
-            target.kind === FINAL_STEP_PHASES.QUEUE ? stepId : undefined
-          );
-        if (eventAddress) {
-          context.dashboardProvider?.updateSubWorkflowSettled?.({
-            target: this.toOutputExecutionTarget(target),
-            runIndex: this.getRunIndexForTarget(context, target),
-            attemptIndex,
-            ...eventAddress,
-            output: settledOutput,
-            workflowId: context.instanceId,
-          });
-        }
+            childWorkflowKey: handle.workflowKey,
+            childRunRef: handle.runRef,
+            outcome: {
+              status: result.status,
+              ...(result.failedToStart !== undefined
+                ? { failedToStart: result.failedToStart }
+                : {}),
+              ...(result.cancelledBy
+                ? { cancelledBy: result.cancelledBy }
+                : {}),
+              ...(result.failureMessage
+                ? { failureMessage: result.failureMessage }
+                : {}),
+            },
+            ...(result.worktree ? { worktree: result.worktree } : {}),
+            ...(result.ranWith ? { ranWith: result.ranWith } : {}),
+          }
+        );
       }
       if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
         return settleCancelled(
@@ -3746,7 +3760,8 @@ export class WorkflowExecutor {
           ? "Sub-workflow could not start: "
           : "";
         return settleFailure(
-          `${prefix}${result.failureMessage ?? "Sub-workflow failed"}`
+          `${prefix}${result.failureMessage ?? "Sub-workflow failed"}`,
+          true
         );
       }
       return this.settleNonHarnessStep({
@@ -3759,7 +3774,50 @@ export class WorkflowExecutor {
       });
     } catch (error) {
       return settleFailure(
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
+        handle !== undefined
+      );
+    }
+  }
+
+  /**
+   * Record a workflow step's `subWorkflowSettled` event and push it to the
+   * dashboard. A history failure never fails the step: the event is the
+   * step's prior-context output, not its outcome.
+   */
+  private async recordSubWorkflowSettlement(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    attemptIndex: number,
+    stepId: string | undefined,
+    settledOutput: SubWorkflowOutput
+  ): Promise<void> {
+    if (!context.historyFilePath || !context.outputHistoryManager) return;
+    try {
+      const eventAddress =
+        await context.outputHistoryManager.recordSubWorkflowSettled(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          this.getRunIndexForTarget(context, target),
+          attemptIndex,
+          settledOutput,
+          context.getDefinitionRevisionContext?.(),
+          undefined,
+          target.kind === FINAL_STEP_PHASES.QUEUE ? stepId : undefined
+        );
+      if (eventAddress) {
+        context.dashboardProvider?.updateSubWorkflowSettled?.({
+          target: this.toOutputExecutionTarget(target),
+          runIndex: this.getRunIndexForTarget(context, target),
+          attemptIndex,
+          ...eventAddress,
+          output: settledOutput,
+          workflowId: context.instanceId,
+        });
+      }
+    } catch (error) {
+      Log.warn(
+        `[WorkflowExecutor] Could not record sub-workflow settlement: ${String(error)}`
       );
     }
   }

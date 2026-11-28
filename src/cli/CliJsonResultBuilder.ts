@@ -406,7 +406,17 @@ function buildSubWorkflowRuns(
     finalStepRuntime,
   })) {
     const { output } = entry.settlement;
-    const child = subWorkflowChildKey(output);
+    // This list addresses child runs; a step that failed before one existed
+    // has none to address (its failure is in the step's own result).
+    if (
+      output.childWorkflowKey === undefined ||
+      output.childRunRef === undefined
+    )
+      continue;
+    const child = subWorkflowChildKey({
+      childWorkflowKey: output.childWorkflowKey,
+      childRunRef: output.childRunRef,
+    });
     const address = {
       workflowKey: output.childWorkflowKey,
       runRef: output.childRunRef,

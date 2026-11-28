@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
+import {
+  buildPriorContextXmlFromItems,
+  type PriorContextItem,
+} from "../../core/HarnessIntegration";
 import type { ScriptVerdict } from "../../types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
@@ -158,6 +161,101 @@ suite("prior-context XML", () => {
       },
     ]);
     assert.ok(xml.includes("<childRunUnavailable/>"), xml);
+  });
+
+  test("renders a childless workflow step's failure with no children and no unavailable marker", () => {
+    for (const detail of ["full", "summary"] as const) {
+      const xml = buildPriorContextXmlFromItems([
+        {
+          index: 0,
+          detail,
+          stepKind: STEP_TYPES.WORKFLOW,
+          workflowPath: "waves/a.yaml",
+          subWorkflow: {
+            output: {
+              outcome: {
+                status: "failed" as never,
+                failedToStart: true,
+                failureMessage: 'cycle <a> & "b"',
+              },
+            },
+          },
+        },
+      ]);
+      assert.ok(xml.includes('outcome="failed"'), xml);
+      assert.ok(
+        xml.includes("<failure>cycle &lt;a&gt; &amp; &quot;b&quot;</failure>"),
+        xml
+      );
+      assert.ok(!xml.includes("workflowKey="), xml);
+      assert.ok(!xml.includes("runRef="), xml);
+      assert.ok(!xml.includes("<childRunUnavailable/>"), xml);
+    }
+  });
+
+  test("names the read_output call on field-level markers inside a child step only", () => {
+    const run = { workflowKey: "child-key", runRef: "run-child" };
+    const call = (index: number, tail?: number) =>
+      `readOutput="read_output { run: { workflowKey: child-key, runRef: run-child }, indices: [${index}]${tail === undefined ? "" : `, tail: ${tail}`} }"`;
+    const longPrompt = "p".repeat(PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES + 120);
+    const longText = "r".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES + 77);
+    const summaryItem = (index: number): PriorContextItem => ({
+      index,
+      stepKind: STEP_TYPES.PROMPT,
+      detail: "summary",
+      prompt: longPrompt,
+      text: longText,
+    });
+    const commandItem: PriorContextItem = {
+      index: 5,
+      stepKind: STEP_TYPES.PROMPT,
+      detail: "full",
+      containingRun: run,
+      prompt: "p",
+      transcript: [
+        {
+          kind: "command",
+          command: "npm test",
+          output: { text: "o", omitted: "end", omittedBytes: 9 },
+        },
+      ],
+    };
+    const xml = buildPriorContextXmlFromItems([
+      summaryItem(0),
+      {
+        index: 1,
+        stepKind: STEP_TYPES.WORKFLOW,
+        detail: "summary",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child-key" as never,
+            childRunRef: "run-child" as never,
+            outcome: { status: "completed" as never },
+          },
+          children: [{ ...summaryItem(4), containingRun: run }, commandItem],
+        },
+      },
+    ]);
+    // Cut from its end: the hint asks for exactly the omitted tail.
+    assert.ok(
+      xml.includes(`<prompt omitted="end" omittedBytes="120" ${call(4, 120)}>`),
+      xml
+    );
+    // Cut from its start: the rest is the whole step, so no tail.
+    assert.ok(
+      xml.includes(`<response omitted="start" omittedBytes="77" ${call(4)}>`),
+      xml
+    );
+    assert.ok(
+      xml.includes(`<output omitted="end" omittedBytes="9" ${call(5, 9)}>`),
+      xml
+    );
+    // The parent run's own markers stay bare.
+    assert.ok(xml.includes('<prompt omitted="end" omittedBytes="120">'), xml);
+    assert.ok(
+      xml.includes('<response omitted="start" omittedBytes="77">'),
+      xml
+    );
   });
 
   test("budgets child summaries with parent summaries while keeping workflow metadata", () => {

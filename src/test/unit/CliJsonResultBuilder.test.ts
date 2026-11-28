@@ -1005,6 +1005,47 @@ suite("CliJsonResultBuilder subWorkflowRuns from timeline events", () => {
     ]);
   });
 
+  test("lists no child run for a step that failed before one existed, and keeps its neighbours", async () => {
+    const failed: SubWorkflowStep = {
+      ...workflowStep("lane-a"),
+      onFail: CONDITION_ACTIONS.CONTINUE,
+    };
+    const ok = workflowStep("lane-b");
+    await startRun([failed, ok]);
+    const identity = (stepIndex: number) => ({
+      target: queue(stepIndex),
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+    });
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: timestampMs++,
+        ...identity(0),
+        stepId: "lane-a",
+        payload: {
+          outcome: {
+            status: PROMPT_TERMINAL_STATUS.FAILED,
+            failedToStart: true,
+            failureMessage: "Sub-workflow cycle detected",
+          },
+        },
+      },
+    ]);
+    await settle(queue(1), 0, "child-b", "completed", "lane-b");
+    failed._runtime = { stepId: "lane-a", terminalStatus: "completed" };
+    ok._runtime = {
+      ...ok._runtime,
+      childRunRef: "child-b" as RunRef,
+      terminalStatus: "completed",
+    };
+
+    assert.deepStrictEqual(await subWorkflowRuns([failed, ok]), [
+      entry("lane-b", "child-b", "completed"),
+    ]);
+  });
+
   test("lists both child runs of a step that launched two", async () => {
     const step = workflowStep("step-a");
     await startRun([step]);

@@ -57,7 +57,7 @@ For example: "I fixed the expiry check in #sym:src/auth/login.ts:validateToken:4
 
 Workflow steps (`type: workflow`, which run another workflow as a child run):
 
-- `$previous`, `$step:2` and `$all` count a workflow step as one step. Its output is a metadata block (the child's `workflowKey`, `runRef` and outcome; for a child with a worktree, also its branch, base, tip, files changed and merge result), followed by the full output of every child step. `$step:summary:2` keeps the metadata whole and shortens the child steps.
+- `$previous`, `$step:2` and `$all` count a workflow step as one step. Its output is a metadata block (the child's `workflowKey`, `runRef` and outcome; for a child with a worktree, also its branch, base, tip, files changed and merge result), followed by the full output of every child step. A step that failed before a child run existed has no `workflowKey`, `runRef` or child steps, only its outcome and a `<failure>` message. `$step:summary:2` keeps the metadata whole and shortens the child steps.
 - An inline definition (a prompt or script written under `workflow:`) starts a new run, so references inside it would address the child run. Prior-output references, a numeric `sessionId` and a numeric or relative `priorContext` there are a validation error; `priorContext: { workflow, run }` still works.
 - To read more of a child run, call MCP `read_output` or `workflow_status` with `run: { workflowKey, runRef }` from the metadata, or run `ctrlyoke history show --workflow <key> --run <ref> -d <main checkout>`.
 

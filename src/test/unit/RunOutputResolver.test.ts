@@ -1571,6 +1571,58 @@ suite("RunOutputResolver", () => {
     );
   });
 
+  test("a workflow step that failed before a child run existed still has output for later prompts", async () => {
+    const workflowStep = {
+      type: "workflow" as const,
+      workflow: "waves/cycle.yaml",
+      name: "cyclic lane",
+      onFail: "continue" as const,
+    };
+    await recorder.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      initialDefinition: {
+        workflowName: "parent",
+        steps: [workflowStep, { prompt: "next parent step" }],
+      },
+    }));
+    // The event the executor writes from `settleFailure`: no child identity.
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: 5,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          outcome: {
+            status: "failed",
+            failedToStart: true,
+            failureMessage: "Sub-workflow cycle detected: a.yaml → a.yaml",
+          },
+        },
+      },
+    ]);
+    const resolver = new RunOutputResolver(recorder);
+    for (const detail of ["full", "summary"] as const) {
+      const items = await resolver.resolvePriorContextItems(
+        manifestPath,
+        [{ context: "previous", detail }],
+        [workflowStep],
+        1,
+        { workspaceRoot }
+      );
+      assert.strictEqual(items.length, 1, `${detail}: the step is not skipped`);
+      const xml = buildPriorContextXmlFromItems(items);
+      assert.match(xml, /type="workflow" name="cyclic lane"/, xml);
+      assert.match(xml, /outcome="failed"/, xml);
+      assert.ok(xml.includes("Sub-workflow cycle detected"), xml);
+      assert.ok(!xml.includes("workflowKey="), xml);
+      assert.ok(!xml.includes("<childRunUnavailable/>"), xml);
+      assert.ok(!xml.includes("read_output"), xml);
+    }
+  });
+
   test("does not resolve a skipped step's pre-condition output as its response", async () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await recorder.appendEvents(manifestPath, [

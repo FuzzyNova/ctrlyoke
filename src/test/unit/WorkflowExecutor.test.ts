@@ -6494,9 +6494,9 @@ suite("WorkflowExecutor sub-workflow steps", () => {
     });
   });
 
-  test("does not record a settlement when failure happens before child launch", async () => {
+  test("records a childless failed settlement when failure happens before child launch", async () => {
     const run = await setupRun();
-    const recorded: unknown[] = [];
+    const recorded: unknown[][] = [];
     run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
     run.context.outputHistoryManager = new Proxy(
       {
@@ -6508,8 +6508,77 @@ suite("WorkflowExecutor sub-workflow steps", () => {
           Reflect.get(target, property) ?? (async () => undefined),
       }
     ) as never;
+    // No host: the step fails before any child run exists (D12a).
     await run.executor.execute(run.integration, run.context);
-    assert.strictEqual(recorded.length, 0);
+    assert.strictEqual(recorded.length, 1);
+    const payload = recorded[0][4] as SubWorkflowOutput;
+    assert.strictEqual(payload.childWorkflowKey, undefined);
+    assert.strictEqual(payload.childRunRef, undefined);
+    assert.strictEqual(payload.outcome.status, PROMPT_TERMINAL_STATUS.FAILED);
+    assert.match(payload.outcome.failureMessage ?? "", /not supported/);
+  });
+
+  test("records one childless settlement for a cycle failure under onFail: continue, and none when a child settled", async () => {
+    const cycle = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    const recorded: unknown[][] = [];
+    cycle.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    cycle.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          recorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    cycle.context.subWorkflowHost = fakeHost(completedResult());
+    cycle.context.ancestorPaths = [cycle.childPath];
+    await cycle.executor.execute(cycle.integration, cycle.context);
+    assert.strictEqual(
+      cycle.queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(recorded.length, 1);
+    const payload = recorded[0][4] as SubWorkflowOutput;
+    assert.strictEqual(payload.childWorkflowKey, undefined);
+    assert.match(payload.outcome.failureMessage ?? "", /cycle detected/i);
+
+    // A child that launched and failed records its own event only.
+    const failedChild = await setupRun();
+    const childRecorded: unknown[][] = [];
+    failedChild.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    failedChild.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          childRecorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    failedChild.context.subWorkflowHost = fakeHost(
+      Promise.resolve({
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureMessage: "child broke",
+      })
+    );
+    await failedChild.executor.execute(
+      failedChild.integration,
+      failedChild.context
+    );
+    assert.strictEqual(childRecorded.length, 1);
+    assert.strictEqual(
+      (childRecorded[0][4] as SubWorkflowOutput).childWorkflowKey,
+      "child-key"
+    );
   });
 
   test("fails by default for a failed child and continues with failure metadata when requested", async () => {

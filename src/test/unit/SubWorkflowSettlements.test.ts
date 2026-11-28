@@ -104,6 +104,37 @@ suite("SubWorkflowSettlements", () => {
     );
   });
 
+  test("attributes a childless failure to its step, and drops it once the step runs again", () => {
+    const failure: SubWorkflowSettlement = {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      output: {
+        outcome: {
+          status: "failed",
+          failedToStart: true,
+          failureMessage: "cycle",
+        },
+      },
+      stepId: "step-a",
+      timestampMs: 50,
+    };
+    // Settled, with no child linked: two absent identities are not a match,
+    // so a step that never launched one still owns the failure.
+    assert.strictEqual(
+      selectLatestSubWorkflowSettlements([failure], {
+        steps: [workflowStep("step-a")],
+      }).queue.get(0)?.outcome.failureMessage,
+      "cycle"
+    );
+    // Executing again (Continue after the cause was fixed): the earlier
+    // execution's failure is not the step's current status.
+    assert.strictEqual(
+      selectLatestSubWorkflowSettlements([failure], {
+        steps: [workflowStep("step-a", { startedAt: 100 })],
+      }).queue.size,
+      0
+    );
+  });
+
   test("keys a child by workflowKey and runRef", () => {
     assert.notStrictEqual(
       subWorkflowChildKey({

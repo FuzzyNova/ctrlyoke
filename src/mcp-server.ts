@@ -1644,8 +1644,12 @@ export class CtrlYokeMCPServer {
                 const output = subWorkflowOutputs.get(index)!;
                 return {
                   childRun: {
-                    workflowKey: output.childWorkflowKey,
-                    runRef: output.childRunRef,
+                    ...(output.childWorkflowKey !== undefined
+                      ? { workflowKey: output.childWorkflowKey }
+                      : {}),
+                    ...(output.childRunRef !== undefined
+                      ? { runRef: output.childRunRef }
+                      : {}),
                     outcome: output.outcome,
                   },
                 };
@@ -1700,8 +1704,14 @@ export class CtrlYokeMCPServer {
             finalStep: {
               pass: finalStepSubWorkflow.passNumber,
               childRun: {
-                workflowKey: finalStepSubWorkflow.output.childWorkflowKey,
-                runRef: finalStepSubWorkflow.output.childRunRef,
+                ...(finalStepSubWorkflow.output.childWorkflowKey !== undefined
+                  ? {
+                      workflowKey: finalStepSubWorkflow.output.childWorkflowKey,
+                    }
+                  : {}),
+                ...(finalStepSubWorkflow.output.childRunRef !== undefined
+                  ? { runRef: finalStepSubWorkflow.output.childRunRef }
+                  : {}),
                 outcome: finalStepSubWorkflow.output.outcome,
               },
             },

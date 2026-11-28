@@ -1352,8 +1352,13 @@ export interface ScriptRuntimeOutput {
 /** Durable metadata for a settled child workflow run. */
 export type SubWorkflowOutput = {
   resolvedWorkflowPath?: string;
-  childWorkflowKey: WorkflowKey;
-  childRunRef: RunRef;
+  /**
+   * Absent when the step failed before a child run existed (an unresolvable
+   * path, a cycle, a bad inline definition, a refused launch): the event then
+   * records only the outcome and its `failureMessage`. Read tolerantly.
+   */
+  childWorkflowKey?: WorkflowKey;
+  childRunRef?: RunRef;
   outcome: Omit<SubWorkflowResult, "worktree" | "ranWith">;
   worktree?: SubWorkflowResult["worktree"];
   /** Optional and read tolerantly: older events omit it (no format bump). */

@@ -261,6 +261,11 @@ export function mapOrderedHistoryEntriesToMessages(
         const output = entry.subWorkflowOutput;
         const details = [
           `${SUB_WORKFLOW_DASHBOARD_LABELS.outcome}: ${output.outcome.status}`,
+          // A step that failed before a child run existed has no child run to
+          // open, so its message is the only place the reason appears.
+          output.childRunRef === undefined && output.outcome.failureMessage
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.failure}: ${output.outcome.failureMessage}`
+            : undefined,
           output.worktree?.branchName
             ? `${SUB_WORKFLOW_DASHBOARD_LABELS.branch}: ${output.worktree.branchName}`
             : undefined,

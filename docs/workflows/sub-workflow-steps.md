@@ -568,7 +568,17 @@ steps:
 ```
 
 The `:summary` form shares the existing summary budget with other summarized
-prior context.
+prior context. When a summary cuts a field short inside a child step, its
+truncation marker (`omitted=… omittedBytes=…`) carries a `readOutput` hint naming
+the `read_output` call that reads the rest, as the marker for a whole omitted
+child step does; markers on the parent's own steps stay as they are.
+
+A workflow step that fails before a child run exists (an unresolvable path, a
+cycle, a bad inline definition, a dirty parent checkout, a refused launch) still
+has output, so `onFail: continue` does not hide it from later steps. Its
+metadata carries the outcome `failed` and the failure message in a `<failure>`
+element, with no `workflowKey` or `runRef` and no child steps. There is no child
+run to read, so it has no `readOutput` hint either.
 
 ## Inspecting a child run from an agent
 
