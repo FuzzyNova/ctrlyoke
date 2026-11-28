@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Appending a step to a finished Copilot run and continuing it no longer leaves the step running forever when the prompt is sent to the Copilot terminal kept open from the earlier run. Copilot reads its hook files each time a hook fires, and the finished run had deleted them, so ctrlyoke never saw the turn end. The hook files are now written back before the prompt is typed into the reused terminal.
 - Choosing a Managed or Named worktree in Workflow Properties, or toggling one of its checkboxes, no longer writes an empty `base` or `setup` into the workflow file. An empty `base` is refused by the schema, so the workflow then failed `ctrlyoke validate`. A blank Base, Setup or Directory field is now left out of the file.
 - In the steps panel, steps that have not run yet now use your `ui.harnessColors` overrides for their colour rail, as the chip rail, the output pane and already-run steps do. Before, they always showed the built-in colours.
 - Stopping a long-running script now waits for its process runner to shut down instead of waiting for the detector's 10-second fallback.

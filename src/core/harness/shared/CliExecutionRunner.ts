@@ -272,6 +272,9 @@ export class CliExecutionRunner {
       return { sent: false };
     }
 
+    // A settled run may have deleted the hook files this live TUI re-reads.
+    await this.deps.provider.restoreLiveProcessHookFiles?.();
+
     const runId = crypto.randomUUID();
     const notifyDir =
       this.deps.runtimeState.getWorkspaceRoot() &&

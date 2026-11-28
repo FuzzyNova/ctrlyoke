@@ -2,7 +2,7 @@
 
 - **Found:** 2026-11-28 by Copilot CLI, investigating run `phone-refresh-2026-11-28T02-02-54-018/run-2026-11-28T02-09-34-998Z`
 - **Area:** `src/core/WorkflowInstance.ts` (`settleWorkflowExecution` retention, `restoreRetainedExecutionIntegrations`), `src/core/harness/shared/CliExecutionRunner.ts` (`executeInRunningTerminal`), `src/core/harness/copilot/CopilotHarnessAdapter.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -21,13 +21,13 @@ The background-work tracking was not involved. The Copilot session log
 
 The cause is missing hooks:
 
-| Time (UTC) | Event |
-| --- | --- |
-| 02:09:36–02:10:20 | Step 1: Copilot runs `sessionStart`, `userPromptSubmitted`, and `agentStop` hooks (the only 3 `hook.start` events in the log). |
-| 02:11:04 | Workflow completes. The PTY is kept in `liveReusableIntegrations`, but Copilot does not opt into `shouldRetainWorkflowArtifactsForReuse()`, so `cleanupRetainedIntegrationArtifacts` deletes its `.github/hooks/ctrlyoke-*.json` file. |
-| 02:18:21 | Append continuation: "Restored live reusable integration", then "Sent prompt to existing PTY session". |
-| 02:18:31 | Copilot `assistant.turn_end`. **No `hook.start` and no hook-debug log entry**, so ctrlyoke never sees `agentStop`. |
-| 02:33:35–02:34:03 | Another turn typed into the same session. Again, no hooks fire. |
+| Time (UTC)        | Event                                                                                                                                                                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 02:09:36–02:10:20 | Step 1: Copilot runs `sessionStart`, `userPromptSubmitted`, and `agentStop` hooks (the only 3 `hook.start` events in the log).                                                                                                         |
+| 02:11:04          | Workflow completes. The PTY is kept in `liveReusableIntegrations`, but Copilot does not opt into `shouldRetainWorkflowArtifactsForReuse()`, so `cleanupRetainedIntegrationArtifacts` deletes its `.github/hooks/ctrlyoke-*.json` file. |
+| 02:18:21          | Append continuation: "Restored live reusable integration", then "Sent prompt to existing PTY session".                                                                                                                                 |
+| 02:18:31          | Copilot `assistant.turn_end`. **No `hook.start` and no hook-debug log entry**, so ctrlyoke never sees `agentStop`.                                                                                                                     |
+| 02:33:35–02:34:03 | Another turn typed into the same session. Again, no hooks fire.                                                                                                                                                                        |
 
 Copilot reads `.github/hooks/` when a hook fires, not once at process start:
 hooks deleted under the live process simply stop running. The comment on
@@ -40,7 +40,7 @@ at process startup") does not hold for Copilot.
 2. Without closing the terminal, append a step in the dashboard and continue the run.
 3. The prompt is sent to the existing Copilot TUI and Copilot finishes, but the step stays running.
 
-Sent turns *within* one run work, because hook files are deleted only when the
+Sent turns _within_ one run work, because hook files are deleted only when the
 run settles.
 
 ## Root Cause
@@ -72,3 +72,20 @@ restored PTY, rather than keeping files around while the terminal is idle:
 Check Claude/Codex/Qwen/OpenCode for the same gap: any provider whose sent
 turns depend on files removed by `cleanupWorkflowArtifacts` will lose
 completion the same way.
+
+## Resolution notes
+
+`CopilotHarnessAdapter.restoreLiveProcessHookFiles()` (new optional
+`IHarnessAdapter` member) rewrites the interactive hook files remembered from
+spawn, and `CliExecutionRunner.executeInRunningTerminal` calls it before each
+sent turn. The paths remain in `hookFilePaths`, so the next settlement deletes
+them again. Covered by a unit test and by
+`src/test/harness/reused-terminal-hooks.harness.test.ts` (real Copilot 1.0.117
+TUI; without the restore the second `agentStop` never fires).
+
+Other providers were not probed. Claude and Antigravity opt into retaining
+their artifacts for reuse (`shouldRetainWorkflowArtifactsForReuse`), and the
+harness-adapters notes say Codex's TUI keeps its already-loaded inline hooks.
+Qwen (per-launch system settings file) and OpenCode (inline plugin config) are
+unverified: probe them with a settled-then-appended run if the same symptom
+shows up.

@@ -468,6 +468,15 @@ export interface IHarnessAdapter {
    */
   getLiveProcessFilePaths?(): string[];
 
+  /**
+   * Re-create the hook registration the live PTY depends on, called before a
+   * prompt is typed into a reused terminal. Providers whose running TUI re-reads
+   * hook files per event, but which delete them when a run settles (Copilot),
+   * implement this instead of retaining idle hook files. The restored files must
+   * stay registered for the next cleanup.
+   */
+  restoreLiveProcessHookFiles?(): Promise<void>;
+
   /** Identity of external permission configuration fixed at process spawn. */
   getExternalPermissionIdentity?(): string;
 

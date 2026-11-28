@@ -275,6 +275,13 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
 
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
   private hookFilePaths: string[] = [];
+  /**
+   * Interactive notification hook files (path -> content) belonging to the
+   * live PTY. Copilot reads `.github/hooks/` when a hook fires, so a reused
+   * terminal needs these back on disk before each sent turn (see
+   * restoreLiveProcessHookFiles()).
+   */
+  private readonly liveInteractiveHookFiles = new Map<string, string>();
   /** Path to temporary .gitignore written in .github/hooks/ to hide ctrlyoke files from git. */
   private hooksDirGitignorePath: string | undefined;
   private enablePromptModeRepoHooksForHeadlessRun = false;
@@ -673,7 +680,8 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
         this.createHookMutation(
           hookPath,
           JSON.stringify((hookConfig as { config?: object }).config, null, 2),
-          "Write Copilot notification hook"
+          "Write Copilot notification hook",
+          true
         ),
       ],
       diagnostics: [],
@@ -809,7 +817,8 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
   private createHookMutation(
     hookPath: string,
     content: string,
-    description: string
+    description: string,
+    liveInteractive = false
   ): PreparedMutation {
     return {
       path: hookPath,
@@ -821,6 +830,10 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       workspaceHarnessConfig: true,
       apply: async () => {
         await this.createHookFile(content, hookPath);
+        if (liveInteractive) {
+          // A new interactive spawn replaces the previous PTY's hook set.
+          this.liveInteractiveHookFiles.set(hookPath, content);
+        }
       },
       restore: async () => {
         await fs.unlink(hookPath).catch(() => undefined);
@@ -904,6 +917,27 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
       await fs.unlink(hookPath).catch(() => {});
     }
     this.hookFilePaths = [];
+    this.liveInteractiveHookFiles.clear();
+  }
+
+  /**
+   * Rewrite the interactive hook files a settled run deleted. The retained PTY
+   * keeps running and Copilot re-reads `.github/hooks/` at each hook, so
+   * without them a turn sent into the reused terminal never reports `agentStop`.
+   * The paths stay in `hookFilePaths`, so the next settlement deletes them again.
+   */
+  async restoreLiveProcessHookFiles(): Promise<void> {
+    for (const [hookPath, content] of this.liveInteractiveHookFiles) {
+      const exists = await fs.access(hookPath).then(
+        () => true,
+        () => false
+      );
+      if (exists) continue;
+      await this.createHookFile(content, hookPath);
+      Log.info(
+        `[CopilotHarnessAdapter] Restored hook file for reused terminal: ${hookPath}`
+      );
+    }
   }
 
   /**
@@ -1005,7 +1039,9 @@ export class CopilotHarnessAdapter implements IHarnessAdapter {
 
       await fs.writeFile(hookPath, content, "utf-8");
 
-      this.hookFilePaths.push(hookPath);
+      if (!this.hookFilePaths.includes(hookPath)) {
+        this.hookFilePaths.push(hookPath);
+      }
       Log.debug(`[CopilotHarnessAdapter] Created hook file: ${hookPath}`);
     } catch (error) {
       Log.warn(`[CopilotHarnessAdapter] Failed to create hook file: ${error}`);

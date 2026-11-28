@@ -417,4 +417,57 @@ suite("CopilotHarnessAdapter", () => {
       removeTempDir(tempDir);
     }
   });
+
+  test("restores the interactive hook files a settled run deleted for a reused terminal", async () => {
+    const tempDir = makeTempDir("copilot-restore-hooks-");
+    try {
+      const repoRoot = await fs.realpath(tempDir);
+      execFileSync("git", ["init", "--quiet"], { cwd: repoRoot });
+
+      const provider = new CopilotHarnessAdapter();
+      const preparation = await provider.planNotificationHookArgs(
+        process.cwd(),
+        repoRoot,
+        0,
+        undefined,
+        undefined,
+        []
+      );
+      for (const mutation of preparation.mutations) await mutation.apply();
+      const hookPath = preparation.mutations[0].path;
+      assert.ok(hookPath);
+      const written = await fs.readFile(hookPath, "utf-8");
+
+      // Settlement deletes every hook file while the PTY is retained.
+      for (const cleanupPath of provider.getAdditionalCleanupFilePaths(
+        repoRoot
+      )) {
+        await fs.rm(cleanupPath, { force: true });
+      }
+      await provider.cleanupWorkspaceArtifacts(repoRoot);
+      await assert.rejects(fs.access(hookPath));
+
+      await provider.restoreLiveProcessHookFiles();
+      assert.strictEqual(await fs.readFile(hookPath, "utf-8"), written);
+      assert.strictEqual(
+        provider
+          .getAdditionalCleanupFilePaths(repoRoot)
+          .filter((p) => p === hookPath).length,
+        1,
+        "restored file is registered once for the next cleanup"
+      );
+
+      // Restoring again with the files present changes nothing.
+      await provider.restoreLiveProcessHookFiles();
+      assert.strictEqual(await fs.readFile(hookPath, "utf-8"), written);
+
+      // A new prompt's hook setup drops the previous PTY's hook set.
+      await provider.cleanupPreviousPromptHooks(repoRoot);
+      await fs.rm(hookPath, { force: true });
+      await provider.restoreLiveProcessHookFiles();
+      await assert.rejects(fs.access(hookPath));
+    } finally {
+      removeTempDir(tempDir);
+    }
+  });
 });
