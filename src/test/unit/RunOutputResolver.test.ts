@@ -1571,6 +1571,171 @@ suite("RunOutputResolver", () => {
     );
   });
 
+  test("every lane of a parallel group of workflow members resolves its metadata through $step ranges", async () => {
+    const lanes = [
+      {
+        name: "lane a",
+        key: "lane-a-workflow",
+        run: "run-2026-11-26T23-10-00-000Z",
+        workflow: "waves/lane-a.yaml",
+        response: "lane a response",
+      },
+      {
+        name: "lane b",
+        key: "lane-b-workflow",
+        run: "run-2026-11-26T23-11-00-000Z",
+        workflow: "waves/lane-b.yaml",
+        response: "lane b response",
+      },
+      {
+        name: "lane c",
+        key: "lane-c-workflow",
+        run: "run-2026-11-26T23-12-00-000Z",
+        workflow: "waves/lane-c.yaml",
+        response: "lane c response",
+      },
+    ];
+    const members = lanes.map((lane) => ({
+      type: "workflow" as const,
+      workflow: lane.workflow,
+      name: lane.name,
+    }));
+    await recorder.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      initialDefinition: {
+        workflowName: "parent",
+        steps: [...members, { prompt: "after the lanes" }],
+        parallelGroups: [
+          { id: "lanes", startIndex: 0, endIndex: 2, failFast: false },
+        ],
+      },
+      workflowId: "parallel-parent-workflow" as never,
+    }));
+    for (const [index, lane] of lanes.entries()) {
+      const childKey = lane.key as never;
+      const childRun = lane.run as never;
+      const childManifestPath = await recorder.initializeRunAt(
+        WorkflowPaths.runDir(workspaceRoot, childKey, childRun),
+        childKey,
+        2,
+        10,
+        EXECUTION_STATES.COMPLETED,
+        1,
+        { workflowName: lane.name, steps: [{ prompt: `${lane.name} prompt` }] }
+      );
+      await recorder.appendEvents(childManifestPath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: 20 + index,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: {
+            kind: "ai",
+            startReason: "initial",
+            prompt: `${lane.name} prompt`,
+          },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: 21 + index,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          responseKind: "ai",
+          payload: {
+            cliOutput: {
+              structured: {
+                events: [{ type: "text", data: { text: lane.response } }],
+                metadata: {},
+              },
+              elapsed: 1,
+              isStreaming: false,
+            },
+          },
+        },
+      ]);
+      await recorder.appendEvents(manifestPath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+          timestampMs: 30 + index,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: index },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: {
+            resolvedWorkflowPath: `/private/absolute/${lane.workflow}`,
+            childWorkflowKey: childKey,
+            childRunRef: childRun,
+            outcome: { status: "completed" },
+          },
+        },
+      ]);
+    }
+    const steps = [...members, { prompt: "after the lanes" }];
+    const resolver = new RunOutputResolver(recorder);
+    const items = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [{ context: [1, 2, 3], detail: "full" }],
+      steps,
+      3,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(
+      items.map((item) => item.index),
+      [0, 1, 2]
+    );
+    const xml = buildPriorContextXmlFromItems(items);
+    for (const lane of lanes) {
+      assert.ok(
+        xml.includes(`name="${lane.name}" workflow="${lane.workflow}"`),
+        xml
+      );
+      assert.ok(xml.includes(`workflowKey="${lane.key}"`), xml);
+      assert.ok(xml.includes(lane.response), xml);
+    }
+    assert.ok(!xml.includes("/private/absolute"), xml);
+    const fullPreview = await PriorContextPreviewBuilder.buildPreview(
+      "step:1-3",
+      3,
+      steps,
+      resolver,
+      manifestPath,
+      { workspaceRoot }
+    );
+    assert.strictEqual(fullPreview, xml);
+
+    const summaryItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [{ context: [1, 2, 3], detail: "summary" }],
+      steps,
+      3,
+      { workspaceRoot }
+    );
+    assert.deepStrictEqual(
+      summaryItems.map((item) => item.index),
+      [0, 1, 2]
+    );
+    const summaryXml = buildPriorContextXmlFromItems(summaryItems);
+    for (const lane of lanes) {
+      // The summary detail attribute sits between the name and the workflow.
+      assert.ok(summaryXml.includes(`name="${lane.name}"`), summaryXml);
+      assert.ok(summaryXml.includes(`workflow="${lane.workflow}"`), summaryXml);
+      assert.ok(summaryXml.includes(`workflowKey="${lane.key}"`), summaryXml);
+    }
+    const summaryPreview = await PriorContextPreviewBuilder.buildPreview(
+      "step:summary:1-3",
+      3,
+      steps,
+      resolver,
+      manifestPath,
+      { workspaceRoot }
+    );
+    assert.strictEqual(summaryPreview, summaryXml);
+  });
+
   test("a workflow step that failed before a child run existed still has output for later prompts", async () => {
     const workflowStep = {
       type: "workflow" as const,

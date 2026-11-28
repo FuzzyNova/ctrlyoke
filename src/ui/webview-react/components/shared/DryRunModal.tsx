@@ -967,6 +967,7 @@ function SummaryPanel({
         <InlineChildRunSection
           childName={step.subWorkflow.childName}
           worktree={step.subWorkflow.worktree}
+          note={step.subWorkflow.note}
         />
       )}
 
@@ -1001,9 +1002,11 @@ function SummaryPanel({
 function InlineChildRunSection({
   childName,
   worktree,
+  note,
 }: {
   childName: string;
   worktree: WorktreeExecutionPreview | undefined;
+  note: string | undefined;
 }): React.ReactElement {
   return (
     <section data-testid="dry-run-inline-child">
@@ -1014,6 +1017,7 @@ function InlineChildRunSection({
       <p className="mt-2 text-xs text-description-fg">
         {SUB_WORKFLOW_DASHBOARD_LABELS.previewInlineNote}
       </p>
+      {note && <p className="mt-2 text-xs text-description-fg">{note}</p>}
       {worktree && (
         <div className="mt-4">
           <p className="mb-2 flex items-center gap-1 text-xs text-editor-fg">

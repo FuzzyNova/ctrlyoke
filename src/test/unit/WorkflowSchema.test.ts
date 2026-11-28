@@ -1039,6 +1039,22 @@ suite("Workflow template schema", () => {
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
   });
 
+  test("accepts file and inline workflow members inside parallel", () => {
+    const valid = validate({
+      steps: [
+        {
+          parallel: [
+            { type: "workflow", workflow: "lanes/one.ctrlyoke.yaml" },
+            { type: "workflow", workflow: { prompt: "inline lane" } },
+            { prompt: "plain member" },
+          ],
+          failFast: true,
+        },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
+
   test("accepts flat parallel members and rejects unsupported parallel shapes", () => {
     const valid = validate({
       steps: [

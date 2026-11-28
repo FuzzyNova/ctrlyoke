@@ -750,6 +750,18 @@ suite("WorkflowFileCompletionCore: sub-workflow steps", () => {
     assert.ok(member.includes("onFail") && !member.includes("harness"));
   });
 
+  test("a typeless step with a workflow key offers workflow-step keys", () => {
+    const keys = labels(
+      complete("steps:\n  - workflow: a.ctrlyoke.yaml\n    §\n")
+    );
+    for (const key of ["onFail", "name", "enabled"]) {
+      assert.ok(keys.includes(key), key);
+    }
+    for (const key of ["prompt", "script", "harness", "compareSource"]) {
+      assert.ok(!keys.includes(key), key);
+    }
+  });
+
   test("prompt and script steps never offer workflow", () => {
     assert.ok(
       !labels(complete("steps:\n  - prompt: hi\n    §\n")).includes("workflow")

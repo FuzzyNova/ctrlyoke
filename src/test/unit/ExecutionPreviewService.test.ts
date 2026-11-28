@@ -37,11 +37,15 @@ import {
   HEADLESS_PROMPT_DELIVERIES,
   FINAL_STEP_PHASES,
   PREVIEW_STEP_TYPES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
   formatSubWorkflowRunsLabel,
   type HeadlessPromptDelivery,
 } from "../../types/DashboardConstants";
 import { SUB_WORKFLOW_SOURCE_KINDS } from "../../types/SubWorkflowTypes";
-import type { StepExecutionPreview } from "../../types/ExecutionPreviewTypes";
+import type {
+  StepExecutionPreview,
+  WorkflowExecutionPreview,
+} from "../../types/ExecutionPreviewTypes";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   type HarnessCapabilityRegistrySnapshot,
@@ -2084,28 +2088,117 @@ suite("ExecutionPreviewService", () => {
       });
     });
 
-    test("an inline child without its own worktree runs in the parent's checkout", async () => {
-      for (const worktree of [undefined, false] as const) {
-        const preview = await createService().build({
-          workflow: {
-            worktree: { mode: WORKTREE_MODES.MANAGED },
-            steps: [
-              {
-                type: "workflow",
-                workflow: {
-                  prompt: "in place",
-                  ...(worktree !== undefined ? { worktree } : {}),
-                },
+    /**
+     * A managed parent whose parallel group holds a prompt member, an inline
+     * lane with `childWorktree` and a merge lane. The merge issue names every
+     * step that edits the parent's shared checkout.
+     */
+    async function mergeIssueEditors(
+      childWorktree: false | undefined
+    ): Promise<{ preview: WorkflowExecutionPreview; editors: string }> {
+      const preview = await createService().build({
+        workflow: {
+          worktree: { mode: WORKTREE_MODES.MANAGED },
+          steps: [
+            { name: "prompt member", prompt: "edit in place" },
+            {
+              type: "workflow",
+              name: "inline lane",
+              workflow: {
+                prompt: "in place",
+                ...(childWorktree !== undefined
+                  ? { worktree: childWorktree }
+                  : {}),
               },
-            ],
-          },
-        });
-        assert.ok(preview.worktree, "the parent's own worktree is previewed");
-        assert.deepStrictEqual(preview.steps[0].subWorkflow, {
-          source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
-          childName: "Workflow · step 1",
-        });
-      }
+            },
+            {
+              type: "workflow",
+              name: "merge lane",
+              workflow: {
+                prompt: "lane work",
+                worktree: { mode: "managed", merge: true },
+              },
+            },
+          ],
+          parallelGroups: [
+            { id: "group", startIndex: 0, endIndex: 2, failFast: true },
+          ],
+        },
+      });
+      const issues = preview.steps.flatMap((step) =>
+        step.diagnostics.filter(
+          (diagnostic) =>
+            diagnostic.code ===
+            PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT
+        )
+      );
+      // The same issue is reported once per consuming step.
+      const messages = new Set(issues.map((issue) => issue.message));
+      assert.strictEqual(messages.size, 1, JSON.stringify(issues));
+      const [message] = messages;
+      const editors = /which (.*) edits? in the same parallel group/.exec(
+        message
+      );
+      assert.ok(editors, message);
+      return { preview, editors: editors[1] };
+    }
+
+    test("an inline child without its own worktree runs in the parent's worktree", async () => {
+      const { preview, editors } = await mergeIssueEditors(undefined);
+      assert.ok(preview.worktree, "the parent's own worktree is previewed");
+      assert.deepStrictEqual(preview.steps[1].subWorkflow, {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: "inline lane",
+      });
+      assert.strictEqual(
+        editors,
+        'Step 1 ("prompt member"), Step 2 ("inline lane")'
+      );
+    });
+
+    test("an inline child with worktree: false runs in the main checkout, not the parent's worktree", async () => {
+      const { preview, editors } = await mergeIssueEditors(false);
+      assert.deepStrictEqual(preview.steps[1].subWorkflow, {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: "inline lane",
+      });
+      assert.strictEqual(editors, 'Step 1 ("prompt member")');
+    });
+
+    test("an inline child whose only step is disabled stays in the preview with a note", async () => {
+      const preview = await createService().build({
+        workflow: {
+          steps: [
+            { prompt: "before" },
+            {
+              type: "workflow",
+              name: "idle lane",
+              workflow: { prompt: "never runs", enabled: false },
+            },
+            {
+              type: "workflow",
+              name: "skipped lane",
+              enabled: false,
+              workflow: { prompt: "not started" },
+            },
+            { prompt: "after" },
+          ],
+        },
+      });
+      // A disabled parent step is skipped, as any disabled step is. A child
+      // whose own step is disabled still starts, so its entry stays.
+      assert.deepStrictEqual(
+        preview.steps.map((step) => step.stepIndex),
+        [0, 1, 3]
+      );
+      const lane = preview.steps[1];
+      assert.strictEqual(lane.type, PREVIEW_STEP_TYPES.WORKFLOW);
+      assert.strictEqual(lane.stepName, "idle lane");
+      assert.deepStrictEqual(lane.subWorkflow, {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: "idle lane",
+        note: SUB_WORKFLOW_DASHBOARD_LABELS.previewDisabledChildNote,
+      });
     });
 
     test("names an inline child of an unnamed workflow after its file, as the launch does", async () => {

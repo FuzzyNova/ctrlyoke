@@ -5520,6 +5520,8 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
   previewChildRun: "Child run",
   previewInlineNote:
     "Runs as a child run with this workflow's settings and variables. Its earlier-step references address the child run.",
+  previewDisabledChildNote:
+    "The child's step is disabled, so the child starts, skips it and runs nothing.",
 } as const;
 
 /** The execution preview's "Runs <file>" entry for a file-referenced child. */

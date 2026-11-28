@@ -163,6 +163,11 @@ export type SubWorkflowStepPreview =
       /** The child run's name: the step's name, else parent and position. */
       childName: string;
       worktree?: WorktreeExecutionPreview;
+      /**
+       * Set when the wrapped step is disabled: the child still starts, skips
+       * it and runs nothing, so the entry has no prompt or command to show.
+       */
+      note?: string;
     };
 
 export interface EffectiveSandboxPreview {

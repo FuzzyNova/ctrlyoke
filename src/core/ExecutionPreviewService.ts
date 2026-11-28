@@ -35,6 +35,7 @@ import {
   type PreviewPermissionAction,
   type PreviewPropertySource,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
 } from "../types/DashboardConstants";
 import * as path from "path";
 import type { PriorContextRequest } from "../utils/PriorContextMerge";
@@ -95,6 +96,7 @@ import {
   type ParallelGroupPreflightPreview,
   type RetryPreview,
   type StepExecutionPreview,
+  type SubWorkflowStepPreview,
   type SubstitutedFieldPreview,
   type VariableResolutionPreview,
   type VariableSubstitutionBlockerPreview,
@@ -1030,33 +1032,16 @@ export class ExecutionPreviewService {
         ? authoredStep
         : preparedStep;
     if (typeof authored.workflow === "string") {
-      const step = this.substituteDispatchStep(target, variables);
-      const resolution = this.resolveTarget(step, workflow);
-      // The child has its own conditions, so the parent's are not shown.
-      const conditions = this.buildConditions(undefined, undefined, undefined);
-      return {
-        stepIndex: target.stepIndex,
-        ...groupField,
-        ...(step.name ? { stepName: step.name } : {}),
-        type: PREVIEW_STEP_TYPES.WORKFLOW,
-        resolvedProperties: this.toResolvedPropertiesPreview(
-          resolution.properties,
-          resolution,
-          conditions,
-          false,
-          [],
-          [],
-          workflow
-        ),
-        workspaceMutations: [],
-        variables: [],
-        conditions,
-        diagnostics: [...parallelDiagnostics],
-        subWorkflow: {
+      return this.buildWorkflowStepEntry(
+        target,
+        workflow,
+        variables,
+        parallelDiagnostics,
+        {
           source: SUB_WORKFLOW_SOURCE_KINDS.FILE,
           workflowPath: authored.workflow,
-        },
-      };
+        }
+      );
     }
     if (!isInlineSubWorkflowDefinition(authored.workflow)) {
       throw new Error(
@@ -1104,10 +1089,6 @@ export class ExecutionPreviewService {
       },
       ownsCheckout ? undefined : parentCheckout
     );
-    const child = childPreview.steps[0];
-    if (!child) {
-      return childPreview.substitutionBlockers?.[0]?.message;
-    }
     const ownWorktree =
       ownsCheckout &&
       subWorkflowCreatesWorktree(
@@ -1115,6 +1096,28 @@ export class ExecutionPreviewService {
       )
         ? childPreview.worktree
         : undefined;
+    const child = childPreview.steps[0];
+    if (!child) {
+      const blocker = childPreview.substitutionBlockers?.[0]?.message;
+      if (blocker) return blocker;
+      // The launch still starts this child (its one step is disabled, which
+      // the executor skips), so the step stays in the preview with a note.
+      return {
+        ...this.buildWorkflowStepEntry(
+          target,
+          workflow,
+          variables,
+          parallelDiagnostics,
+          {
+            source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+            childName: displayName,
+            ...(ownWorktree ? { worktree: ownWorktree } : {}),
+            note: SUB_WORKFLOW_DASHBOARD_LABELS.previewDisabledChildNote,
+          }
+        ),
+        stepName: outerName?.trim() || displayName,
+      };
+    }
     // A one-step child has no parallel group of its own.
     return {
       ...child,
@@ -1132,6 +1135,45 @@ export class ExecutionPreviewService {
         childName: displayName,
         ...(ownWorktree ? { worktree: ownWorktree } : {}),
       },
+    };
+  }
+
+  /**
+   * The `type: workflow` entry both a file child and a child with no
+   * executable step show. Its properties are the parent step's resolved
+   * ones, since the child inherits the workflow-level settings.
+   */
+  private buildWorkflowStepEntry(
+    target: PreviewStepTarget,
+    workflow: PromptFile,
+    variables: Record<string, string>,
+    parallelDiagnostics: readonly CompatibilityDiagnostic[],
+    subWorkflow: SubWorkflowStepPreview
+  ): StepExecutionPreview {
+    const parallelGroupId = this.parallelGroupId(workflow, target.stepIndex);
+    const step = this.substituteDispatchStep(target, variables);
+    const resolution = this.resolveTarget(step, workflow);
+    // The child has its own conditions, so the parent's are not shown.
+    const conditions = this.buildConditions(undefined, undefined, undefined);
+    return {
+      stepIndex: target.stepIndex,
+      ...(parallelGroupId ? { parallelGroupId } : {}),
+      ...(step.name ? { stepName: step.name } : {}),
+      type: PREVIEW_STEP_TYPES.WORKFLOW,
+      resolvedProperties: this.toResolvedPropertiesPreview(
+        resolution.properties,
+        resolution,
+        conditions,
+        false,
+        [],
+        [],
+        workflow
+      ),
+      workspaceMutations: [],
+      variables: [],
+      conditions,
+      diagnostics: [...parallelDiagnostics],
+      subWorkflow,
     };
   }
 

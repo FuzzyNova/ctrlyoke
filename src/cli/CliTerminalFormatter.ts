@@ -699,6 +699,9 @@ export class CliTerminalFormatter {
         writeLine(
           `${indent}  ${SUB_WORKFLOW_DASHBOARD_LABELS.previewChildRun}: ${step.subWorkflow.childName}${worktree ? ` · ${SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle.toLowerCase()} (${worktree.branch ?? worktree.mode})` : ""}`
         );
+        if (step.subWorkflow.note) {
+          writeLine(`${indent}  ${step.subWorkflow.note}`);
+        }
       }
       writeLine(`${indent}  Harness: ${step.resolvedProperties.harnessId}`);
       if (step.resolvedProperties.model) {

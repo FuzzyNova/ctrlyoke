@@ -207,6 +207,11 @@ function keySourceKinds(
     PROMPT_PROPERTIES.PARALLEL,
   ].every((key) => fields[key] === undefined);
   if (!undecided) return [location.objectKind];
+  // A typeless `workflow` key decides the kind the way `prompt` or `script` does:
+  // the object classifier reads only `type`, so it would otherwise report a prompt.
+  if (fields[PROMPT_PROPERTIES.WORKFLOW_REF] !== undefined) {
+    return [WORKFLOW_OBJECT_KINDS.SUB_WORKFLOW_STEP];
+  }
   const slotKinds = stepSlotKinds(ownerPath, root);
   return slotKinds.length > 0 ? slotKinds : [location.objectKind];
 }
