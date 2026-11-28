@@ -93,6 +93,7 @@ import {
 import { Log } from "./utils/Log";
 import { secretRedactionService } from "./utils/SecretRedactionService";
 import { saveIfDirty } from "./platform/VsCodeDocuments";
+import { queueAsSubWorkflowFromContext } from "./platform/QueueAsSubWorkflowCommand";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
 import { WorkspaceInitializer } from "./core/orchestration/WorkspaceInitializer";
@@ -1122,20 +1123,10 @@ function registerCommands(
   // Queue as Sub-workflow (context menu) - appends one workflow step that runs the file as a child run
   const queueAsSubWorkflowFromContextCommand = vscode.commands.registerCommand(
     "ctrlyoke.queueAsSubWorkflowFromContext",
-    async (uri: vscode.Uri) => {
-      if (!uri) {
-        reportCommandError("No file selected");
-        return;
-      }
-      await saveIfDirty(uri.fsPath, workflowOrchestrator.getUserFeedbackSink());
-      try {
-        await workflowOrchestrator.queueSubWorkflowFromFileForPanel(uri.fsPath);
-      } catch (error) {
-        reportCommandError(
-          `Failed to queue as a sub-workflow: ${getErrorMessage(error)}`
-        );
-      }
-    }
+    (uri: vscode.Uri) =>
+      queueAsSubWorkflowFromContext(uri, workflowOrchestrator, (message) =>
+        reportCommandError(message)
+      )
   );
 
   // Queue Next With ctrlyoke command (context menu) - appends prompts after current position

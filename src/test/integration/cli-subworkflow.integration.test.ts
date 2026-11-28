@@ -236,6 +236,54 @@ suite("CLI sub-workflow runs", () => {
     );
   });
 
+  test("a parallel group of two inline lanes builds and completes both child runs", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-lanes-");
+    const env = { CTRLYOKE_HOME: path.join(root, "state") };
+    const laneMarker = (lane: string) => path.join(root, `lane-${lane}.txt`);
+    const lane = (name: string, marker: string) => ({
+      type: "workflow",
+      name,
+      workflow: { type: "script", script: writeMarkerScript(marker) },
+    });
+    const parent = await writeWorkflow(root, "lanes.ctrlyoke.json", {
+      name: "Lanes",
+      steps: [
+        {
+          parallel: [
+            lane("Lane A", laneMarker("a")),
+            lane("Lane B", laneMarker("b")),
+          ],
+        },
+      ],
+    });
+
+    const run = await runCli(
+      ["run", parent, "--headless", "--json", "--cwd", root],
+      root,
+      env
+    );
+
+    assert.strictEqual(run.code, 0, run.stderr);
+    // Each lane ran its own script, in its own child.
+    assert.strictEqual(await fs.readFile(laneMarker("a"), "utf8"), "ran");
+    assert.strictEqual(await fs.readFile(laneMarker("b"), "utf8"), "ran");
+    const result = JSON.parse(run.stdout) as CliJsonWithChildren;
+    assert.deepStrictEqual(
+      result.subWorkflowRuns.map((child) => child.status),
+      ["completed", "completed"]
+    );
+    assert.strictEqual(
+      new Set(result.subWorkflowRuns.map((child) => child.runRef)).size,
+      2,
+      "each lane has its own child run"
+    );
+    for (const child of result.subWorkflowRuns) {
+      assert.ok(child.workflowKey);
+      assert.ok(child.stepId);
+    }
+  });
+
   test("reports a child's prompt headers and final-step pass label under its prefix", async function () {
     this.timeout(CLI_RUN_TIMEOUT_MS);
     const root = await makeRoot("ctrlyoke-cli-child-final-");
@@ -389,6 +437,11 @@ function varLines(stdout: string): string[] {
     .split(/\r?\n/)
     .filter((line) => line.startsWith("VAR:"))
     .map((line) => line.slice("VAR:".length));
+}
+
+/** Writes `ran` to `marker`, so a test can prove the script executed. */
+function writeMarkerScript(marker: string): string {
+  return `node -e "require('fs').writeFileSync(process.argv[1], 'ran')" ${JSON.stringify(marker)}`;
 }
 
 function markerScript(marker: string): string {

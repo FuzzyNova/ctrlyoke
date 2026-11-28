@@ -6667,6 +6667,43 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       assert.deepStrictEqual(parseCalls, []);
     });
 
+    test("queueSubWorkflowFromFileForPanel queues one sub-workflow step on the run the panel is showing", async () => {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      stubParser(internal, { steps: [{ prompt: "c" }] });
+      const appended: unknown[][] = [];
+      internal.instances = new Map([
+        [
+          "live",
+          {
+            getQueueState: () => ({
+              workflowKey: run.workflowKey,
+              runRef: run.runRef,
+              status: EXECUTION_STATES.RUNNING,
+            }),
+            getPromptFileResolutionInput: idleResolutionInput,
+            appendFromFile: async (...args: unknown[]) => {
+              appended.push(args);
+            },
+          },
+        ],
+      ]);
+
+      await orchestrator.queueSubWorkflowFromFileForPanel(childPath());
+
+      assert.deepStrictEqual(appended, [
+        [
+          childPath(),
+          QUEUE_POSITION.END,
+          { type: STEP_TYPES.WORKFLOW, workflow: "flows/child.ctrlyoke.yaml" },
+        ],
+      ]);
+    });
+
     for (const status of [
       EXECUTION_STATES.RUNNING,
       EXECUTION_STATES.PAUSING,

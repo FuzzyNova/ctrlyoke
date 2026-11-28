@@ -27,6 +27,7 @@ import {
   QUEUE_POSITION,
   STEP_TYPES,
   WORKTREE_LIFECYCLE_STATES,
+  WORKTREE_MERGE_OUTCOMES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
@@ -40,6 +41,7 @@ import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
   isSubWorkflowStep,
+  type SubWorkflowOutput,
   type SubWorkflowStep,
   type WorkingFile,
   type WorkingFileWorktreeRuntime,
@@ -3522,10 +3524,10 @@ suite("Sub-workflow host end to end", () => {
       : undefined;
   }
 
-  /** Each `subWorkflowSettled` outcome the parent recorded, in step order. */
-  async function settledOutcomesByStep(
+  /** Each `subWorkflowSettled` payload the parent recorded, in step order. */
+  async function settledOutputsByStep(
     parent: WorkflowInstance
-  ): Promise<Array<{ stepIndex: number; outcome: unknown }>> {
+  ): Promise<Array<{ stepIndex: number; output: SubWorkflowOutput }>> {
     const state = parent.promptQueue.getState();
     const events = await new TimelineRecorder().readEvents(
       parent.outputHistoryManager.getHistoryFilePath(
@@ -3537,15 +3539,19 @@ suite("Sub-workflow host end to end", () => {
       .flatMap((event) =>
         event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
         event.target?.kind === FINAL_STEP_PHASES.QUEUE
-          ? [
-              {
-                stepIndex: event.target.stepIndex,
-                outcome: event.payload.outcome,
-              },
-            ]
+          ? [{ stepIndex: event.target.stepIndex, output: event.payload }]
           : []
       )
       .sort((left, right) => left.stepIndex - right.stepIndex);
+  }
+
+  /** Each `subWorkflowSettled` outcome the parent recorded, in step order. */
+  async function settledOutcomesByStep(
+    parent: WorkflowInstance
+  ): Promise<Array<{ stepIndex: number; outcome: unknown }>> {
+    return (await settledOutputsByStep(parent)).map(
+      ({ stepIndex, output }) => ({ stepIndex, outcome: output.outcome })
+    );
   }
 
   const inlineLane = (
@@ -5820,6 +5826,103 @@ suite("Sub-workflow host end to end", () => {
       assert.strictEqual(
         await fs.readFile(path.join(workspace, "lane.txt"), "utf8"),
         "lane"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a merge: true lane whose merge conflicts with the parent's checkout is reported, not failed: the step completes and the branch is kept", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-merge-conflict-");
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await fs.writeFile(path.join(workspace, "shared.txt"), "base\n");
+      // The lane edits `shared.txt` in its own worktree and, while it runs,
+      // commits a different edit to it in the parent's checkout, so the
+      // later merge can neither fast-forward nor apply cleanly.
+      await fs.writeFile(
+        path.join(workspace, "conflict-lane.js"),
+        [
+          "const fs = require('fs');",
+          "const { execFileSync } = require('child_process');",
+          `const main = ${JSON.stringify(workspace)};`,
+          "fs.writeFileSync('shared.txt', 'lane\\n');",
+          "fs.writeFileSync(main + '/shared.txt', 'main\\n');",
+          "execFileSync('git', ['-C', main, 'add', 'shared.txt']);",
+          "execFileSync('git', ['-C', main, 'commit', '-m', 'main edit']);",
+        ].join("\n")
+      );
+      await writeJson(path.join(workspace, "parent.ctrlyoke.json"), {
+        name: "Conflict parent",
+        steps: [
+          inlineLane("Lane", "node conflict-lane.js", {
+            worktree: { mode: "managed", merge: true },
+          }),
+        ],
+      });
+      commitAll(workspace, "add workflows");
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(
+        await parent.loadPromptFile(
+          path.join(workspace, "parent.ctrlyoke.json")
+        ),
+        true
+      );
+      await parent.executeLoadedPromptFile();
+
+      const state = parent.promptQueue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+      assert.strictEqual(
+        state.steps[0]?._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+
+      const [settled] = await settledOutputsByStep(parent);
+      assert.strictEqual(
+        settled?.output.outcome.status,
+        PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+      const worktree = settled?.output.worktree;
+      assert.strictEqual(
+        worktree?.mergeOutcome,
+        WORKTREE_MERGE_OUTCOMES.CONFLICT,
+        JSON.stringify(settled)
+      );
+      assert.deepStrictEqual(worktree?.conflictFiles, ["shared.txt"]);
+
+      // The branch survives for the user to resolve, and the parent's
+      // checkout holds its own edit with no merge left half done.
+      const branchName = worktree?.branchName;
+      assert.ok(branchName, "the settled event names the lane's branch");
+      assert.match(
+        execFileSync("git", ["-C", workspace, "branch", "--list", branchName], {
+          encoding: "utf8",
+        }),
+        new RegExp(branchName.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "shared.txt"), "utf8"),
+        "main\n"
+      );
+      assert.strictEqual(
+        execFileSync("git", ["-C", workspace, "status", "--porcelain"], {
+          encoding: "utf8",
+        }).trim(),
+        ""
       );
     } finally {
       restoreGitTimeouts();
