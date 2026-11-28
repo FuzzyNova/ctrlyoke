@@ -1117,16 +1117,121 @@ describe("Workflow mode", () => {
     expect(store().subWorkflowOnFail).toBe("stopWorkflow");
   });
 
-  it("loads an inline workflow step read-only instead of throwing", () => {
-    const inline = { prompt: "Implement the lane" };
-    store().enterEditMode(0, { type: STEP_TYPES.WORKFLOW, workflow: inline });
+  it("loads an inline prompt step into the prompt fields", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      color: "#123456",
+      onFail: "continue",
+      workflow: {
+        prompt: "Implement the lane",
+        model: "sonnet",
+        color: "#abcdef",
+        worktree: { mode: "managed", merge: true },
+      },
+    });
 
-    expect(store().stepType).toBe(STEP_TYPES.WORKFLOW);
-    expect(store().subWorkflowInline).toEqual(inline);
-    expect(store().subWorkflowPath).toBe("");
-    expect(store().hasContent()).toBe(false);
+    expect(store()).toMatchObject({
+      stepType: STEP_TYPES.WORKFLOW,
+      subWorkflowInline: {
+        kind: STEP_TYPES.PROMPT,
+        worktree: { mode: "managed", merge: true },
+        preserved: { color: "#abcdef" },
+      },
+      subWorkflowPath: "",
+      subWorkflowOnFail: "continue",
+      promptText: "Implement the lane",
+      promptName: "Lane",
+    });
+    // The header's colour is the outer step's; the model is the wrapped one's.
+    expect(store().properties.color).toBe("#123456");
+    expect(store().properties.model).toBe("sonnet");
+    expect(store().hasContent()).toBe(true);
+    expect(store().validateRequired()).toBe(true);
+  });
+
+  it("loads an inline script step into the script fields", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { type: STEP_TYPES.SCRIPT, script: "npm test", timeoutSec: 30 },
+    });
+
+    expect(store().subWorkflowInline?.kind).toBe(STEP_TYPES.SCRIPT);
+    expect(store().scriptCommand).toBe("npm test");
+    expect(store().scriptTimeoutSec).toBe(30);
+    expect(store().subWorkflowInline?.worktree).toBeUndefined();
+  });
+
+  it("validates an inline step as the step it wraps", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowForm("inline");
     expect(store().validateRequired()).toBe(false);
-    expect(store().validationErrors.subWorkflowPath).toMatch(/inline/);
+    expect(store().validationErrors.promptText).toBe("Prompt text is required");
+
+    store().setSubWorkflowInlineKind(STEP_TYPES.SCRIPT);
+    expect(store().validateRequired()).toBe(false);
+    expect(store().validationErrors.scriptCommand).toBe(
+      "Script command is required"
+    );
+
+    store().setScriptCommand("npm test");
+    store().setSubWorkflowWorktree({ mode: "named", branch: "" });
+    expect(store().validateRequired()).toBe(false);
+    expect(store().validationErrors.subWorkflowWorktree).toBe(
+      "Branch is required for named worktree mode."
+    );
+
+    store().setSubWorkflowWorktree({ mode: "named", branch: "lane/docs" });
+    expect(store().validateRequired()).toBe(true);
+  });
+
+  it("switches File and Inline without losing either form", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowPath("workflows/verify.ctrlyoke.yaml");
+    store().setSubWorkflowOnFail("continue");
+    store().setSubWorkflowForm("inline");
+    expect(store().subWorkflowInline).toEqual({
+      kind: STEP_TYPES.PROMPT,
+      worktree: undefined,
+      preserved: {},
+    });
+
+    store().setSubWorkflowInlineKind(STEP_TYPES.SCRIPT);
+    store().setScriptCommand("npm test");
+    store().setSubWorkflowWorktree({ mode: "managed" });
+    store().setSubWorkflowForm("file");
+
+    expect(store().subWorkflowInline).toBeNull();
+    expect(store().subWorkflowPath).toBe("workflows/verify.ctrlyoke.yaml");
+    expect(store().subWorkflowOnFail).toBe("continue");
+    expect(store().hasContent()).toBe(true);
+
+    store().setSubWorkflowForm("inline");
+    expect(store().subWorkflowInline).toMatchObject({
+      kind: STEP_TYPES.SCRIPT,
+      worktree: { mode: "managed" },
+    });
+    expect(store().scriptCommand).toBe("npm test");
+  });
+
+  it("drops a prompt's explicit type when the inline step becomes a script", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { type: STEP_TYPES.PROMPT, prompt: "p", name: "inner" },
+    });
+    expect(store().subWorkflowInline?.preserved).toEqual({
+      type: STEP_TYPES.PROMPT,
+      name: "inner",
+    });
+    store().setSubWorkflowInlineKind(STEP_TYPES.SCRIPT);
+    expect(store().subWorkflowInline?.preserved).toEqual({ name: "inner" });
+  });
+
+  it("routes a prompt-editor insert into an inline prompt", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowForm("inline");
+    store().preparePromptEditorForInsert();
+    expect(store().stepType).toBe(STEP_TYPES.WORKFLOW);
   });
 
   it("requires a non-empty workflow path", () => {
@@ -1170,6 +1275,7 @@ describe("Workflow mode", () => {
       subWorkflowPath: "",
       subWorkflowOnFail: "stopWorkflow",
       subWorkflowInline: null,
+      subWorkflowSetAsideInline: null,
     });
   });
 

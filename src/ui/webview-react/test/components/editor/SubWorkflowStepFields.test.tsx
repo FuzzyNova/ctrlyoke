@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SUB_WORKFLOW_EDITOR_CONTROL_IDS,
+  SubWorkflowFormBar,
   SubWorkflowStepFields,
 } from "@components/editor/SubWorkflowStepFields";
 import { useEditorStore } from "@store/editorStore";
@@ -11,6 +12,7 @@ import {
   EDITOR_TARGET_KINDS,
   MESSAGE_TYPES,
   STEP_TYPES,
+  SUB_WORKFLOW_EDITOR_FORMS,
   SUB_WORKFLOW_EDITOR_LABELS,
 } from "@root/types/DashboardConstants";
 
@@ -70,6 +72,76 @@ describe("SubWorkflowStepFields", () => {
     );
     expect(browse).toBe(
       screen.getByRole("button", { name: SUB_WORKFLOW_EDITOR_LABELS.browse })
+    );
+  });
+
+  it("renders the form switches and the inline worktree under their registered ids", () => {
+    render(
+      <>
+        <SubWorkflowFormBar disabled={false} />
+        <SubWorkflowStepFields disabled={false} />
+      </>
+    );
+    const fileForm = document.getElementById(
+      SUB_WORKFLOW_EDITOR_CONTROL_IDS.formFile
+    );
+    expect(fileForm).toBe(
+      screen.getByRole("button", { name: SUB_WORKFLOW_EDITOR_LABELS.formFile })
+    );
+    expect(fileForm).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: SUB_WORKFLOW_EDITOR_LABELS.formInline,
+      })
+    );
+    expect(
+      document.getElementById(SUB_WORKFLOW_EDITOR_CONTROL_IDS.formInline)
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      document.getElementById(SUB_WORKFLOW_EDITOR_CONTROL_IDS.inlinePrompt)
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      document.getElementById(SUB_WORKFLOW_EDITOR_CONTROL_IDS.inlineScript)
+    ).toBe(screen.getByRole("button", { name: "Script" }));
+    // The shared worktree editor, under this form's prefix.
+    expect(
+      document.getElementById(
+        `${SUB_WORKFLOW_EDITOR_CONTROL_IDS.worktree}-worktree-mode`
+      )
+    ).not.toBeNull();
+    expect(
+      document.getElementById(SUB_WORKFLOW_EDITOR_CONTROL_IDS.file)
+    ).toBeNull();
+    expect(
+      document.getElementById(SUB_WORKFLOW_EDITOR_CONTROL_IDS.onFail)
+    ).not.toBeNull();
+  });
+
+  it("switches the inline step's kind and keeps its worktree", () => {
+    useEditorStore
+      .getState()
+      .setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+    useEditorStore.getState().setSubWorkflowWorktree({ mode: "managed" });
+    render(<SubWorkflowFormBar disabled={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Script" }));
+    expect(useEditorStore.getState().subWorkflowInline).toMatchObject({
+      kind: STEP_TYPES.SCRIPT,
+      worktree: { mode: "managed" },
+    });
+  });
+
+  it("edits a managed inline worktree through the shared editor", () => {
+    useEditorStore
+      .getState()
+      .setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+    useEditorStore.getState().setSubWorkflowWorktree({ mode: "managed" });
+    render(<SubWorkflowStepFields disabled={false} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Merge" }));
+    expect(useEditorStore.getState().subWorkflowInline?.worktree).toMatchObject(
+      { mode: "managed", merge: true }
     );
   });
 

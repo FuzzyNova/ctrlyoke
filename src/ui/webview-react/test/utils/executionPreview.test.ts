@@ -6,6 +6,7 @@ import {
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   STEP_TYPES,
+  SUB_WORKFLOW_EDITOR_FORMS,
 } from "@root/types/DashboardConstants";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 
@@ -127,11 +128,32 @@ describe("getExecutionPreviewEditorSnapshot sub-workflow steps", () => {
     });
   });
 
-  it("has no editor snapshot for a read-only inline workflow step", () => {
+  it("previews an edited inline workflow step as the save builds it", () => {
     selectSavedWorkflowStep({
       type: STEP_TYPES.WORKFLOW,
-      workflow: { prompt: "Inline lane" },
+      name: "Lane",
+      workflow: { prompt: "Inline lane", worktree: { mode: "managed" } },
     });
+    useEditorStore.getState().setPromptText("Edited lane");
+    useEditorStore.getState().setProperty("model", "sonnet");
+
+    const snapshot = getExecutionPreviewEditorSnapshot();
+    expect(snapshot).toMatchObject({
+      stepIndex: 0,
+      step: { type: STEP_TYPES.WORKFLOW, name: "Lane" },
+    });
+    expect((snapshot?.step as { workflow?: unknown }).workflow).toEqual({
+      prompt: "Edited lane",
+      model: "sonnet",
+      worktree: { mode: "managed" },
+    });
+  });
+
+  it("has no editor snapshot for an empty inline step", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    useEditorStore
+      .getState()
+      .setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
     expect(getExecutionPreviewEditorSnapshot()).toBeUndefined();
   });
 });

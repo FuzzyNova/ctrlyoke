@@ -3478,6 +3478,8 @@ export type CommitSubmissionChannel =
 
 /** Selector-only choice for the workflow value `worktree: false`. */
 export const WORKTREE_MODE_SELECTIONS = {
+  /** No `worktree` key: an inline sub-workflow child runs in its parent's checkout (D4a). */
+  INHERIT: "inherit",
   NONE: "none",
   MANAGED: "managed",
   NAMED: "named",
@@ -5548,11 +5550,30 @@ export const SUB_WORKFLOW_EDITOR_LABELS = {
   onFailTitle:
     "What to do when the child run fails or cannot start. A stopped child always stops the parent.",
   fileRequired: "Workflow file is required",
-  inlineReadOnly:
-    "This step defines its workflow inline. Inline definitions can't be edited in the step editor yet; edit the workflow file to change it.",
-  inlineMoveDisabled:
-    "Steps with an inline workflow definition can't be moved into the editor yet",
+  form: "Workflow",
+  formFile: "File",
+  formFileTitle: "Run a workflow file as the child run",
+  formInline: "Inline",
+  formInlineTitle:
+    "Define the child run here as one prompt or script step. It inherits this workflow's settings and vars, as an ordinary step would.",
+  inlineKind: "Inline step",
+  worktree: "Worktree",
+  worktreeTitle:
+    "Where the inline child runs. Parent's checkout runs it where this workflow runs; None runs it in the main checkout; Managed and Named give it its own worktree, branched from this workflow's checkout.",
 } as const;
+
+/**
+ * The step editor's Workflow-mode forms: a workflow file reference or an
+ * inline single-step definition (D13). Never stored; the form is read from
+ * the step's `workflow` shape.
+ */
+export const SUB_WORKFLOW_EDITOR_FORMS = {
+  FILE: "file",
+  INLINE: "inline",
+} as const;
+
+export type SubWorkflowEditorForm =
+  (typeof SUB_WORKFLOW_EDITOR_FORMS)[keyof typeof SUB_WORKFLOW_EDITOR_FORMS];
 
 /**
  * Dashboard entry points that queue a workflow file as one sub-workflow step

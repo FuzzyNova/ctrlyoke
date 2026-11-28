@@ -417,7 +417,9 @@ it is written relative to the workspace, like any other file in it.
 
 Choose **Workflow** in the step editor's **Prompt** / **Script** / **Workflow**
 switch to write a sub-workflow step, or click a workflow step in the steps
-panel to edit it. The editor shows:
+panel to edit it. A **File** / **Inline** switch above the fields picks the
+form: a workflow file, or an [inline definition](#inline-definitions). The
+File form shows:
 
 - **Workflow file**: the path the step runs. Type it (backslashes become
   forward slashes), or use **Browse…** to pick it: VS Code opens its file
@@ -433,16 +435,37 @@ panel to edit it. The editor shows:
 - The step colour, when step colours are on. The step's name and its enable
   toggle are in the editor header, as for every step.
 
-**Run**, **Queue** and **Update** save the step as
-`{ type: workflow, workflow: <path> }` plus the fields you set. A field you
-set back to its default is removed from the step. The editor does not check
-the file when you save; a file that is missing or does not parse fails the
-step when it starts, under its `onFail`.
+The Inline form shows:
 
-A step whose `workflow` is an [inline definition](#inline-definitions) opens
-read-only in the editor, with a note. Edit the workflow file to change it.
-**Move to Editor** is unavailable for such a step, and, as with a script
-draft, while the new-step editor holds an unsaved workflow file path.
+- A **Prompt** / **Script** switch for the step the definition holds, and the
+  editor for that step: the prompt editor, with its footer pickers and
+  properties drawer, or the script step's fields. They are the same editors as
+  for an ordinary step, and a field left at **Inherit** takes this workflow's
+  value when the child starts, as an ordinary step's would.
+- **Worktree**: where the child runs. **Parent's checkout** (the default)
+  leaves `worktree` out, so the child runs where this workflow runs; **None
+  (main checkout)**, **Managed** and **Named** write the same `worktree` the
+  workflow properties panel does, with the same fields, and a named worktree
+  needs a branch before the step can be saved. See
+  [Execution directory and worktrees](#execution-directory-and-worktrees).
+- **On Fail** and the step colour, as in the File form.
+
+**Run**, **Queue** and **Update** save the step as
+`{ type: workflow, workflow: <path> }`, or with the Inline form as
+`{ type: workflow, workflow: { …the step, worktree } }`, plus the fields you
+set. A field you set back to its default is removed from the step. The step's
+name, colour and enable toggle in the editor header belong to the workflow
+step, not to the step inside it. The editor does not check the file when you
+save; a file that is missing or does not parse fails the step when it starts,
+under its `onFail`. An inline step that refers to the parent run's sessions or
+earlier steps (see [Inline definitions](#inline-definitions)) fails the same
+way.
+
+Switching between **File** and **Inline** keeps what you entered in the other
+form until you leave the step, but only the form shown is saved: saving
+Inline replaces the file path, and saving File replaces the inline step.
+**Move to Editor** is unavailable, as with a script draft, while the new-step
+editor holds an unsaved workflow step.
 
 ## Outcomes, Stop, and Pause
 

@@ -170,3 +170,11 @@ export {
   DateRangeFilterControls,
   type DateRangeFilterControlsProps,
 } from "./DateRangeFilterControls";
+export { SchemaFormField, type SchemaFormFieldProps } from "./SchemaFormField";
+export {
+  WorktreeConfigEditor,
+  worktreeConfigForMode,
+  WORKTREE_CONFIG_CHANGES,
+  type WorktreeConfigChange,
+  type WorktreeConfigEditorProps,
+} from "./WorktreeConfigEditor";

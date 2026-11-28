@@ -21,7 +21,6 @@ import { useTerminalStore } from "@store/terminalStore";
 import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import {
   EDITOR_TARGET_KINDS,
-  SUB_WORKFLOW_EDITOR_LABELS,
   PROMPT_HISTORY_KINDS,
 } from "@root/types/DashboardConstants";
 import { NO_LIVE_HARNESS, STEER_PROMPT_ONLY } from "@utils/steerTargets";
@@ -776,18 +775,25 @@ describe("useStepContextMenu", () => {
       );
     });
 
-    it("disables Move to Editor for a step with an inline workflow definition", () => {
+    it("moves an inline workflow step into an editable Workflow-mode draft", () => {
       openMenuOnQueuedStep({
         type: STEP_TYPES.WORKFLOW,
-        workflow: { prompt: "Implement the lane" },
+        workflow: {
+          prompt: "Implement the lane",
+          worktree: { mode: "managed" },
+        },
       } as WorkflowStep);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Move to Editor" }));
 
-      const move = screen.getByRole("menuitem", { name: "Move to Editor" });
-      expect(move).toBeDisabled();
-      expect(move).toHaveAttribute(
-        "title",
-        SUB_WORKFLOW_EDITOR_LABELS.inlineMoveDisabled
-      );
+      expect(useEditorStore.getState()).toMatchObject({
+        stepType: STEP_TYPES.WORKFLOW,
+        promptText: "Implement the lane",
+        subWorkflowInline: {
+          kind: STEP_TYPES.PROMPT,
+          worktree: { mode: "managed" },
+        },
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      });
     });
 
     it("moves a file workflow step into a Workflow-mode draft", () => {

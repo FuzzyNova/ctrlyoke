@@ -5,7 +5,7 @@ import {
   getStepType,
   type EndCondition,
   type ErrorBehavior,
-  type InlineSubWorkflowDefinition,
+  type InlineSubWorkflowStepKind,
   type SubWorkflowStep,
   type UserHookConfig,
   type WorkflowStepType,
@@ -27,8 +27,10 @@ import {
   DEFAULT_COMPARE_SOURCE,
   DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
+  SUB_WORKFLOW_EDITOR_FORMS,
   SUB_WORKFLOW_EDITOR_LABELS,
   type ExecutionMode,
+  type SubWorkflowEditorForm,
   type HarnessId,
   type PriorContextDetail,
   type SandboxMode,
@@ -38,10 +40,18 @@ import type { PromptEditorInsertRequest } from "@root/types/WebviewMessageTypes"
 import { useUiStore } from "./uiStore";
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import {
+  getEditorContentKind,
   getEditorOnlyDraftKind,
   getStepDraftContent,
   isPromptEditorStepType,
 } from "@utils/stepDraftContent";
+import {
+  createInlineSubWorkflowShell,
+  splitInlineSubWorkflowDefinition,
+  type InlineSubWorkflowEditorShell,
+} from "@utils/subWorkflowStepProperties";
+import type { WorktreeConfig } from "@root/types/CtrlYokeTypes";
+import { namedWorktreeBranchError } from "@root/utils/WorktreeConfigShape";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
 import { useWorkflowStore } from "./workflowStore";
 import {
@@ -312,10 +322,17 @@ interface EditorState {
   subWorkflowPath: string;
   subWorkflowOnFail: string;
   /**
-   * The loaded step's inline definition (D13), shown read-only: the editor
-   * has no inline form yet, so a step holding one cannot be saved from here.
+   * The inline definition (D13) being edited, or null for the File form: the
+   * form is read from this, never stored separately. The wrapped step's own
+   * fields live in the prompt or script fields, so Inline reuses their
+   * editors.
    */
-  subWorkflowInline: InlineSubWorkflowDefinition | null;
+  subWorkflowInline: InlineSubWorkflowEditorShell | null;
+  /**
+   * The inline shell set aside while the File form is shown, so switching
+   * back to Inline restores its kind and worktree. Never saved.
+   */
+  subWorkflowSetAsideInline: InlineSubWorkflowEditorShell | null;
 
   // Property values
   properties: PropertyValues;
@@ -356,6 +373,7 @@ const NEW_STEP_DRAFT_FIELDS = [
   "subWorkflowPath",
   "subWorkflowOnFail",
   "subWorkflowInline",
+  "subWorkflowSetAsideInline",
 ] as const satisfies readonly (keyof EditorState)[];
 
 type NewStepDraftField = (typeof NEW_STEP_DRAFT_FIELDS)[number];
@@ -441,6 +459,26 @@ function rememberReplacedPromptDraft(
 ): void {
   if (draft?.stepType !== STEP_TYPES.PROMPT) return;
   usePromptHistoryStore.getState().rememberDraft(draft.promptText);
+}
+
+/** The prompt properties drawer belongs to prompt content alone. */
+function closeDrawerUnlessPromptContent(state: EditorState): void {
+  if (!isPromptEditorStepType(getEditorContentKind(state))) {
+    useUiStore.getState().closePromptPropertiesDrawer();
+  }
+}
+
+/**
+ * Why the inline child's worktree cannot be saved, or undefined: the same
+ * check the workflow-level worktree editor shows.
+ */
+export function getInlineWorktreeError(
+  state: Pick<EditorState, "stepType" | "subWorkflowInline">
+): string | undefined {
+  if (state.stepType !== STEP_TYPES.WORKFLOW) return undefined;
+  return state.subWorkflowInline
+    ? namedWorktreeBranchError(state.subWorkflowInline.worktree)
+    : undefined;
 }
 
 /** Drop the reply context once the draft no longer resumes that session. */
@@ -530,6 +568,17 @@ interface EditorActions {
   setScriptShell: (value: string | undefined) => void;
   setSubWorkflowPath: (value: string) => void;
   setSubWorkflowOnFail: (value: string) => void;
+  /**
+   * Switch Workflow mode between a file reference and an inline definition.
+   * The path, the prompt and script fields, and the outer step's name,
+   * colour, enabled state and onFail all carry over; leaving Inline sets its
+   * kind and worktree aside for a switch back.
+   */
+  setSubWorkflowForm: (form: SubWorkflowEditorForm) => void;
+  /** Switch the step an inline definition wraps; its worktree carries over. */
+  setSubWorkflowInlineKind: (kind: InlineSubWorkflowStepKind) => void;
+  /** Set the inline child's worktree; undefined runs it in the parent's checkout. */
+  setSubWorkflowWorktree: (worktree: WorktreeConfig | undefined) => void;
 
   // Content updates
   setPromptText: (text: string) => void;
@@ -624,7 +673,8 @@ type StepKindField =
   | "scriptShell"
   | "subWorkflowPath"
   | "subWorkflowOnFail"
-  | "subWorkflowInline";
+  | "subWorkflowInline"
+  | "subWorkflowSetAsideInline";
 
 /**
  * Put the editor in `kind` mode with every kind-specific field at its
@@ -650,6 +700,7 @@ function resetStepKindFields(
     subWorkflowPath: "",
     subWorkflowOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
     subWorkflowInline: null,
+    subWorkflowSetAsideInline: null,
   };
 }
 
@@ -732,20 +783,32 @@ function loadStepFields(step: WorkflowStep): LoadedStepFields {
     }
     case STEP_TYPES.WORKFLOW: {
       const subWorkflow = step as SubWorkflowStep;
-      const isFileReference = typeof subWorkflow.workflow === "string";
+      const subWorkflowOnFail =
+        subWorkflow.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+      if (typeof subWorkflow.workflow === "string") {
+        return {
+          ...resetStepKindFields(STEP_TYPES.WORKFLOW),
+          ...shared,
+          promptText: "",
+          subWorkflowPath: subWorkflow.workflow,
+          subWorkflowOnFail,
+          properties: { ...PROPERTY_DEFAULTS, color: subWorkflow.color },
+        };
+      }
+      // The wrapped step loads into the prompt or script fields exactly as
+      // it would on its own; the outer step keeps its name, colour, enabled
+      // state and onFail.
+      const { wrapped, shell } = splitInlineSubWorkflowDefinition(
+        subWorkflow.workflow
+      );
+      const inner = loadStepFields(wrapped);
       return {
-        ...resetStepKindFields(STEP_TYPES.WORKFLOW),
+        ...inner,
         ...shared,
-        promptText: "",
-        subWorkflowPath: isFileReference
-          ? (subWorkflow.workflow as string)
-          : "",
-        subWorkflowInline: isFileReference
-          ? null
-          : (subWorkflow.workflow as InlineSubWorkflowDefinition),
-        subWorkflowOnFail:
-          subWorkflow.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        properties: { ...PROPERTY_DEFAULTS, color: subWorkflow.color },
+        stepType: STEP_TYPES.WORKFLOW,
+        subWorkflowInline: shell,
+        subWorkflowOnFail,
+        properties: { ...inner.properties, color: subWorkflow.color },
       };
     }
     default:
@@ -1300,10 +1363,7 @@ export const useEditorStore = create<
     // Only the kind flips: every kind keeps its own fields, so switching away
     // and back round-trips the draft.
     set({ stepType: type, isDirty: true });
-    // The prompt properties drawer belongs to prompt mode alone.
-    if (!isPromptEditorStepType(type)) {
-      useUiStore.getState().closePromptPropertiesDrawer();
-    }
+    closeDrawerUnlessPromptContent(get());
   },
 
   setStepEnabled: (enabled) =>
@@ -1403,6 +1463,60 @@ export const useEditorStore = create<
     set({
       subWorkflowOnFail: value,
       isDirty: true,
+    }),
+
+  setSubWorkflowForm: (form) => {
+    const state = get();
+    switch (form) {
+      case SUB_WORKFLOW_EDITOR_FORMS.FILE:
+        if (state.subWorkflowInline === null) return;
+        set({
+          subWorkflowInline: null,
+          subWorkflowSetAsideInline: state.subWorkflowInline,
+          isDirty: true,
+          validationErrors: {},
+        });
+        break;
+      case SUB_WORKFLOW_EDITOR_FORMS.INLINE:
+        if (state.subWorkflowInline !== null) return;
+        set({
+          subWorkflowInline:
+            state.subWorkflowSetAsideInline ??
+            createInlineSubWorkflowShell(STEP_TYPES.PROMPT),
+          subWorkflowSetAsideInline: null,
+          isDirty: true,
+          validationErrors: {},
+        });
+        break;
+      default:
+        assertNever(form);
+    }
+    closeDrawerUnlessPromptContent(get());
+  },
+
+  setSubWorkflowInlineKind: (kind) => {
+    const shell = get().subWorkflowInline;
+    if (shell === null || shell.kind === kind) return;
+    // A prompt's explicit `type` belongs to the prompt it was written on.
+    const { type: _type, ...preserved } = shell.preserved;
+    set({
+      subWorkflowInline: { ...shell, kind, preserved },
+      isDirty: true,
+      validationErrors: {},
+    });
+    closeDrawerUnlessPromptContent(get());
+  },
+
+  setSubWorkflowWorktree: (worktree) =>
+    set((state) => {
+      if (state.subWorkflowInline === null) return {};
+      const { subWorkflowWorktree: _cleared, ...validationErrors } =
+        state.validationErrors;
+      return {
+        subWorkflowInline: { ...state.subWorkflowInline, worktree },
+        isDirty: true,
+        validationErrors,
+      };
     }),
 
   // ============================================================================
@@ -1628,7 +1742,7 @@ export const useEditorStore = create<
     // to promptText/pendingPromptEditorInserts regardless of whether the
     // editor is creating a new step or editing an existing one, so the
     // pending insert should land wherever the user is currently editing.
-    if (!isPromptEditorStepType(get().stepType)) {
+    if (!isPromptEditorStepType(getEditorContentKind(get()))) {
       get().setStepType(STEP_TYPES.PROMPT);
     }
 
@@ -1779,12 +1893,13 @@ export const useEditorStore = create<
 
   validateRequired: () => {
     const state = get();
-    const { stepType } = state;
+    // An inline workflow step is checked as the step it wraps.
+    const contentKind = getEditorContentKind(state);
     const errors: Record<string, string> = {};
 
     const content = getStepDraftContent(state);
     if (!content.trim()) {
-      switch (stepType) {
+      switch (contentKind) {
         case STEP_TYPES.PROMPT:
           errors.promptText = "Prompt text is required";
           break;
@@ -1792,15 +1907,14 @@ export const useEditorStore = create<
           errors.scriptCommand = "Script command is required";
           break;
         case STEP_TYPES.WORKFLOW:
-          errors.subWorkflowPath =
-            state.subWorkflowInline !== null
-              ? SUB_WORKFLOW_EDITOR_LABELS.inlineReadOnly
-              : SUB_WORKFLOW_EDITOR_LABELS.fileRequired;
+          errors.subWorkflowPath = SUB_WORKFLOW_EDITOR_LABELS.fileRequired;
           break;
         default:
-          assertNever(stepType);
+          assertNever(contentKind);
       }
     }
+    const worktreeError = getInlineWorktreeError(state);
+    if (worktreeError) errors.subWorkflowWorktree = worktreeError;
 
     set({ validationErrors: errors });
     return Object.keys(errors).length === 0;

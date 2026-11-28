@@ -58,6 +58,7 @@ export function useRunDispatchTargets(
   const promptText = useEditorStore((state) => state.promptText);
   const scriptCommand = useEditorStore((state) => state.scriptCommand);
   const subWorkflowPath = useEditorStore((state) => state.subWorkflowPath);
+  const subWorkflowInline = useEditorStore((state) => state.subWorkflowInline);
   const stepType = useEditorStore((state) => state.stepType);
   const executionState = useWorkflowStore((state) => state.executionState);
   const activeStepIndices = useWorkflowStore(
@@ -79,6 +80,7 @@ export function useRunDispatchTargets(
         promptText,
         scriptCommand,
         subWorkflowPath,
+        subWorkflowInline,
       }).trim().length > 0;
     const isExternallyManaged = loadedWorkflows.some(
       (workflow) => workflow.id === workflowId && workflow.externalOwner
@@ -166,6 +168,7 @@ export function useRunDispatchTargets(
     selectionTarget,
     steerTargets,
     stepType,
+    subWorkflowInline,
     subWorkflowPath,
     workflowId,
   ]);

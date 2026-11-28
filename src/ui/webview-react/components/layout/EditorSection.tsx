@@ -15,6 +15,7 @@ import { StepEditor, type PromptFileAction } from "../editor/StepEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { StepColorSwatch } from "./StepColorSwatch";
 import { PanelBar, IconToggleButton } from "../shared";
+import { ModeSwitch, type ModeSwitchOption } from "../shared/ModeSwitch";
 import { HARNESS_DISPLAY_NAMES } from "../shared/HarnessDropdown";
 import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
 import { PromptTokenCount } from "../shared/PromptTokenCount";
@@ -41,6 +42,7 @@ import { Icon } from "../shared/Icon";
 import { WorkflowVariableValue } from "../shared/WorkflowVariableValue";
 import { isPromptStep, type WorkflowStepType } from "@root/types/CtrlYokeTypes";
 import {
+  getEditorContentKind,
   isPromptEditorStepType,
   isScriptEditorStepType,
   isSubWorkflowEditorStepType,
@@ -62,28 +64,16 @@ const EDITOR_HEADER_NARROW_THRESHOLD = 600;
 const EDITOR_HEADER_COMPACT_THRESHOLD = 460;
 
 /** The step-type toggle's options, in display order. */
-const STEP_TYPE_OPTIONS: ReadonlyArray<{
-  type: WorkflowStepType;
-  icon: string;
-  label: string;
-  title: string;
-}> = [
-  {
-    type: STEP_TYPES.PROMPT,
-    icon: "comment",
-    ...STEP_EDITOR_MODE_LABELS[STEP_TYPES.PROMPT],
-  },
-  {
-    type: STEP_TYPES.SCRIPT,
-    icon: "terminal-powershell",
-    ...STEP_EDITOR_MODE_LABELS[STEP_TYPES.SCRIPT],
-  },
-  {
-    type: STEP_TYPES.WORKFLOW,
-    icon: getStepKindIconClass(STEP_TYPES.WORKFLOW),
-    ...STEP_EDITOR_MODE_LABELS[STEP_TYPES.WORKFLOW],
-  },
-];
+const STEP_TYPE_OPTIONS: ReadonlyArray<ModeSwitchOption<WorkflowStepType>> = [
+  STEP_TYPES.PROMPT,
+  STEP_TYPES.SCRIPT,
+  STEP_TYPES.WORKFLOW,
+].map((type) => ({
+  value: type,
+  icon: getStepKindIconClass(type),
+  ...STEP_EDITOR_MODE_LABELS[type],
+  ariaLabel: `${STEP_EDITOR_MODE_LABELS[type].label} step`,
+}));
 
 function resolveEditorHeaderTier(width: number): EditorHeaderTier {
   if (width < EDITOR_HEADER_COMPACT_THRESHOLD)
@@ -111,6 +101,7 @@ const EditorSectionInner: React.FC = () => {
     replyContext,
     cancelReplyToStep,
     stepType,
+    subWorkflowInline,
     stepEnabled,
     setStepType,
     setStepEnabled,
@@ -251,6 +242,10 @@ const EditorSectionInner: React.FC = () => {
   const isScriptMode = isScriptEditorStepType(stepType);
   const isSubWorkflowMode = isSubWorkflowEditorStepType(stepType);
   const isPromptMode = isPromptEditorStepType(stepType);
+  // An inline workflow step's prompt is edited, and estimated, as a prompt.
+  const isPromptContent = isPromptEditorStepType(
+    getEditorContentKind({ stepType, subWorkflowInline })
+  );
 
   // Below EDITOR_HEADER_COMPACT_THRESHOLD the name + token count no longer
   // fit on one line without the token count truncating away, so stack them.
@@ -260,7 +255,7 @@ const EditorSectionInner: React.FC = () => {
     !isEditingName &&
     !isBulkMode &&
     stepEnabled &&
-    isPromptMode;
+    isPromptContent;
 
   // Generate mode indicator text (includes name when set)
   const getModeText = () => {
@@ -333,39 +328,15 @@ const EditorSectionInner: React.FC = () => {
           )}
         </button>
 
-        <div
-          className="cy-mode-switch mx-2"
-          role="group"
-          aria-label="Step type"
-        >
-          {STEP_TYPE_OPTIONS.map((option, index) => {
-            const isActive = option.type === stepType;
-            return (
-              <React.Fragment key={option.type}>
-                {index > 0 && (
-                  <div className="cy-mode-switch-divider">
-                    <div className="w-px h-full bg-current opacity-40" />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  disabled={isExternallyManaged}
-                  className={`cy-mode-switch-btn ${isActive ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
-                  onClick={() => setStepType(option.type)}
-                  title={option.title}
-                  aria-label={`${option.label} step`}
-                  aria-pressed={isActive}
-                >
-                  <Icon
-                    name={option.icon}
-                    className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
-                  />
-                  {!isNarrow && <span>{option.label}</span>}
-                </button>
-              </React.Fragment>
-            );
-          })}
-        </div>
+        <ModeSwitch
+          className="mx-2"
+          ariaLabel="Step type"
+          options={STEP_TYPE_OPTIONS}
+          value={stepType}
+          onChange={setStepType}
+          disabled={isExternallyManaged}
+          compact={isNarrow}
+        />
 
         {/* Center: Enable toggle + Mode text (clickable to edit name) + token count */}
         <div className="flex items-center justify-center flex-1 gap-1 min-w-0">
@@ -466,7 +437,7 @@ const EditorSectionInner: React.FC = () => {
                   {" — "}
                   <span className="italic text-warning-fg">disabled</span>
                 </>
-              ) : isPromptMode ? (
+              ) : isPromptContent ? (
                 <>
                   {!showStackedTokens && " — "}
                   <PromptTokenCount

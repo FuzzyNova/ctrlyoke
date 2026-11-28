@@ -1131,6 +1131,10 @@ export type InlineSubWorkflowDefinition = (PromptStep | ScriptStep) & {
   worktree?: WorktreeConfig;
 };
 
+/** The step kinds an inline sub-workflow definition can wrap (D13). */
+export type InlineSubWorkflowStepKind =
+  typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
+
 /** Runtime link to the child run launched by a sub-workflow step. */
 export interface SubWorkflowRuntimeMetadata extends StepLifecycleRuntime {
   childWorkflowKey?: WorkflowKey;

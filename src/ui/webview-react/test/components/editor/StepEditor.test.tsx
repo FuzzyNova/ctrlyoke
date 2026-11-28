@@ -1813,30 +1813,97 @@ describe("StepEditor — Workflow (sub-workflow step) mode", () => {
     });
   });
 
-  it("shows an inline workflow step read-only and never saves it", async () => {
+  it("edits an inline script workflow step and saves it as one object", async () => {
     useEditorStore.getState().selectPrompt(
       { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
       {
         type: STEP_TYPES.WORKFLOW,
+        name: "Checks",
         workflow: {
-          prompt: "Implement the lane",
+          type: STEP_TYPES.SCRIPT,
+          script: "npm test",
           worktree: { mode: "managed" },
         },
       }
     );
     render(<StepEditor />);
 
-    expect(screen.getByRole("note")).toHaveTextContent(
-      SUB_WORKFLOW_EDITOR_LABELS.inlineReadOnly
-    );
-    expect(screen.getByText("Implement the lane")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: SUB_WORKFLOW_EDITOR_LABELS.formInline,
+      })
+    ).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.queryByRole("textbox", { name: /Workflow file/ })
     ).not.toBeInTheDocument();
+    // The wrapped script is edited in the script step's own editor.
+    expect(document.getElementById("script-step-timeout")).not.toBeNull();
+    act(() => useEditorStore.getState().setScriptTimeoutSec(30));
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Update" }));
+
+    expect(findMessage(MESSAGE_TYPES.UPDATE_PROMPT)).toMatchObject({
+      index: 0,
+      text: "npm test",
+      promptName: "Checks",
+      properties: {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: {
+          type: STEP_TYPES.SCRIPT,
+          script: "npm test",
+          timeoutSec: 30,
+          worktree: { mode: "managed" },
+        },
+      },
+    });
+  });
+
+  it("refuses to save an inline step whose named worktree has no branch", () => {
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "Implement the lane" },
+      }
+    );
+    act(() =>
+      useEditorStore
+        .getState()
+        .setSubWorkflowWorktree({ mode: "named", branch: "" })
+    );
+    render(<StepEditor />);
+
+    expect(
+      screen.getByText("Branch is required for named worktree mode.")
+    ).toBeInTheDocument();
     const update = screen.getByRole("button", { name: "Update" });
     expect(update).toBeDisabled();
     fireEvent.click(update);
     expect(findMessage(MESSAGE_TYPES.UPDATE_PROMPT)).toBeUndefined();
+  });
+
+  it("queues a new inline prompt workflow step", async () => {
+    act(() => {
+      const store = useEditorStore.getState();
+      store.setStepType(STEP_TYPES.WORKFLOW);
+      store.setSubWorkflowForm("inline");
+      store.setPromptText("Implement the lane");
+    });
+    render(<StepEditor />);
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: /^Queue/ }));
+
+    expect(findMessage(MESSAGE_TYPES.EXECUTE_PROMPT)).toMatchObject({
+      text: "Implement the lane",
+      properties: {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "Implement the lane" },
+      },
+    });
   });
 
   it("asks the extension for the native picker from Browse in the panel", async () => {

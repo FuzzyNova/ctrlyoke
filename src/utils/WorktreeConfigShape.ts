@@ -72,6 +72,25 @@ export function effectiveWorktreeObjectConfig(
   return effective === false ? false : { ...effective };
 }
 
+/** Shown, and refused on save, for a named worktree without a branch. */
+export const NAMED_WORKTREE_BRANCH_REQUIRED =
+  "Branch is required for named worktree mode.";
+
+/**
+ * Why a worktree config cannot be saved as it stands, or undefined: a named
+ * worktree needs a branch. The worktree editor's one blocking check.
+ */
+export function namedWorktreeBranchError(
+  value: WorktreeConfig | undefined
+): string | undefined {
+  const config = toWorktreeObjectConfig(value);
+  return config !== false &&
+    config.mode === WORKTREE_MODES.NAMED &&
+    !config.branch?.trim()
+    ? NAMED_WORKTREE_BRANCH_REQUIRED
+    : undefined;
+}
+
 /**
  * Set one field of an object worktree config. An empty `directory` removes
  * the key, because a stored `directory: ""` is invalid and "empty" means

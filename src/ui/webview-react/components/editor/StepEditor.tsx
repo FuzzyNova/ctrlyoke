@@ -36,6 +36,7 @@ import { EditorFooter } from "./EditorFooter";
 import { ConfirmDeleteOperationModal } from "../shared/ConfirmDeleteOperationModal";
 import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
 import {
+  getEditorContentKind,
   getStepDraftContent,
   isPromptEditorStepType,
   isScriptEditorStepType,
@@ -95,8 +96,15 @@ import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 
 import { buildPropertyUpdateValues } from "@utils/promptPropertyValues";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
-import { getSubWorkflowStepPropertyUpdate } from "@utils/subWorkflowStepProperties";
-import { SubWorkflowStepFields } from "./SubWorkflowStepFields";
+import {
+  getSubWorkflowEditorWorkflow,
+  getSubWorkflowStepUpdateFromEditor,
+} from "@utils/subWorkflowStepProperties";
+import { getInlineWorktreeError } from "@store/editorStore";
+import {
+  SubWorkflowFormBar,
+  SubWorkflowStepFields,
+} from "./SubWorkflowStepFields";
 import { Icon } from "../shared/Icon";
 
 interface StepEditorProps {
@@ -217,7 +225,6 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     scriptExecutionMode,
     scriptShell,
     subWorkflowPath,
-    subWorkflowOnFail,
     subWorkflowInline,
     originalPromptData,
     setScriptCommand,
@@ -347,9 +354,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       : isFinalStep
         ? finalStep?._runtime?.stepId
         : undefined;
-  const isScriptMode = isScriptEditorStepType(stepType);
+  // An inline workflow step (D13) is edited in the prompt or script editor of
+  // the step it wraps, so those modes follow the content kind; every save and
+  // dispatch path checks Workflow mode first.
+  const contentKind = getEditorContentKind({ stepType, subWorkflowInline });
   const isSubWorkflowMode = isSubWorkflowEditorStepType(stepType);
-  const isPromptMode = isPromptEditorStepType(stepType);
+  const isScriptMode = isScriptEditorStepType(contentKind);
+  const isPromptMode = isPromptEditorStepType(contentKind);
+  const inlineWorktreeError = getInlineWorktreeError({
+    stepType,
+    subWorkflowInline,
+  });
   const inheritedScriptSecrets =
     workflowProperties.secrets !== undefined
       ? (workflowProperties.secrets ?? [])
@@ -981,18 +996,14 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     ]
   );
 
-  // The file-reference sub-workflow step's property payload, shared by every
-  // dispatch destination for the same reason as the script one above. Its
-  // `workflow` path travels as the message's `text`.
+  // The sub-workflow step's property payload, shared by every dispatch
+  // destination and the preview for the same reason as the script one
+  // above. A path travels as the message's `text`; an inline definition as
+  // `properties.workflow`. Read at call time from the store, which holds
+  // every field it is built from.
   const buildSubWorkflowUpdate = useCallback(
-    () =>
-      getSubWorkflowStepPropertyUpdate({
-        onFail: subWorkflowOnFail,
-        color: properties.color,
-        enabled: stepEnabled,
-        promptName,
-      }),
-    [promptName, properties.color, stepEnabled, subWorkflowOnFail]
+    () => getSubWorkflowStepUpdateFromEditor(useEditorStore.getState()),
+    []
   );
 
   // Compute the final action based on execution state (shared by every step kind)
@@ -1013,6 +1024,22 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     (action: string) => {
       const finalAction = resolveFinalAction(action);
 
+      if (isSubWorkflowMode) {
+        const update = buildSubWorkflowUpdate();
+        if (!update.text || inlineWorktreeError) return;
+
+        lastSubmittedTextRef.current = update.text;
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.EXECUTE_PROMPT,
+          text: update.text,
+          properties: update.properties,
+          action: finalAction,
+          promptName: promptName.trim(),
+        });
+        clearEditorAfterDispatch();
+        return;
+      }
+
       if (isScriptMode) {
         const command = scriptCommand.trim();
         if (!command) return;
@@ -1022,22 +1049,6 @@ export const StepEditor: React.FC<StepEditorProps> = ({
           type: MESSAGE_TYPES.EXECUTE_PROMPT,
           text: command,
           properties: buildScriptProperties(),
-          action: finalAction,
-          promptName: promptName.trim(),
-        });
-        clearEditorAfterDispatch();
-        return;
-      }
-
-      if (isSubWorkflowMode) {
-        const workflowPath = subWorkflowPath.trim();
-        if (!workflowPath || subWorkflowInline !== null) return;
-
-        lastSubmittedTextRef.current = workflowPath;
-        postWorkflowDefinitionMutation(vscode, {
-          type: MESSAGE_TYPES.EXECUTE_PROMPT,
-          text: workflowPath,
-          properties: buildSubWorkflowUpdate().properties,
           action: finalAction,
           promptName: promptName.trim(),
         });
@@ -1066,9 +1077,8 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     [
       isScriptMode,
       isSubWorkflowMode,
+      inlineWorktreeError,
       scriptCommand,
-      subWorkflowPath,
-      subWorkflowInline,
       buildScriptProperties,
       buildSubWorkflowUpdate,
       promptText,
@@ -1102,16 +1112,17 @@ export const StepEditor: React.FC<StepEditorProps> = ({
 
     let text: string;
     let propertyValues: Record<string, unknown>;
-    if (isScriptMode) {
+    if (isSubWorkflowMode) {
+      const update = buildSubWorkflowUpdate();
+      text = update.text;
+      if (!text || inlineWorktreeError) return;
+
+      propertyValues = update.properties;
+    } else if (isScriptMode) {
       text = scriptCommand.trim();
       if (!text) return;
 
       propertyValues = buildScriptProperties();
-    } else if (isSubWorkflowMode) {
-      text = subWorkflowPath.trim();
-      if (!text || subWorkflowInline !== null) return;
-
-      propertyValues = buildSubWorkflowUpdate().properties;
     } else {
       text = promptText.trim();
       if (!text) return;
@@ -1132,17 +1143,18 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       properties: propertyValues,
       promptName: promptName.trim(),
     });
-    clearEditorAfterDispatch(isPromptMode ? text : undefined);
+    clearEditorAfterDispatch(
+      isPromptMode && !isSubWorkflowMode ? text : undefined
+    );
   }, [
     buildScriptProperties,
     buildSubWorkflowUpdate,
     fileName,
     getPropertyValues,
+    inlineWorktreeError,
     isPromptMode,
     isScriptMode,
     isSubWorkflowMode,
-    subWorkflowInline,
-    subWorkflowPath,
     promptName,
     promptText,
     scriptCommand,
@@ -1200,52 +1212,62 @@ export const StepEditor: React.FC<StepEditorProps> = ({
       }
     };
 
-    // Script and file sub-workflow steps carry their content (a command or a
-    // workflow path) as the message's `text` and under one step key.
-    const nonPromptUpdate = isScriptMode
-      ? {
-          contentKey: PROMPT_PROPERTIES.SCRIPT,
-          content: scriptCommand.trim(),
-          ...getScriptStepPropertyUpdate({
-            env: scriptEnv,
-            secrets: properties.secrets,
-            errorBehavior: properties.errorBehavior,
-            timeoutSec: scriptTimeoutSec,
-            onPass: scriptOnPass,
-            onFail: scriptOnFail,
-            compareSource: scriptCompareSource,
-            operator: scriptOperator,
-            expected: scriptExpected,
-            ignoreCase: scriptIgnoreCase,
-            executionMode: scriptExecutionMode,
-            shell: scriptShell,
-            color: properties.color,
-            enabled: stepEnabled,
-            promptName,
-          }),
-        }
-      : isSubWorkflowMode
-        ? {
+    // Script and sub-workflow steps carry their content under one step key:
+    // a command, or a workflow path or inline definition. `text` is what the
+    // message sends as its text.
+    const nonPromptUpdate = isSubWorkflowMode
+      ? (() => {
+          const update = buildSubWorkflowUpdate();
+          return {
+            ...update,
             contentKey: PROMPT_PROPERTIES.WORKFLOW_REF,
-            // An inline definition has no editor form yet, so it is not saved.
-            content: subWorkflowInline === null ? subWorkflowPath.trim() : "",
-            ...buildSubWorkflowUpdate(),
+            // A worktree the editor refuses is not saved.
+            text: inlineWorktreeError ? "" : update.text,
+            content: getSubWorkflowEditorWorkflow(useEditorStore.getState()),
+          };
+        })()
+      : isScriptMode
+        ? {
+            contentKey: PROMPT_PROPERTIES.SCRIPT,
+            text: scriptCommand.trim(),
+            content: scriptCommand.trim(),
+            ...getScriptStepPropertyUpdate({
+              env: scriptEnv,
+              secrets: properties.secrets,
+              errorBehavior: properties.errorBehavior,
+              timeoutSec: scriptTimeoutSec,
+              onPass: scriptOnPass,
+              onFail: scriptOnFail,
+              compareSource: scriptCompareSource,
+              operator: scriptOperator,
+              expected: scriptExpected,
+              ignoreCase: scriptIgnoreCase,
+              executionMode: scriptExecutionMode,
+              shell: scriptShell,
+              color: properties.color,
+              enabled: stepEnabled,
+              promptName,
+            }),
           }
         : null;
 
     if (nonPromptUpdate) {
       const {
         contentKey,
-        content,
+        text: content,
         properties: kindProperties,
         clearProperties,
       } = nonPromptUpdate;
       if (!content) return;
+      const stepContent =
+        typeof nonPromptUpdate.content === "string"
+          ? nonPromptUpdate.content.trim()
+          : nonPromptUpdate.content;
 
       const named = promptName.trim() ? { name: promptName.trim() } : {};
       const submittedStep = {
         ...kindProperties,
-        [contentKey]: content,
+        [contentKey]: stepContent,
         ...named,
       } as WorkflowStep;
 
@@ -1264,7 +1286,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
           finalStep: {
             ...kindProperties,
-            [contentKey]: content,
+            [contentKey]: stepContent,
             ...named,
             ...(!stepEnabled && { enabled: false }),
           },
@@ -1326,8 +1348,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({
     canBulkUpdate,
     isScriptMode,
     isSubWorkflowMode,
-    subWorkflowPath,
-    subWorkflowInline,
+    inlineWorktreeError,
     buildSubWorkflowUpdate,
     scriptCommand,
     scriptTimeoutSec,
@@ -1434,10 +1455,15 @@ export const StepEditor: React.FC<StepEditorProps> = ({
 
   const convertShellEscapeToScript = useCallback(
     (command: string) => {
-      setStepType(STEP_TYPES.SCRIPT);
+      // In an inline workflow step the wrapped step becomes the script.
+      if (isSubWorkflowMode) {
+        useEditorStore.getState().setSubWorkflowInlineKind(STEP_TYPES.SCRIPT);
+      } else {
+        setStepType(STEP_TYPES.SCRIPT);
+      }
       setScriptCommand(command);
     },
-    [setScriptCommand, setStepType]
+    [isSubWorkflowMode, setScriptCommand, setStepType]
   );
 
   // Sync ScriptConditionEditor value to individual script store fields
@@ -1518,6 +1544,11 @@ export const StepEditor: React.FC<StepEditorProps> = ({
         }))}
         className="border-b border-(--vscode-widget-border,var(--vscode-panel-border)) px-2 py-1"
       />
+      {/* Workflow mode's File / Inline switch, above the wrapped step's editor */}
+      {isSubWorkflowMode && !isBulkMode && (
+        <SubWorkflowFormBar disabled={isExternallyManaged} />
+      )}
+
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {isPromptMode && (
         // overflow-clip (not overflow-hidden): PromptPropertiesDrawer's closed-state
@@ -1610,9 +1641,9 @@ export const StepEditor: React.FC<StepEditorProps> = ({
             />
           )}
           <div className="mt-4 space-y-4 rounded-sm border border-panel-border p-3">
-            {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
-              <StepColorField idPrefix="script-step" />
-            )}
+            {/* An inline step's colour is the workflow step's, set below. */}
+            {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE &&
+              !isSubWorkflowMode && <StepColorField idPrefix="script-step" />}
             <SecretGrantsEditor
               value={properties.secrets}
               inheritedValue={inheritedScriptSecrets}
@@ -1663,7 +1694,13 @@ export const StepEditor: React.FC<StepEditorProps> = ({
 
       {/* Sub-workflow step fields (Workflow mode only) */}
       {isSubWorkflowMode && (
-        <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
+        <div
+          className={
+            subWorkflowInline === null
+              ? "flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg"
+              : "flex flex-col shrink-0 max-h-[45%] overflow-auto border-t border-panel-border px-3 py-3 bg-editor-bg"
+          }
+        >
           {!isBulkMode && (
             <SubWorkflowStepFields disabled={isExternallyManaged} />
           )}
@@ -1736,7 +1773,8 @@ export const StepEditor: React.FC<StepEditorProps> = ({
             promptText,
             scriptCommand,
             subWorkflowPath,
-          }).trim().length > 0
+            subWorkflowInline,
+          }).trim().length > 0 && inlineWorktreeError === undefined
         }
         hasPendingPrompts={hasPendingPrompts()}
         runButtonText={getRunButtonText()}

@@ -23,7 +23,10 @@ import {
 } from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
 import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
-import { getSubWorkflowStepPropertyUpdate } from "@utils/subWorkflowStepProperties";
+import {
+  getSubWorkflowEditorWorkflow,
+  getSubWorkflowStepUpdateFromEditor,
+} from "@utils/subWorkflowStepProperties";
 
 /**
  * Overlay a script or sub-workflow step's property update on its saved step,
@@ -125,21 +128,15 @@ export function getExecutionPreviewEditorSnapshot():
     case STEP_TYPES.PROMPT:
       break;
     case STEP_TYPES.WORKFLOW: {
-      // Only a file reference reaches here: an inline definition has no
-      // editor content, so `hasContent()` above returned for it.
+      // A file reference or an inline definition, built as a save builds it.
       const base: SubWorkflowStep =
         existingStep && isSubWorkflowStep(existingStep)
           ? existingStep
           : { type: STEP_TYPES.WORKFLOW, workflow: "" };
       const step = overlayStepUpdate(
         base,
-        getSubWorkflowStepPropertyUpdate({
-          onFail: editor.subWorkflowOnFail,
-          color: editor.properties.color,
-          enabled: editor.stepEnabled,
-          promptName: editor.promptName,
-        }),
-        { workflow: editor.subWorkflowPath },
+        getSubWorkflowStepUpdateFromEditor(editor),
+        { workflow: getSubWorkflowEditorWorkflow(editor) },
         editor.promptName
       );
       return {

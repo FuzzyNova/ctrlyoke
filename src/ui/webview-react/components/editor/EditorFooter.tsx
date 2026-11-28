@@ -15,7 +15,10 @@ import { BULK_EDIT_DISABLED_REASONS } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { SplitButton } from "../shared/SplitButton";
-import { isPromptEditorStepType } from "@utils/stepDraftContent";
+import {
+  getEditorContentKind,
+  isPromptEditorStepType,
+} from "@utils/stepDraftContent";
 import type {
   RunDispatchTarget,
   SteerDispatchTarget,
@@ -127,8 +130,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
     [footerRef, footerRefSmall]
   );
   const stepType = useEditorStore((s) => s.stepType);
-  // Properties, quick pickers and the drawer tab bar are prompt-only.
-  const isPromptMode = isPromptEditorStepType(stepType);
+  const subWorkflowInline = useEditorStore((s) => s.subWorkflowInline);
+  // Properties, quick pickers and the drawer tab bar are prompt-only; an
+  // inline workflow step's wrapped prompt counts as one.
+  const isPromptMode = isPromptEditorStepType(
+    getEditorContentKind({ stepType, subWorkflowInline })
+  );
   // Model, agent, skills and permissions all draw their options from the
   // effective harness, so they share one gate.
   const harnessScopedPickerDisabled =
