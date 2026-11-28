@@ -2,10 +2,9 @@
 
 ## Status (2026-11-27)
 
-**Nearly complete. Every section is implemented (rounds 1–17; see [Progress](#progress)); the
-gaps found by the audit after round 16 were closed in round 17 and its review. One small CLI
-polish item is queued as round 18. Every open question is settled (see
-[Revision 5](#revision-5-decisions)), apart from the two questions for Nathan under Decisions.**
+**Complete. Every section is implemented and reviewed (rounds 1–18; see [Progress](#progress)).
+The whole-spec audit after round 16 found the last gaps, which rounds 17–18 closed. Two
+non-blocking questions for Nathan remain under Decisions; neither gates any requirement here.**
 
 Shipped:
 
@@ -2984,7 +2983,7 @@ keep: true }`; `managedWorktreeConfig.base` has `minLength: 1`, so the file no l
     previews with `previewDisabledChildNote` (the launch runs it and it does nothing), and the
     split parent's-checkout preview test.
   - `579257d84`: real-git merge conflict test (parent COMPLETED, `worktree.mergeOutcome:
-    "conflict"`, branch kept), a CLI two-lane group test, and the explorer command's handler
+"conflict"`, branch kept), a CLI two-lane group test, and the explorer command's handler
     moved to `src/platform/QueueAsSubWorkflowCommand.ts` with tests. Run Workflow Alongside was
     already covered (`WorkflowOrchestrator.test.ts`, `DashboardMessageRouter.test.ts`).
   - Review fix `d09a8ad70`: a launched child whose run threw (its `done` rejected) settled with
@@ -2993,16 +2992,24 @@ keep: true }`; `managedWorktreeConfig.base` has `minLength: 1`, so the file no l
     reattached the old file child; it now launches fresh, and an inline launch clears the
     recorded path. `WorkflowOrchestrator implements SubWorkflowQueueTarget`.
 
+- **Round 18** (reviewed 2026-11-27; `npm test` green; one `claude-cli`/`sonnet` step gated by
+  `committed`):
+  - `eb3dab7c7`: the CLI unused-`--var` warning also reads every `type: workflow` file child
+    reachable from the root (queue, `parallel` members, `finalStep`, recursively, visited set),
+    resolved through `resolveSubWorkflowReference` relative to the naming file; an unusable child
+    is skipped. Inline children were already covered by the parent walk. CHANGELOG clause added.
+    End-to-end D6 test: stop, edit the step's `workflow` through `updateStepAtRun` (keeps
+    `_runtime`), Continue launches the second file as a new child and leaves the first stopped.
+    Reviewed; no fixes needed.
+
+**Spec complete (2026-11-27).** Moved to `dev/implemented/`.
+
 ### Next
 
-Coarse roadmap; re-planned every pass.
-
-- **Round 18 (queued 2026-11-27): last polish.** One `sonnet` step on `claude-cli`, gated by
-  `committed`: the CLI "`--var` is unused" warning counts placeholders in every file child the run
-  can reach (and inline children), so a var only a child uses no longer warns; plus an
-  end-to-end D6 test (real stop, edit `workflow`, Continue launches the new file).
-- **Round 19:** review round 18; if nothing is left, mark the spec complete and `git mv` it to
-  `dev/implemented/`.
+Nothing. The roadmap is empty and the spec is complete; the two questions for Nathan under
+Decisions (re-running an interrupted step on a direct child continue, and a catalog editor for
+`conditions`/`worktreePresets`) and the optional template allow-empty flag would each be a
+separate follow-up change.
 
 ### Decisions
 

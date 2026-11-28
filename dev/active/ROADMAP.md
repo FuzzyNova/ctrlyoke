@@ -220,7 +220,7 @@ than reimplementing them. Compatibility **phase 2** is descoped to this list.
 MCP lifecycle control was previously listed first here; it is now rejected (see
 "Rejected and Removed Scope"). External automation is served by
 `ctrlyoke run --headless --json`, and sub-workflow composition by
-[`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md).
+[`WORKFLOW_STEP_PLAN.md`](../implemented/WORKFLOW_STEP_PLAN.md).
 
 **Secrets and redaction was previously listed first here.** It is now a P0
 one-way door (see above) on irreversibility grounds. One useful side effect: the
@@ -332,7 +332,7 @@ Do not schedule these until users demonstrate the pain:
 | [Script-field completions](../implemented/SCRIPT_FIELD_COMPLETIONS_PLAN.md)           | **Shipped** 2026-08-17 (script and branch-name completions).                                                                                            |
 | [Quick-picker scope improvements](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)       | Low-risk polish; validate demand for workflow-scope edits first.                                                                                        |
 | [Harness session import](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                   | Powerful but parser-heavy and dependent on unstable native logs.                                                                                        |
-| [Workflow-step composition](../backlog/WORKFLOW_STEP_PLAN.md)                         | Driven by parallel worktree fan-out; additive (new step type), no pre-release pressure.                                                                 |
+| [Workflow-step composition](../implemented/WORKFLOW_STEP_PLAN.md)                     | **Shipped** 2026-11-27 (`type: workflow` steps, parallel lanes, agent-queued lanes).                                                                    |
 | [Cline integration](../backlog/CLINE_INTEGRATION_PLAN.md)                             | Add another harness only when user demand justifies its maintenance matrix.                                                                             |
 | [VS Code LM API features](../backlog/VSCODE_LM_API_FEATURES.md)                       | Keep ctrlyoke harness-neutral; revisit focused uses such as prompt improvement.                                                                         |
 | [E2E automation via MCP](../rejected/VSCODE_TESTING_E2E_MCP.md)                       | Obsolete: superseded by the hosted dashboard + Playwright MCP and the `dev:host:*` scripts.                                                             |
@@ -567,7 +567,7 @@ criteria matter more than speculative dates.
 | [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](../implemented/SCRIPT_FIELD_COMPLETIONS_PLAN.md)                             | P3 — shipped                                                        |
 | [`QUICK_PICKER_IMPROVEMENTS_PLAN.md`](../backlog/QUICK_PICKER_IMPROVEMENTS_PLAN.md)                               | P3                                                                  |
 | [`HARNESS_SESSION_IMPORT_PLAN.md`](../backlog/HARNESS_SESSION_IMPORT_PLAN.md)                                     | P3                                                                  |
-| [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md)                                                       | P3                                                                  |
+| [`WORKFLOW_STEP_PLAN.md`](../implemented/WORKFLOW_STEP_PLAN.md)                                                   | P3 — shipped                                                        |
 | [`CLINE_INTEGRATION_PLAN.md`](../backlog/CLINE_INTEGRATION_PLAN.md)                                               | P3                                                                  |
 | [`VSCODE_LM_API_FEATURES.md`](../backlog/VSCODE_LM_API_FEATURES.md)                                               | P3                                                                  |
 | [`VSCODE_TESTING_E2E_MCP.md`](../rejected/VSCODE_TESTING_E2E_MCP.md)                                              | Rejected (obsolete)                                                 |

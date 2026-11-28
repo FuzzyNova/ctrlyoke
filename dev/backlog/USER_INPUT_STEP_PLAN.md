@@ -3,8 +3,8 @@
 **Status:** Not started.
 
 Last reviewed against code: 2026-10-26. No `userInput` step kind exists; every cited symbol still
-exists. Depends on `WORKFLOW_STEP_PLAN.md`'s Phase 0 (`getStepType`/`isPromptStep`, not done
-yet), which whichever of the two step kinds lands first must do. Adding the step is an additive
+exists. Depends on `WORKFLOW_STEP_PLAN.md`'s Phase 0 (`getStepType`/`isPromptStep`), which
+landed with that plan's round 1. Adding the step is an additive
 schema arm (no `schema:bump`). Open question 5 overlaps
 `AWAITING_INPUT_NOTIFICATION_PLAN.md`; share its "waiting for input" notification event rather
 than inventing a second one.
@@ -203,7 +203,7 @@ userInputStep:
 `workflowStep` (`#/$defs/workflowStep`) is an `allOf` whose first member is a `oneOf` of
 `promptStep`/`scriptStep` (the other members forbid root-only keys such as `worktree`). Add
 `userInputStep` to that inner `oneOf`, matching the pattern in
-`dev/backlog/WORKFLOW_STEP_PLAN.md` (whose new definition is `subWorkflowStep`). Run
+`dev/implemented/WORKFLOW_STEP_PLAN.md` (whose new definition is `subWorkflowStep`). Run
 `npm run schema:update` afterwards to regenerate the `.yaml`, `SchemaDescriptions.ts`, and
 reference docs.
 

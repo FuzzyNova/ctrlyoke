@@ -1210,7 +1210,7 @@ later version at no compatibility cost.
     persisted run state and dashboard, CLI, MCP, logs, and notifications. Dry-run output includes
     the effective global guardrails.
 - [x] **Script verdict in `$previous`/`$step` output** —
-      [`WORKFLOW_STEP_PLAN.md`](../backlog/WORKFLOW_STEP_PLAN.md) D12a.
+      [`WORKFLOW_STEP_PLAN.md`](../implemented/WORKFLOW_STEP_PLAN.md) D12a.
   - **Done 2026-10-13.** `PriorContextItem.scriptVerdict` is resolved from the script step's own
     completed output (queue steps and script `finalStep` passes) and rendered by
     `buildPriorContextXmlFromItems` as a trailing `<verdict/>` element (outcome, compare source,
