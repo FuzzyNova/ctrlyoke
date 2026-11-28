@@ -121,6 +121,106 @@ suite("StepReferenceShifts", () => {
     );
   });
 
+  test("never scans the inside of an inline workflow step definition", () => {
+    // References inside an inline definition could only address the child
+    // run (D13), so a parent topology change never shifts them.
+    const inlinePrompt = {
+      type: "workflow",
+      name: "inline prompt",
+      workflow: {
+        prompt: "child $step:2 and $step:summary:3",
+        sessionId: 2,
+        priorContext: [3],
+        endCondition: { script: "true", retryPrompt: "retry $step:2" },
+      },
+    };
+    const inlineScript = {
+      type: "workflow",
+      name: "inline script",
+      workflow: { type: "script", script: "echo $step:2" },
+    };
+    const oldSteps = ensureStepIds([
+      { prompt: "first" },
+      { prompt: "second" },
+      { prompt: "third" },
+      inlinePrompt,
+      inlineScript,
+    ] as WorkflowStep[]);
+    const finalStep = {
+      type: "workflow",
+      workflow: { prompt: "final child $step:2" },
+    } as WorkflowStep;
+
+    const inserted = ensureStepIds(
+      [oldSteps[0], { prompt: "new" }, ...oldSteps.slice(1)] as WorkflowStep[],
+      oldSteps
+    );
+    const removed = oldSteps.filter((_, index) => index !== 1);
+    const moved = [
+      oldSteps[0],
+      oldSteps[2],
+      oldSteps[1],
+      oldSteps[3],
+      oldSteps[4],
+    ];
+
+    for (const newSteps of [inserted, removed, moved]) {
+      assert.deepStrictEqual(
+        findShiftedStepReferences(oldSteps, newSteps, { finalStep }),
+        []
+      );
+    }
+    // The inline definition itself is left exactly as authored.
+    assert.strictEqual(
+      (oldSteps[3] as { workflow: { prompt: string } }).workflow.prompt,
+      "child $step:2 and $step:summary:3"
+    );
+  });
+
+  test("reports a parent reference to a workflow step's position like any step's", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "first" },
+      { type: "workflow", name: "lane", workflow: "lanes/a.ctrlyoke.yaml" },
+      {
+        type: "workflow",
+        workflow: { prompt: "inline lane", worktree: { mode: "managed" } },
+      },
+      { prompt: "merge $step:summary:2-3", name: "merge" },
+      { prompt: "uses $previous", priorContext: [3] },
+    ] as WorkflowStep[]);
+
+    const inserted = ensureStepIds(
+      [oldSteps[0], { prompt: "new" }, ...oldSteps.slice(1)] as WorkflowStep[],
+      oldSteps
+    );
+    assert.deepStrictEqual(findShiftedStepReferences(oldSteps, inserted), [
+      'Step 5 ("merge")',
+      "Step 6",
+    ]);
+
+    const removed = oldSteps.filter((_, index) => index !== 0);
+    assert.deepStrictEqual(findShiftedStepReferences(oldSteps, removed), [
+      'Step 3 ("merge")',
+      "Step 4",
+    ]);
+
+    // Swapping the two workflow steps shifts both of the merge step's
+    // references; the final step's reference to step 2 shifts too.
+    const moved = [
+      oldSteps[0],
+      oldSteps[2],
+      oldSteps[1],
+      oldSteps[3],
+      oldSteps[4],
+    ];
+    assert.deepStrictEqual(
+      findShiftedStepReferences(oldSteps, moved, {
+        finalStep: { prompt: "final $step:2" },
+      }),
+      ['Step 4 ("merge")', "Step 5", "Final step"]
+    );
+  });
+
   test("describes the warning, or nothing when no reference shifted", () => {
     assert.strictEqual(
       describeShiftedStepReferences(describeStepRemoval([2, 0]), ["Step 3"]),

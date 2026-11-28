@@ -68,6 +68,10 @@ and other workflow defaults come from the parent. The child is materialized at
 launch and its run file is self-contained. It starts a new session, so the
 parent's `sessionId`, `resumeSession`, and relative `priorContext` selectors are
 not inherited; a run-address `priorContext` (`{ workflow, run }`) is.
+For the same reason, references inside an inline definition would address the
+child run, so a numeric or `finalStep` `sessionId`, a numeric or relative
+`priorContext` selector, and `$previous`, `$step:N`, `$all` or `$finalStep` in
+its prompt or retry prompts are a validation error that names the run boundary.
 
 The child workflow is named after the step's `name`, or else after the parent
 and its position, such as `Release · step 3` or `Release · final step pass 2`.
@@ -540,7 +544,10 @@ child run; continuing a pass that was stopped reconnects to that pass's child.
 
 ## Using child output in later steps
 
-`$previous` and `$step:N` include the workflow step's metadata and the full
+`$previous` and `$step:N` count a workflow step as one step, whatever the child
+runs. They include the workflow step's metadata (the workflow file, the child's
+`workflowKey` and `runRef`, and its outcome; for a child with a worktree, also
+its mode, branch, base, tip, files changed and merge result) and the full
 output of each child step, including nested child output. Use `:summary` to
 bound the output while retaining the child metadata and recent step summaries:
 
