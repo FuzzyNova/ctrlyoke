@@ -5,7 +5,10 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import * as vscode from "vscode";
 import { WorkflowFileCompletionProvider } from "../../completions/WorkflowFileCompletionProvider";
-import { HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  COMPLETION_ITEM_KINDS,
+  HARNESS_IDS,
+} from "../../types/DashboardConstants";
 import {
   CLAUDE_CLI_MODEL_LABELS,
   COPILOT_CLI_MODEL_IDS,
@@ -82,7 +85,8 @@ const CURSOR = "§";
 async function complete(
   fileName: string,
   marked: string,
-  triggerCharacter?: string
+  triggerCharacter?: string,
+  provider = new WorkflowFileCompletionProvider()
 ): Promise<vscode.CompletionList | undefined> {
   const text = marked.replace(CURSOR, "");
   const document = new PromptDocumentStub(
@@ -91,7 +95,7 @@ async function complete(
     text
   );
   const position = document.positionAt(marked.indexOf(CURSOR));
-  return new WorkflowFileCompletionProvider().provideCompletionItems(
+  return provider.provideCompletionItems(
     document.asDocument(),
     position,
     new vscode.CancellationTokenSource().token,
@@ -269,6 +273,48 @@ suite("WorkflowFileCompletionProvider", () => {
         marked
       );
     }
+  });
+
+  test("a sub-workflow's workflow path lists workflow files from the path query", async () => {
+    const queries: string[] = [];
+    const provider = new WorkflowFileCompletionProvider(
+      undefined,
+      async (query) => {
+        queries.push(query);
+        return [
+          {
+            label: "check.ctrlyoke.yaml",
+            kind: COMPLETION_ITEM_KINDS.FILE,
+            insertText: "./flows/check.ctrlyoke.yaml",
+            filterText: "check.ctrlyoke.yaml flows/check.ctrlyoke.yaml",
+          },
+        ];
+      }
+    );
+    const marked = "steps:\n  - type: workflow\n    workflow: ./flo§\n";
+    const list = await complete("w.ctrlyoke.yaml", marked, undefined, provider);
+    assert.deepStrictEqual(queries, ["./flo"]);
+    assert.strictEqual(list?.isIncomplete, true);
+    const item = list?.items[0];
+    assert.strictEqual(item?.insertText, "./flows/check.ctrlyoke.yaml");
+    assert.strictEqual(item?.filterText, "./flows/check.ctrlyoke.yaml");
+    const range = item?.range as vscode.Range;
+    const start = marked.indexOf("./flo");
+    assert.strictEqual(
+      range.start.character,
+      start - marked.lastIndexOf("\n", start) - 1
+    );
+
+    const json = await complete(
+      "w.ctrlyoke.json",
+      '{ "type": "workflow", "workflow": § }',
+      undefined,
+      provider
+    );
+    assert.strictEqual(
+      json?.items[0]?.insertText,
+      '"./flows/check.ctrlyoke.yaml"'
+    );
   });
 
   test("ignores files that are not ctrlyoke files", async () => {

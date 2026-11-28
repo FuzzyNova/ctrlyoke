@@ -10,6 +10,8 @@ import {
   PromptStep,
   InlineSubWorkflowDefinition,
   describeInvalidInlineSubWorkflowDefinition,
+  isParentRunPriorContext,
+  isParentRunSessionId,
   WorkflowStep,
   ScriptStep,
   SubWorkflowStep,
@@ -45,7 +47,6 @@ import {
 } from "./UserFeedbackSink";
 import {
   STEP_TYPES,
-  FINAL_STEP_PHASES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
@@ -54,7 +55,6 @@ import {
   USER_FEEDBACK_ACTIONS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
-  PRIOR_CONTEXT_KEYWORDS,
   SCRIPT_STEP_COPY_FIELDS,
   SUB_WORKFLOW_STEP_COPY_FIELDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
@@ -135,11 +135,7 @@ export function inlineRunBoundaryErrors(
   if (invalid) return [`${label}: ${invalid}`];
   const errors: string[] = [];
   const boundary = `${label}: Inline sub-workflow starts a new run boundary`;
-  if (
-    "sessionId" in inline &&
-    (typeof inline.sessionId === "number" ||
-      inline.sessionId === FINAL_STEP_PHASES.FINAL_STEP)
-  ) {
+  if ("sessionId" in inline && isParentRunSessionId(inline.sessionId)) {
     errors.push(
       `${boundary}; numeric and final-pass sessionId references select parent-run sessions`
     );
@@ -151,16 +147,7 @@ export function inlineRunBoundaryErrors(
   }
   const priorContext =
     "priorContext" in inline ? inline.priorContext : undefined;
-  if (
-    Array.isArray(priorContext) ||
-    priorContext === PRIOR_CONTEXT_KEYWORDS.ALL ||
-    priorContext === PRIOR_CONTEXT_KEYWORDS.PREVIOUS ||
-    priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
-    priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS ||
-    (priorContext !== null &&
-      typeof priorContext === "object" &&
-      "previous" in priorContext)
-  ) {
+  if (isParentRunPriorContext(priorContext)) {
     errors.push(
       `${boundary}; numeric or relative priorContext selectors cannot cross into the child run`
     );

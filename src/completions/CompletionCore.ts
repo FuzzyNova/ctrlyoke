@@ -12,12 +12,17 @@ import {
 } from "../utils/ContextReferenceBuilder";
 import { fuzzyMatches, rankByFuzzyQuery } from "./FuzzyRanking";
 import { getPathDepthSortKey } from "./PathDepthSort";
-import { getPriorContextCompletionItems } from "./PriorContextCompletions";
+import {
+  getPriorContextCompletionItems,
+  type PriorContextCompletionOptions,
+} from "./PriorContextCompletions";
 import {
   COMPLETION_ITEM_KINDS,
   GIT_CHANGE_KINDS,
   GIT_REFERENCE_ICONS,
+  PATH_QUERY_FILE_SETS,
   WORKSPACE_ENTRY_KINDS,
+  type PathQueryFileSet,
   type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
 import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
@@ -302,6 +307,20 @@ export class CompletionCore {
   async getPromptFileCompletions(
     query: string
   ): Promise<PlainCompletionItem[]> {
+    return this.getLonePathCompletions(query, PATH_QUERY_FILE_SETS.PROMPT);
+  }
+
+  /** Workflow files for a sub-workflow step's `workflow` path, inserted like a prompt-file path. */
+  async getWorkflowFilePathCompletions(
+    query: string
+  ): Promise<PlainCompletionItem[]> {
+    return this.getLonePathCompletions(query, PATH_QUERY_FILE_SETS.WORKFLOW);
+  }
+
+  private async getLonePathCompletions(
+    query: string,
+    fileSet: PathQueryFileSet
+  ): Promise<PlainCompletionItem[]> {
     const normalized = normalizeReferencePath(query)
       .replace(/^\.\.?\//, "")
       .replace(/^\//, "");
@@ -314,6 +333,7 @@ export class CompletionCore {
     const shouldRank = Boolean(child || (normalized && !hasPath));
     const ranked = await this.workspace.files.queryPromptFiles(query, {
       limit: 200,
+      fileSet,
     });
     return ranked.slice(0, 200).map((entry, rank) => {
       const name = path.posix.basename(entry.relativePath);
@@ -326,7 +346,7 @@ export class CompletionCore {
         kind: COMPLETION_ITEM_KINDS.FILE,
         insertText: insertPath,
         detail: parent === "." ? "Root" : parent,
-        documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
+        documentation: `**${fileSet === PATH_QUERY_FILE_SETS.WORKFLOW ? "Workflow file" : "Prompt file"} reference**\n\nPath: \`${insertPath}\``,
         sortText: shouldRank
           ? String(rank).padStart(6, "0")
           : `${getPathDepthSortKey(entry.relativePath)}_${entry.relativePath}`,
@@ -541,8 +561,11 @@ export class CompletionCore {
       }));
   }
 
-  getPriorContextCompletions(filterText: string): PlainCompletionItem[] {
-    return getPriorContextCompletionItems(filterText);
+  getPriorContextCompletions(
+    filterText: string,
+    options?: PriorContextCompletionOptions
+  ): PlainCompletionItem[] {
+    return getPriorContextCompletionItems(filterText, options);
   }
 
   async getPathSuggestions(

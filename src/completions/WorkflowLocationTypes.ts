@@ -47,6 +47,12 @@ export interface WorkflowLocation {
   readonly scalarStyle?: YamlScalarStyle;
   /** Inside a YAML flow collection (`{ ... }`, `[ ... ]`), where only single-line flow syntax is valid. */
   readonly inFlowCollection?: boolean;
+  /**
+   * Inside a sub-workflow step's inline `workflow` definition, which is the
+   * first step of a new child run: step numbers, sessions and `$previous`-style
+   * references cannot reach the parent run from here (D13).
+   */
+  readonly inlineDefinition?: boolean;
 }
 
 /**
@@ -91,6 +97,14 @@ export const WORKFLOW_TEXT_FIELDS: readonly {
     key: WORKFLOW_HOOK_PROPERTIES.COMMAND,
     role: WORKFLOW_LOCATION_ROLES.SCRIPT_TEXT,
   },
+  ...[
+    WORKFLOW_OBJECT_KINDS.WORKFLOW_ROOT,
+    WORKFLOW_OBJECT_KINDS.SUB_WORKFLOW_STEP,
+  ].map((objectKind) => ({
+    objectKind,
+    key: PROMPT_PROPERTIES.WORKFLOW_REF,
+    role: WORKFLOW_LOCATION_ROLES.WORKFLOW_FILE_PATH,
+  })),
 ];
 
 /** The role of a scalar value under `key` of an `objectKind` object. */
@@ -130,6 +144,36 @@ function stepPrefixLength(path: WorkflowPath): number {
   return 0;
 }
 
+function isSubWorkflowNode(node: unknown): boolean {
+  return (
+    isRecord(node) && node[PROMPT_PROPERTIES.STEP_TYPE] === STEP_TYPES.WORKFLOW
+  );
+}
+
+/**
+ * The step a path is inside. A `type: workflow` step's `workflow` object is an
+ * inline definition, a step of its own, so it extends the prefix by one.
+ */
+function locateStep(
+  path: WorkflowPath,
+  root: unknown
+): { readonly length: number; readonly inline: boolean } {
+  const length = stepPrefixLength(path);
+  const inline =
+    path[length] === PROMPT_PROPERTIES.WORKFLOW_REF &&
+    isSubWorkflowNode(valueAt(root, path.slice(0, length)));
+  return inline ? { length: length + 1, inline } : { length, inline };
+}
+
+/** The path of the inline sub-workflow definition `path` is in, if any (D13). */
+export function getInlineDefinitionPath(
+  path: WorkflowPath,
+  root: unknown
+): WorkflowPath | undefined {
+  const step = locateStep(path, root);
+  return step.inline ? path.slice(0, step.length) : undefined;
+}
+
 const NESTED_OBJECT_KINDS: Readonly<Record<string, WorkflowObjectKind>> = {
   [PROMPT_PROPERTIES.END_CONDITION]: WORKFLOW_OBJECT_KINDS.END_CONDITION,
   [PROMPT_PROPERTIES.PRE_CONDITION]: WORKFLOW_OBJECT_KINDS.PRE_CONDITION,
@@ -144,14 +188,16 @@ const ROOT_ONLY_OBJECT_KINDS: Readonly<Record<string, WorkflowObjectKind>> = {
 
 /**
  * Which schema object lives at `objectPath`, given the (possibly partial)
- * parsed document. On a step, `type: script`, or a `script` without a
- * `prompt`, makes a script step; a `parallel` list makes a group.
+ * parsed document. On a step, `type: workflow` makes a sub-workflow step,
+ * `type: script`, or a `script` without a `prompt`, makes a script step, and a
+ * `parallel` list makes a group. A sub-workflow step's inline `workflow`
+ * object is a prompt or script step by the same rules (D13).
  */
 export function classifyWorkflowObject(
   objectPath: WorkflowPath,
   root: unknown
 ): WorkflowObjectKind {
-  const prefix = stepPrefixLength(objectPath);
+  const { length: prefix, inline } = locateStep(objectPath, root);
   const rest = objectPath.slice(prefix);
   if (rest.length === 0) {
     const node = valueAt(root, objectPath);
@@ -159,8 +205,13 @@ export function classifyWorkflowObject(
     // The root stays the root even in a single-step script workflow: it still
     // allows root-only keys (`worktree`, `maxSteps`) that a script step forbids.
     if (prefix === 0) return WORKFLOW_OBJECT_KINDS.WORKFLOW_ROOT;
-    if (prefix === 2 && fields[PROMPT_PROPERTIES.PARALLEL] !== undefined) {
-      return WORKFLOW_OBJECT_KINDS.PARALLEL_GROUP;
+    if (!inline) {
+      if (prefix === 2 && fields[PROMPT_PROPERTIES.PARALLEL] !== undefined) {
+        return WORKFLOW_OBJECT_KINDS.PARALLEL_GROUP;
+      }
+      if (isSubWorkflowNode(fields)) {
+        return WORKFLOW_OBJECT_KINDS.SUB_WORKFLOW_STEP;
+      }
     }
     const isScript =
       fields[PROMPT_PROPERTIES.STEP_TYPE] === STEP_TYPES.SCRIPT ||
@@ -171,11 +222,24 @@ export function classifyWorkflowObject(
       ? WORKFLOW_OBJECT_KINDS.SCRIPT_STEP
       : WORKFLOW_OBJECT_KINDS.PROMPT_STEP;
   }
+  // A sub-workflow step's only object-valued key is its inline `workflow`,
+  // which `locateStep` already treated as a step.
+  if (
+    !inline &&
+    prefix > 0 &&
+    isSubWorkflowNode(valueAt(root, objectPath.slice(0, prefix)))
+  ) {
+    return WORKFLOW_OBJECT_KINDS.UNKNOWN;
+  }
   const head = String(rest[0]);
   if (rest.length === 1) {
     return (
       NESTED_OBJECT_KINDS[head] ??
       (prefix === 0 ? ROOT_ONLY_OBJECT_KINDS[head] : undefined) ??
+      // An inline definition's only workflow-only key (D13).
+      (inline && head === PROMPT_PROPERTIES.WORKTREE
+        ? WORKFLOW_OBJECT_KINDS.WORKTREE
+        : undefined) ??
       WORKFLOW_OBJECT_KINDS.UNKNOWN
     );
   }
@@ -266,5 +330,8 @@ export function buildWorkflowLocation(
     jsonString: input.jsonString,
     scalarStyle: input.scalarStyle,
     inFlowCollection: input.inFlowCollection || undefined,
+    inlineDefinition:
+      getInlineDefinitionPath(input.ownerPath, input.root) !== undefined ||
+      undefined,
   };
 }

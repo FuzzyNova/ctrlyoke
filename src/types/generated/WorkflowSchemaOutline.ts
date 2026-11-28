@@ -721,6 +721,55 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "worktree"
     ]
   },
+  "subWorkflowStep": {
+    "properties": {
+      "type": {
+        "valueKind": "string",
+        "enum": [
+          "workflow"
+        ],
+        "description": "Marks this step as a sub-workflow step."
+      },
+      "workflow": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "string",
+          "object"
+        ],
+        "description": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step."
+      },
+      "onFail": {
+        "valueKind": "string",
+        "enum": [
+          "continue",
+          "stopWorkflow"
+        ],
+        "default": "stopWorkflow",
+        "description": "What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent."
+      },
+      "name": {
+        "valueKind": "string",
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
+      },
+      "enabled": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
+      },
+      "color": {
+        "valueKind": "string",
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
+      }
+    },
+    "forbiddenKeys": [
+      "maxSteps",
+      "trustedExternalRoots",
+      "worktree"
+    ]
+  },
   "parallelGroup": {
     "properties": {
       "parallel": {

@@ -7,6 +7,7 @@ import {
   parseWorkflowDocumentRoot,
 } from "../../completions/WorkflowDocumentLocation";
 import {
+  formatWorkflowFilePathInsert,
   getWorkflowFileCompletions,
   type WorkflowFileCompletions,
   type WorkflowModelOption,
@@ -711,5 +712,252 @@ suite("WorkflowFileCompletionCore: inserts leave a valid document", () => {
 suite("escapeJsonStringFragment", () => {
   test("escapes quotes, backslashes and line breaks", () => {
     assert.strictEqual(escapeJsonStringFragment('a"b\\c\nd'), 'a\\"b\\\\c\\nd');
+  });
+});
+
+suite("WorkflowFileCompletionCore: sub-workflow steps", () => {
+  test("an undecided step offers workflow, and type offers every kind", () => {
+    assert.ok(labels(complete("steps:\n  - §\n")).includes("workflow"));
+    assert.ok(labels(complete("finalStep:\n  §\n")).includes("workflow"));
+    assert.deepStrictEqual(labels(complete("steps:\n  - type: §\n")), [
+      "prompt",
+      "script",
+      "workflow",
+    ]);
+  });
+
+  test("a workflow step offers only its own keys", () => {
+    const keys = labels(complete("steps:\n  - type: workflow\n    §\n"));
+    for (const key of ["workflow", "onFail", "name", "enabled", "color"]) {
+      assert.ok(keys.includes(key), key);
+    }
+    for (const key of [
+      "prompt",
+      "script",
+      "harness",
+      "compareSource",
+      "endCondition",
+      "worktree",
+      "parallel",
+    ]) {
+      assert.ok(!keys.includes(key), key);
+    }
+    const member = labels(
+      complete(
+        "steps:\n  - parallel:\n      - type: workflow\n        workflow: a.ctrlyoke.yaml\n        §\n"
+      )
+    );
+    assert.ok(member.includes("onFail") && !member.includes("harness"));
+  });
+
+  test("prompt and script steps never offer workflow", () => {
+    assert.ok(
+      !labels(complete("steps:\n  - prompt: hi\n    §\n")).includes("workflow")
+    );
+    const script = labels(complete("steps:\n  - type: script\n    §\n"));
+    assert.ok(!script.includes("workflow"));
+    assert.ok(script.includes("onFail"), "onFail is a script key too");
+  });
+
+  test("roots offer workflow only as a single-step workflow root", () => {
+    assert.ok(
+      !labels(complete("steps:\n  - prompt: hi\n§\n")).includes("workflow")
+    );
+    assert.ok(!labels(complete("prompt: hi\n§\n")).includes("workflow"));
+    assert.ok(!labels(complete("type: script\n§\n")).includes("workflow"));
+    assert.ok(labels(complete("§\n")).includes("workflow"));
+
+    const keys = labels(complete("type: workflow\n§\n"));
+    for (const key of ["workflow", "onFail", "worktree", "vars", "maxSteps"]) {
+      assert.ok(keys.includes(key), key);
+    }
+    for (const key of [
+      "steps",
+      "finalStep",
+      "conditions",
+      "worktreePresets",
+      "prompt",
+      "script",
+      "harness",
+      "compareSource",
+    ]) {
+      assert.ok(!keys.includes(key), key);
+    }
+  });
+
+  test("single-step script and workflow roots do not offer conditions or worktreePresets", () => {
+    for (const marked of ["type: script\n§\n", "type: workflow\n§\n"]) {
+      const keys = labels(complete(marked));
+      assert.ok(!keys.includes("conditions"), marked);
+      assert.ok(!keys.includes("worktreePresets"), marked);
+    }
+    assert.ok(labels(complete("prompt: hi\n§\n")).includes("conditions"));
+  });
+
+  test("an inline definition is a prompt or script step plus worktree", () => {
+    const keys = labels(
+      complete("steps:\n  - type: workflow\n    workflow:\n      §\n")
+    );
+    for (const key of ["prompt", "script", "harness", "worktree"]) {
+      assert.ok(keys.includes(key), key);
+    }
+    for (const key of [
+      "steps",
+      "finalStep",
+      "parallel",
+      "workflow",
+      "vars",
+      "maxSteps",
+      "conditions",
+      "worktreePresets",
+      "trustedExternalRoots",
+    ]) {
+      assert.ok(!keys.includes(key), key);
+    }
+    const prompt = labels(
+      complete(
+        "finalStep:\n  type: workflow\n  workflow:\n    prompt: hi\n    §\n"
+      )
+    );
+    assert.ok(prompt.includes("worktree") && !prompt.includes("script"));
+    assert.deepStrictEqual(
+      labels(
+        complete("steps:\n  - type: workflow\n    workflow:\n      type: §\n")
+      ),
+      ["prompt", "script"]
+    );
+    assert.deepStrictEqual(
+      labels(
+        complete(
+          "steps:\n  - type: workflow\n    workflow:\n      prompt: hi\n      worktree: §\n"
+        )
+      ).sort(),
+      ["false", "true"]
+    );
+  });
+
+  test("an inline definition offers no parent step numbers, sessions or relative selectors", () => {
+    const prefix =
+      "steps:\n  - prompt: a\n  - prompt: b\n  - type: workflow\n    workflow:\n      prompt: c\n";
+    assert.deepStrictEqual(
+      labels(complete(`${prefix}      sessionId: §\n`)),
+      []
+    );
+    assert.deepStrictEqual(
+      labels(complete(`${prefix}      priorContext: §\n`)),
+      ["none"]
+    );
+    assert.deepStrictEqual(
+      labels(complete(`${prefix}      priorContext:\n        - §\n`)),
+      []
+    );
+  });
+
+  test("an inline definition's model follows its own harness, then the parent's", () => {
+    const own = complete(
+      "steps:\n  - type: workflow\n    workflow:\n      harness: claude-cli\n      prompt: x\n      model: §\n"
+    );
+    assert.deepStrictEqual(labels(own), ["none", "claude-sonnet"]);
+    const inherited = complete(
+      "harness: claude-cli\nsteps:\n  - type: workflow\n    workflow:\n      prompt: x\n      model: §\n"
+    );
+    assert.deepStrictEqual(labels(inherited), ["none", "claude-sonnet"]);
+  });
+
+  test("sessionId skips workflow steps; priorContext still offers them", () => {
+    const prefix =
+      "steps:\n  - prompt: a\n  - type: workflow\n    workflow: b.ctrlyoke.yaml\n  - prompt: c\n";
+    assert.deepStrictEqual(labels(complete(`${prefix}    sessionId: §\n`)), [
+      "1",
+    ]);
+    assert.deepStrictEqual(
+      labels(complete(`${prefix}    priorContext:\n      - §\n`)),
+      ["1", "2"]
+    );
+  });
+
+  test("picking workflow on an untyped step also writes type: workflow", () => {
+    const yaml = complete("steps:\n  - wor§\n");
+    const inserted = apply(yaml, "workflow", "flows/a.ctrlyoke.yaml");
+    assert.deepStrictEqual(parseYamlStrict(inserted), {
+      steps: [{ type: "workflow", workflow: "flows/a.ctrlyoke.yaml" }],
+    });
+    const root = complete("§\n");
+    assert.strictEqual(
+      root.items.find((item) => item.label === "workflow")?.insertText,
+      "type: workflow\nworkflow: "
+    );
+    const typed = complete("steps:\n  - type: workflow\n    §\n");
+    assert.strictEqual(
+      typed.items.find((item) => item.label === "workflow")?.insertText,
+      "workflow: "
+    );
+    const flow = complete("steps:\n  - { name: x, § }\n");
+    assert.deepStrictEqual(
+      parseYamlStrict(apply(flow, "workflow", "a.ctrlyoke.yaml")),
+      { steps: [{ name: "x", type: "workflow", workflow: "a.ctrlyoke.yaml" }] }
+    );
+    const json = complete('{ "steps": [ { § } ] }', WORKFLOW_JSON);
+    assert.deepStrictEqual(
+      parseJsonStrict(apply(json, "workflow", '"a.ctrlyoke.yaml"')),
+      { steps: [{ type: "workflow", workflow: "a.ctrlyoke.yaml" }] }
+    );
+  });
+
+  test("the type snippet names every step type", () => {
+    assert.strictEqual(
+      getWorkflowPropertySnippet(WORKFLOW_OBJECT_KINDS.PROMPT_STEP, "type")
+        .detail,
+      'Step type: "prompt" | "script" | "workflow"'
+    );
+  });
+
+  test("a workflow path gets no core items, only the range host items replace", () => {
+    const result = complete(
+      "steps:\n  - type: workflow\n    workflow: ./flows/ch§\n"
+    );
+    assert.deepStrictEqual(result.items, []);
+    assert.strictEqual(
+      result.text.slice(result.replaceRange.start, result.replaceRange.end),
+      "./flows/ch"
+    );
+  });
+
+  test("workflow path inserts stay plain when they can, escaped where they must", () => {
+    const at = (marked: string, kind: WorkflowFileKind = WORKFLOW_YAML) => {
+      const offset = marked.indexOf("§");
+      const text = marked.slice(0, offset) + marked.slice(offset + 1);
+      return getWorkflowLocation(text, offset, kind);
+    };
+    const plain = at("type: workflow\nworkflow: §\n");
+    assert.strictEqual(
+      formatWorkflowFilePathInsert("./flows/a.ctrlyoke.yaml", plain),
+      "./flows/a.ctrlyoke.yaml"
+    );
+    assert.strictEqual(
+      formatWorkflowFilePathInsert("@team/a.ctrlyoke.yaml", plain),
+      '"@team/a.ctrlyoke.yaml"'
+    );
+    assert.strictEqual(
+      formatWorkflowFilePathInsert(
+        "a 'b'.ctrlyoke.yaml",
+        at("type: workflow\nworkflow: '§'\n")
+      ),
+      "a ''b''.ctrlyoke.yaml"
+    );
+    assert.strictEqual(
+      formatWorkflowFilePathInsert(
+        "./a.ctrlyoke.yaml",
+        at('{ "type": "workflow", "workflow": § }', WORKFLOW_JSON)
+      ),
+      '"./a.ctrlyoke.yaml"'
+    );
+    assert.strictEqual(
+      formatWorkflowFilePathInsert(
+        './a".ctrlyoke.yaml',
+        at('{ "type": "workflow", "workflow": "§" }', WORKFLOW_JSON)
+      ),
+      './a\\".ctrlyoke.yaml'
+    );
   });
 });

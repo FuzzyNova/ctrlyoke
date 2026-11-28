@@ -29,7 +29,7 @@ test("checked-in outline matches the generator output", () => {
 });
 
 test("a step carries no workflow-only or runtime keys", () => {
-  for (const kind of ["promptStep", "scriptStep"]) {
+  for (const kind of ["promptStep", "scriptStep", "subWorkflowStep"]) {
     const keys = Object.keys(outline[kind].properties);
     for (const key of [
       "worktree",
@@ -48,6 +48,18 @@ test("a step carries no workflow-only or runtime keys", () => {
     );
   }
   assert.ok(outline.promptStep.forbiddenKeys.includes("script"));
+});
+
+test("a sub-workflow step offers its own keys and the display keys", () => {
+  assert.deepEqual(Object.keys(outline.subWorkflowStep.properties).sort(), [
+    "color",
+    "enabled",
+    "name",
+    "onFail",
+    "type",
+    "workflow",
+  ]);
+  assert.deepEqual(outline.subWorkflowStep.properties.type.enum, ["workflow"]);
 });
 
 test("the root accepts steps and finalStep but no runtime fields", () => {

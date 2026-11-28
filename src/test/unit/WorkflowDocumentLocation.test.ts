@@ -232,6 +232,76 @@ suite("WorkflowDocumentLocation: YAML", () => {
     assert.strictEqual(worktree.objectKind, OBJECT.WORKTREE);
   });
 
+  test("a type: workflow step is a sub-workflow step in every slot", () => {
+    for (const marked of [
+      "steps:\n  - type: workflow\n    §\n",
+      "steps:\n  - parallel:\n      - type: workflow\n        §\n",
+      "finalStep:\n  type: workflow\n  §\n",
+    ]) {
+      const { loc } = locate(marked, WORKFLOW_YAML);
+      assert.strictEqual(loc.role, ROLE.KEY, marked);
+      assert.strictEqual(loc.objectKind, OBJECT.SUB_WORKFLOW_STEP, marked);
+      assert.strictEqual(loc.inlineDefinition, undefined, marked);
+    }
+    const json = locate(
+      '{ "steps": [ { "type": "workflow", "workflow": "x.ctrlyoke.yaml", § } ] }',
+      WORKFLOW_JSON
+    ).loc;
+    assert.strictEqual(json.objectKind, OBJECT.SUB_WORKFLOW_STEP);
+  });
+
+  test("a workflow path is a file-path value; an inline definition is a step", () => {
+    const path = locate(
+      "steps:\n  - type: workflow\n    workflow: flows/ch§eck.ctrlyoke.yaml\n",
+      WORKFLOW_YAML
+    );
+    assert.strictEqual(path.loc.role, ROLE.WORKFLOW_FILE_PATH);
+    assert.strictEqual(
+      slice(path.text, path.loc.valueRange),
+      "flows/check.ctrlyoke.yaml"
+    );
+    const root = locate("type: workflow\nworkflow: §\n", WORKFLOW_YAML).loc;
+    assert.strictEqual(root.role, ROLE.WORKFLOW_FILE_PATH);
+
+    const prompt = locate(
+      "steps:\n  - type: workflow\n    workflow:\n      prompt: hi\n      §\n",
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(prompt.role, ROLE.KEY);
+    assert.strictEqual(prompt.objectKind, OBJECT.PROMPT_STEP);
+    assert.deepStrictEqual(prompt.path, ["steps", 0, "workflow"]);
+    assert.strictEqual(prompt.inlineDefinition, true);
+
+    const text = locate(
+      "steps:\n  - type: workflow\n    workflow:\n      prompt: fix §it\n",
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(text.role, ROLE.PROMPT_TEXT);
+    assert.strictEqual(text.inlineDefinition, true);
+
+    const script = locate(
+      "finalStep:\n  type: workflow\n  workflow:\n    type: script\n    §\n",
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(script.objectKind, OBJECT.SCRIPT_STEP);
+
+    const worktree = locate(
+      "steps:\n  - type: workflow\n    workflow:\n      prompt: hi\n      worktree:\n        §\n",
+      WORKFLOW_YAML
+    ).loc;
+    assert.strictEqual(worktree.objectKind, OBJECT.WORKTREE);
+    assert.strictEqual(worktree.inlineDefinition, true);
+  });
+
+  test("a workflow key on a step that is not type: workflow is not an inline definition", () => {
+    const { loc } = locate(
+      "steps:\n  - prompt: hi\n    workflow:\n      §\n",
+      WORKFLOW_YAML
+    );
+    assert.strictEqual(loc.objectKind, OBJECT.UNKNOWN);
+    assert.strictEqual(loc.inlineDefinition, undefined);
+  });
+
   test("scalar list items are values owned by the list's key", () => {
     const { loc } = locate(
       "steps:\n  - prompt: a\n    skills:\n      - one\n      - tw§o\n",

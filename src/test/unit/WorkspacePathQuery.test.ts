@@ -10,7 +10,10 @@ import {
   WorkspacePathStore,
   type WorkspacePathEntry,
 } from "../../completions/WorkspacePathStore";
-import { WORKSPACE_ENTRY_KINDS } from "../../types/DashboardConstants";
+import {
+  PATH_QUERY_FILE_SETS,
+  WORKSPACE_ENTRY_KINDS,
+} from "../../types/DashboardConstants";
 import { workspacePathStoreEntries } from "../helpers/workspacePathStoreEntries";
 
 function create(files: string[]): {
@@ -144,6 +147,38 @@ suite("WorkspacePathQuery", () => {
       (await query.queryPromptFiles("")).every(
         (item) => item.kind === WORKSPACE_ENTRY_KINDS.FILE
       )
+    );
+  });
+
+  test("the workflow file set lists every ctrlyoke file kind and nothing else", async () => {
+    const { query } = create([
+      "flows/check.ctrlyoke.yaml",
+      "flows/lint.ctrlyoke.yml",
+      "flows/data.ctrlyoke.json",
+      "flows/one.prompt.md",
+      "flows/notes.md",
+      "flows/plain.yaml",
+    ]);
+    assert.deepStrictEqual(
+      (
+        await query.queryPromptFiles("./flows/", {
+          fileSet: PATH_QUERY_FILE_SETS.WORKFLOW,
+        })
+      )
+        .map((item) => item.relativePath)
+        .sort(),
+      [
+        "flows/check.ctrlyoke.yaml",
+        "flows/data.ctrlyoke.json",
+        "flows/lint.ctrlyoke.yml",
+        "flows/one.prompt.md",
+      ]
+    );
+    assert.ok(
+      (await query.queryPromptFiles("./flows/")).some(
+        (item) => item.relativePath === "flows/notes.md"
+      ),
+      "prompt files stay the default set"
     );
   });
 

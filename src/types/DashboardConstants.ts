@@ -4965,6 +4965,8 @@ export const WORKFLOW_LOCATION_ROLES = {
   PROMPT_TEXT: "promptText",
   /** Shell text: step and condition `script`, hook `command`. */
   SCRIPT_TEXT: "scriptText",
+  /** A sub-workflow step's `workflow` file path. */
+  WORKFLOW_FILE_PATH: "workflowFilePath",
   NONE: "none",
 } as const;
 export type WorkflowLocationRole =
@@ -4975,6 +4977,8 @@ export const WORKFLOW_OBJECT_KINDS = {
   WORKFLOW_ROOT: "workflowRoot",
   PROMPT_STEP: "promptStep",
   SCRIPT_STEP: "scriptStep",
+  /** A `type: workflow` step. Its inline `workflow` object is a prompt or script step. */
+  SUB_WORKFLOW_STEP: "subWorkflowStep",
   PARALLEL_GROUP: "parallelGroup",
   END_CONDITION: "endCondition",
   PRE_CONDITION: "preCondition",
@@ -6068,6 +6072,15 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   WorkspaceEntryKind,
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
+
+/** Which files a lone-path completion query lists: prompt files, or workflow files (`getCtrlYokeFileKind`). */
+export const PATH_QUERY_FILE_SETS = {
+  PROMPT: "prompt",
+  WORKFLOW: "workflow",
+} as const;
+
+export type PathQueryFileSet =
+  (typeof PATH_QUERY_FILE_SETS)[keyof typeof PATH_QUERY_FILE_SETS];
 
 /** Lifecycle states exposed by the workspace file completion index. */
 export const WORKSPACE_FILE_INDEX_STATES = {

@@ -1196,6 +1196,31 @@ export function isInlineSubWorkflowDefinition(
   return describeInvalidInlineSubWorkflowDefinition(value) === undefined;
 }
 
+/**
+ * True when an inline sub-workflow definition's `sessionId` would name a
+ * parent-run session (a step number or `finalStep`), which the child run
+ * cannot reach (D13). A session GUID crosses the boundary.
+ */
+export function isParentRunSessionId(value: unknown): boolean {
+  return typeof value === "number" || value === FINAL_STEP_PHASES.FINAL_STEP;
+}
+
+/**
+ * True when an inline sub-workflow definition's `priorContext` would select
+ * parent-run steps: a step-number list, `{ previous: N }`, or a relative
+ * keyword (D13). `none`, `null` and a run address cross the boundary.
+ */
+export function isParentRunPriorContext(value: unknown): boolean {
+  return (
+    Array.isArray(value) ||
+    value === PRIOR_CONTEXT_KEYWORDS.ALL ||
+    value === PRIOR_CONTEXT_KEYWORDS.PREVIOUS ||
+    value === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
+    value === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS ||
+    (value !== null && typeof value === "object" && "previous" in value)
+  );
+}
+
 /** Union type for all workflow steps */
 export type WorkflowStep = PromptStep | ScriptStep | SubWorkflowStep;
 

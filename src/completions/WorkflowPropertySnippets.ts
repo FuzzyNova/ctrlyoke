@@ -4,6 +4,7 @@ import {
   WORKFLOW_OBJECT_KINDS,
   type WorkflowObjectKind,
 } from "../types/DashboardConstants";
+import type { WorkflowStepType } from "../types/CtrlYokeTypes";
 
 /**
  * Editorial completion polish for a workflow key. The generated
@@ -22,16 +23,25 @@ export interface WorkflowPropertySnippet {
   readonly documentation?: string;
   /** VS Code snippet syntax, shared by both hosts. */
   readonly insertSnippet?: string;
+  /**
+   * The step `type` this key implies. Completion inserts `type: <value>`
+   * ahead of the key when the object has no `type` yet, so picking the key
+   * on an undecided step leaves a step of that kind.
+   */
+  readonly impliesStepType?: WorkflowStepType;
 }
 
 export const WORKFLOW_PROPERTY_SNIPPETS: Readonly<
   Record<string, WorkflowPropertySnippet>
 > = {
   [PROMPT_PROPERTIES.STEP_TYPE]: {
-    detail: `Step type: "${STEP_TYPES.PROMPT}" | "${STEP_TYPES.SCRIPT}"`,
+    detail: `Step type: ${Object.values(STEP_TYPES)
+      .map((type) => `"${type}"`)
+      .join(" | ")}`,
     documentation:
       "Discriminates the step type. Omit for an AI prompt step (backwards compatible). " +
-      `Set to \`"${STEP_TYPES.SCRIPT}"\` for a shell script step with no AI interaction.`,
+      `Set to \`"${STEP_TYPES.SCRIPT}"\` for a shell script step with no AI interaction, ` +
+      `or \`"${STEP_TYPES.WORKFLOW}"\` to run another workflow as a child run.`,
     insertSnippet: `${PROMPT_PROPERTIES.STEP_TYPE}: `,
   },
   [PROMPT_PROPERTIES.NAME]: {
@@ -116,6 +126,14 @@ export const WORKFLOW_PROPERTY_SNIPPETS: Readonly<
     documentation:
       "Shell command or path to script file to execute. Resolved relative to workspace root or `.ctrlyoke/`.",
     insertSnippet: `${PROMPT_PROPERTIES.SCRIPT}: `,
+  },
+  [PROMPT_PROPERTIES.WORKFLOW_REF]: {
+    detail: "Sub-workflow file path or inline step (required)",
+    documentation:
+      "The workflow a sub-workflow step runs as its own child run: a path to a workflow file, " +
+      "resolved like a prompt file reference, or an inline single prompt or script step with an optional `worktree`.",
+    insertSnippet: `${PROMPT_PROPERTIES.WORKFLOW_REF}: `,
+    impliesStepType: STEP_TYPES.WORKFLOW,
   },
   [PROMPT_PROPERTIES.TIMEOUT]: {
     detail: "Timeout in seconds",

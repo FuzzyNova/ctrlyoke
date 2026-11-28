@@ -26,4 +26,18 @@ suite("PriorContextCompletions", () => {
       )
     );
   });
+
+  test("without step outputs only the script-output placeholders remain", () => {
+    const labels = getPriorContextCompletionItems("", {
+      stepOutputs: false,
+    }).map((item) => item.label);
+    assert.ok(labels.length > 0);
+    assert.ok(
+      labels.every(
+        (label) =>
+          label.startsWith("preCondition:") || label.startsWith("endCondition:")
+      ),
+      labels.join(", ")
+    );
+  });
 });

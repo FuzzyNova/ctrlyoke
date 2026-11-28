@@ -4,12 +4,28 @@ import {
   type WorkspacePathEntry,
 } from "./WorkspacePathStore";
 import { normalizeReferencePath } from "../utils/ContextReferenceBuilder";
-import { type WorkspaceFileTreeEntryKind } from "../types/DashboardConstants";
+import {
+  PATH_QUERY_FILE_SETS,
+  type PathQueryFileSet,
+  type WorkspaceFileTreeEntryKind,
+} from "../types/DashboardConstants";
+import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import { comparePathDepths } from "./PathDepthSort";
 
 const FILE_LIMIT = 500;
 const PROMPT_LIMIT = 200;
 const PROMPT_EXTENSIONS = [".prompt.md", ".md", ".txt"];
+
+/** Which lower-cased paths each lone-path file set lists. */
+const FILE_SET_MATCHERS: Readonly<
+  Record<PathQueryFileSet, (lowerPath: string) => boolean>
+> = {
+  [PATH_QUERY_FILE_SETS.PROMPT]: (lowerPath) =>
+    PROMPT_EXTENSIONS.some((ext) => lowerPath.endsWith(ext)),
+  // A sub-workflow step names any workflow file, `.prompt.md` included.
+  [PATH_QUERY_FILE_SETS.WORKFLOW]: (lowerPath) =>
+    getCtrlYokeFileKind(lowerPath) !== null,
+};
 const SCAN_CHUNK_SIZE = 20_000;
 const PROGRESS_INTERVAL_MS = 50;
 
@@ -33,6 +49,8 @@ export interface WorkspacePathQueryOptions {
   readonly resumeOnAbort?: boolean;
   /** Deterministic scan budget for query tests. */
   readonly maxScanEntries?: number;
+  /** Which files `queryPromptFiles` lists; prompt files by default. */
+  readonly fileSet?: PathQueryFileSet;
 }
 
 interface ScoredEntry {
@@ -88,11 +106,13 @@ export class WorkspacePathQuery {
       .replace(/^\//, "")
       .toLowerCase();
     const { hasPath, parent, child } = splitScopedQuery(filter);
+    const inFileSet =
+      FILE_SET_MATCHERS[options.fileSet ?? PATH_QUERY_FILE_SETS.PROMPT];
     const selected: WorkspacePathEntry[] = [];
     for (let position = 0; position < store.size; position++) {
       if (!store.isFileAt(position)) continue;
       const lowerPath = store.lowerPathAt(position);
-      if (!PROMPT_EXTENSIONS.some((ext) => lowerPath.endsWith(ext))) continue;
+      if (!inFileSet(lowerPath)) continue;
       if (filter) {
         if (hasPath && !store.hasLowerParent(position, parent)) continue;
         if (!hasPath && !subsequenceWordsMatch(lowerPath, filter)) continue;
