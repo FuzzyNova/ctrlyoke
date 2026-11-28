@@ -13,6 +13,7 @@ import {
   VarSubstitutor,
 } from "./VarSubstitutor";
 import { VAR_SUBSTITUTION_PHASES } from "./VarSubstitutionPolicy";
+import { formatFinalPassPhrase } from "./FinalStepLabels";
 
 /**
  * Workflow-level execution properties a parent's root never hands to an inline
@@ -70,6 +71,23 @@ export function substituteInlineStepName(
 export interface InlineSubWorkflowPosition {
   /** Lineage name used when the step has no `name`, e.g. "step 2". */
   readonly label: string;
+}
+
+/**
+ * The position of a queue step (0-based `stepIndex`) or of a `finalStep`
+ * pass (1-based `passNumber`), shared by the launch and the execution
+ * preview so both name the child the same way.
+ */
+export function getInlineSubWorkflowPosition(
+  at:
+    | { readonly isFinalStep: false; readonly stepIndex: number }
+    | { readonly isFinalStep: true; readonly passNumber: number }
+): InlineSubWorkflowPosition {
+  return {
+    label: at.isFinalStep
+      ? formatFinalPassPhrase(at.passNumber)
+      : `step ${at.stepIndex + 1}`,
+  };
 }
 
 /**

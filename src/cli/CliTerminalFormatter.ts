@@ -42,8 +42,11 @@ import {
   STATUS_MESSAGE_SEVERITY,
   USER_STEER_ATTRIBUTIONS,
   DIFF_LINE_TYPES,
+  formatSubWorkflowRunsLabel,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
   type HarnessId,
 } from "../types/DashboardConstants";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "../types/SubWorkflowTypes";
 import {
   generateDiffLines,
   getStructuredPatchDiffLines,
@@ -683,6 +686,20 @@ export class CliTerminalFormatter {
       const indent = group ? "  " : "";
       const name = step.stepName ? ` — ${step.stepName}` : "";
       writeLine(`${indent}Step ${step.stepIndex + 1}${name} (${step.type})`);
+      if (step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.FILE) {
+        // The child resolves its own harness and settings when it starts.
+        writeLine(
+          `${indent}  ${formatSubWorkflowRunsLabel(step.subWorkflow.workflowPath)}`
+        );
+        writeLine("");
+        continue;
+      }
+      if (step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE) {
+        const worktree = step.subWorkflow.worktree;
+        writeLine(
+          `${indent}  ${SUB_WORKFLOW_DASHBOARD_LABELS.previewChildRun}: ${step.subWorkflow.childName}${worktree ? ` · ${SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle.toLowerCase()} (${worktree.branch ?? worktree.mode})` : ""}`
+        );
+      }
       writeLine(`${indent}  Harness: ${step.resolvedProperties.harnessId}`);
       if (step.resolvedProperties.model) {
         writeLine(`${indent}  Model: ${step.resolvedProperties.model}`);

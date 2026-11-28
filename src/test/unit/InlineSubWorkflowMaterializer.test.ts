@@ -7,6 +7,7 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   INLINE_INHERITED_EXECUTION_KEYS,
+  getInlineSubWorkflowPosition,
   materializeInlineSubWorkflow,
   substituteInlineStepName,
 } from "../../utils/InlineSubWorkflowMaterializer";
@@ -226,6 +227,17 @@ suite("InlineSubWorkflowMaterializer", () => {
     assert.strictEqual(
       substituteInlineStepName(inlineStep({ prompt: "child" }), {}, 1),
       undefined
+    );
+  });
+
+  test("labels a queue step by number and a final step by its pass", () => {
+    assert.deepStrictEqual(
+      getInlineSubWorkflowPosition({ isFinalStep: false, stepIndex: 2 }),
+      { label: "step 3" }
+    );
+    assert.deepStrictEqual(
+      getInlineSubWorkflowPosition({ isFinalStep: true, passNumber: 2 }),
+      { label: "final step pass 2" }
     );
   });
 });

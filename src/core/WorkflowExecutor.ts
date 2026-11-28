@@ -228,14 +228,12 @@ import {
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
-import {
-  formatFinalPassPhrase,
-  formatParallelStepsLabel,
-} from "../utils/FinalStepLabels";
+import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 import { resolveSubWorkflowReference } from "./SubWorkflowReferenceStep";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import {
+  getInlineSubWorkflowPosition,
   materializeInlineSubWorkflow,
   substituteInlineStepName,
 } from "../utils/InlineSubWorkflowMaterializer";
@@ -3798,12 +3796,11 @@ export class WorkflowExecutor {
           this.promptQueue.getWorkflowFile(),
           this.getRunStartView(context).vars,
           authoredStep,
-          {
-            label:
-              target.kind === FINAL_STEP_PHASES.FINAL_STEP
-                ? formatFinalPassPhrase(target.loopIndex + 1)
-                : `step ${stepIndex + 1}`,
-          },
+          getInlineSubWorkflowPosition(
+            target.kind === FINAL_STEP_PHASES.FINAL_STEP
+              ? { isFinalStep: true, passNumber: target.loopIndex + 1 }
+              : { isFinalStep: false, stepIndex }
+          ),
           this.promptQueue.getState().workflowName,
           substituteInlineStepName(
             authoredStep,

@@ -351,6 +351,51 @@ CliTerminalFormatter.renderExecutionPreview(${JSON.stringify(previewFixture())})
     assert.ok(output.includes("Script timeout: 3600 seconds"));
   });
 
+  test("renders a file workflow step as 'Runs <file>' and an inline one as its child run", () => {
+    const fixture = previewFixture();
+    const [prompt] = fixture.steps;
+    fixture.steps = [
+      {
+        ...prompt,
+        stepIndex: 0,
+        type: "workflow",
+        stepName: "verify",
+        command: undefined,
+        mcpApplication: undefined,
+        subWorkflow: { source: "file", workflowPath: "flows/verify.yaml" },
+      },
+      {
+        ...prompt,
+        stepIndex: 1,
+        subWorkflow: {
+          source: "inline",
+          childName: "Release · step 2",
+          worktree: {
+            mode: "named",
+            origin: "authored",
+            branch: "lane/docs",
+            eligible: true,
+            plannedDirectoryIsExact: false,
+          },
+        },
+      },
+    ];
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderExecutionPreview(${JSON.stringify(fixture)});
+`);
+    const lines = output.split("\n");
+    const file = lines.indexOf("Step 1 — verify (workflow)");
+    assert.ok(file >= 0, output);
+    assert.strictEqual(lines[file + 1], "  Runs flows/verify.yaml");
+    assert.strictEqual(lines[file + 2], "");
+    const inline = lines.indexOf("Step 2 (prompt)");
+    assert.strictEqual(
+      lines[inline + 1],
+      "  Child run: Release · step 2 · runs in its own worktree (lane/docs)"
+    );
+    assert.strictEqual(lines[inline + 2], "  Harness: claude-cli");
+  });
+
   test("prints the shared message for every guardrail stop code", () => {
     const output = runFormatterScript(`
 for (const code of ["queue-size-limit", "workflow-time-limit", "prompt-timeout"]) {

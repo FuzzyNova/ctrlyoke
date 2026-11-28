@@ -85,6 +85,29 @@ the POSIX shell form.
 Secret values never appear: granted secrets are listed by name, and the
 **Command** tab lists environment variable names without their values.
 
+## Workflow steps
+
+A [workflow step](/workflows/sub-workflow-steps) that runs a workflow file is
+one entry, **Runs** and the file's path as written, with the workflow icon in
+place of a harness icon. The child workflow picks its own harness, model and
+settings when it starts, so the entry has no tabs, payload or command, and the
+Dry Run doesn't list the child's steps. Its timeline entry is the same line.
+
+A workflow step with an
+[inline definition](/workflows/sub-workflow-steps#inline-definitions) is shown
+as the prompt or script step it holds, with the usual tabs, as its child run
+will start it: with this workflow's harness, model and other settings unless
+the step sets its own, and with its <code v-pre>{{variables}}</code>
+substituted from this workflow's variables. Its header carries a **Workflow**
+badge, and its **Summary** adds a **Child run** section with the child's name.
+References such as `$previous` in an inline prompt address the child run, so
+the Dry Run never fills them with this workflow's output. When the definition
+has its own managed or named `worktree`, the header shows a worktree badge
+and the **Child run** section adds a note that the step runs in its own
+worktree, with the worktree's mode, branch, base, setup command and working
+directory; the **Command** tab uses that worktree too. Without one, the step
+runs in this workflow's checkout.
+
 ## The footer
 
 | Button           | What it does                                                                                                                                 |

@@ -516,6 +516,16 @@ each lane's chip filters its outcome block like any member's output. The child's
 header identify the parent run; the link is unavailable when that parent is not
 present in the current project.
 
+In a [Dry Run](/guide/dry-run#workflow-steps), a workflow step that runs a file
+is a single **Runs** _file_ entry: the child's steps, harness and model are not
+previewed, because the child resolves them when it starts. An inline step is
+previewed as the prompt or script it holds, built the way its child run will
+be: with this workflow's settings and variables, substituted once, and with
+`$previous`-style references left to the child run. One with its own managed
+or named `worktree` is marked as running in its own worktree. This holds for
+the whole-workflow Dry Run, for **Dry Run Step**, and for the step in the editor
+in either form.
+
 If a child tries to launch a workflow already active earlier in the same chain,
 the step fails with a cycle path. Reusing a workflow after an earlier child has
 finished is allowed.

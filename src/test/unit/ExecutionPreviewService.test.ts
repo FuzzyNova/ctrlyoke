@@ -35,8 +35,13 @@ import {
   WORKTREE_MODES,
   DEFAULT_ERROR_BEHAVIOR_RETRIES,
   HEADLESS_PROMPT_DELIVERIES,
+  FINAL_STEP_PHASES,
+  PREVIEW_STEP_TYPES,
+  formatSubWorkflowRunsLabel,
   type HeadlessPromptDelivery,
 } from "../../types/DashboardConstants";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "../../types/SubWorkflowTypes";
+import type { StepExecutionPreview } from "../../types/ExecutionPreviewTypes";
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   type HarnessCapabilityRegistrySnapshot,
@@ -1562,8 +1567,8 @@ suite("ExecutionPreviewService", () => {
           { id: "group", startIndex: 0, endIndex: 2, failFast: true },
         ],
       },
-      // Workflow steps have no step preview yet, so a previewed member's
-      // preview carries its group's issues on them.
+      // The workflow members are outside this step's scope, so the previewed
+      // member's preview carries its group's issues on them.
       scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 0 },
     });
 
@@ -1922,5 +1927,299 @@ suite("ExecutionPreviewService", () => {
     // Managed mode can't know its real directory before a run allocates an
     // ID, so the command preview keeps showing the ordinary workspace root.
     assert.ok(pathsEqual(preview.steps[0].command!.cwd, workspaceRoot));
+  });
+
+  suite("sub-workflow steps", () => {
+    /** A service whose plan builder records each planned step's context. */
+    async function createRecordingService(): Promise<{
+      service: ExecutionPreviewService;
+      contexts: Array<WorkflowContext | undefined>;
+    }> {
+      const workspaceRoot = await fsPromises.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-preview-sub-workflow-")
+      );
+      temporaryRoots.push(workspaceRoot);
+      const harness = createHarness(workspaceRoot);
+      const contexts: Array<WorkflowContext | undefined> = [];
+      const plan = harness.executionPlanBuilder.plan.bind(
+        harness.executionPlanBuilder
+      );
+      harness.executionPlanBuilder.plan = async (session, options) => {
+        contexts.push(session.workflowContext);
+        return plan(session, options);
+      };
+      const service = new ExecutionPreviewService({
+        defaults: createDefaults(),
+        capabilities: createCapabilities(),
+        getHarness: () => harness,
+        workspaceRoot,
+        workspaceRoots: [workspaceRoot],
+        extensionPath: "extension",
+        hostCanProvidePty: false,
+        platform: "linux",
+      });
+      return { service, contexts };
+    }
+
+    function promptText(step: StepExecutionPreview): string {
+      return (step.prompt?.sections ?? [])
+        .map((section) => section.body ?? "")
+        .join("\n");
+    }
+
+    test("previews a file child as one 'Runs <file>' entry with no expansion", async () => {
+      const { service, contexts } = await createRecordingService();
+      const preview = await service.build({
+        workflow: {
+          model: "parent-model",
+          vars: { dir: "flows" },
+          steps: [
+            {
+              type: "workflow",
+              name: "verify",
+              // A workflow path is never substituted (D11).
+              workflow: "{{dir}}/verify.ctrlyoke.yaml",
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(preview.steps.length, 1);
+      const [step] = preview.steps;
+      assert.strictEqual(step.type, PREVIEW_STEP_TYPES.WORKFLOW);
+      assert.strictEqual(step.stepName, "verify");
+      assert.deepStrictEqual(step.subWorkflow, {
+        source: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+        workflowPath: "{{dir}}/verify.ctrlyoke.yaml",
+      });
+      assert.strictEqual(step.prompt, undefined);
+      assert.strictEqual(step.command, undefined);
+      assert.deepStrictEqual(step.workspaceMutations, []);
+      // Nothing of the child is planned, and its harness is not the parent's.
+      assert.strictEqual(contexts.length, 0);
+      assert.deepStrictEqual(preview.workflow.harnessIds, []);
+      assert.strictEqual(
+        formatSubWorkflowRunsLabel("flows/verify.ctrlyoke.yaml"),
+        "Runs flows/verify.ctrlyoke.yaml"
+      );
+    });
+
+    test("previews an inline prompt lane as its materialized wrapped step", async () => {
+      const { service, contexts } = await createRecordingService();
+      const preview = await service.build({
+        workflowName: "Release",
+        workflow: {
+          model: "parent-model",
+          resumeSession: true,
+          priorContext: "previous",
+          vars: { target: "src/core" },
+          steps: [
+            { prompt: "plan it" },
+            {
+              type: "workflow",
+              workflow: {
+                prompt: "Implement {{target}} using $previous",
+                worktree: { mode: WORKTREE_MODES.MANAGED, setup: "npm ci" },
+              },
+            },
+          ],
+        },
+        variables: { target: "src/ui" },
+        scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 1 },
+      });
+
+      assert.strictEqual(preview.steps.length, 1);
+      const [step] = preview.steps;
+      assert.strictEqual(step.stepIndex, 1);
+      assert.strictEqual(step.type, PREVIEW_STEP_TYPES.PROMPT);
+      // Inherited from the parent's root, as an ordinary step would be.
+      assert.strictEqual(step.resolvedProperties.model, "parent-model");
+      // Effective vars (host `--var` included), substituted once by the child.
+      assert.match(promptText(step), /Implement src\/ui using \$previous/);
+      assert.strictEqual(step.stepName, "Release · step 2");
+      assert.ok(step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE);
+      assert.strictEqual(step.subWorkflow.childName, "Release · step 2");
+      assert.strictEqual(
+        step.subWorkflow.worktree?.mode,
+        WORKTREE_MODES.MANAGED
+      );
+      assert.strictEqual(step.subWorkflow.worktree?.setupCommand, "npm ci");
+
+      // The child run is a new run: its prompt is its first step, so
+      // `$previous` and the inherited relative selectors address the child,
+      // never the parent's output.
+      assert.strictEqual(contexts.length, 1);
+      assert.strictEqual(contexts[0]?.promptIndex, 0);
+      assert.strictEqual(contexts[0]?.allPrompts?.length, 1);
+      assert.strictEqual(contexts[0]?.workflowFile?.priorContext, undefined);
+      assert.strictEqual(contexts[0]?.workflowFile?.resumeSession, undefined);
+      assert.strictEqual(
+        step.resolvedProperties.continuationMode,
+        "new-session"
+      );
+    });
+
+    test("previews an inline script child with its substituted command", async () => {
+      const preview = await createService().build({
+        workflow: {
+          vars: { suite: "core" },
+          steps: [
+            {
+              type: "workflow",
+              name: "check {{suite}}",
+              workflow: { type: "script", script: "npm test -- {{suite}}" },
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(preview.steps.length, 1);
+      const [step] = preview.steps;
+      assert.strictEqual(step.type, PREVIEW_STEP_TYPES.SCRIPT);
+      assert.strictEqual(step.stepName, "check core");
+      assert.match(step.command?.displayCommand ?? "", /npm test -- core/);
+      assert.deepStrictEqual(step.subWorkflow, {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: "check core",
+      });
+    });
+
+    test("an inline child without its own worktree runs in the parent's checkout", async () => {
+      for (const worktree of [undefined, false] as const) {
+        const preview = await createService().build({
+          workflow: {
+            worktree: { mode: WORKTREE_MODES.MANAGED },
+            steps: [
+              {
+                type: "workflow",
+                workflow: {
+                  prompt: "in place",
+                  ...(worktree !== undefined ? { worktree } : {}),
+                },
+              },
+            ],
+          },
+        });
+        assert.ok(preview.worktree, "the parent's own worktree is previewed");
+        assert.deepStrictEqual(preview.steps[0].subWorkflow, {
+          source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+          childName: "Workflow · step 1",
+        });
+      }
+    });
+
+    test("previews workflow members of a parallel group with the group's issues", async () => {
+      const preview = await createService().build({
+        workflow: {
+          steps: [
+            { name: "prompt member", prompt: "edit in place" },
+            {
+              type: "workflow",
+              name: "file lane",
+              workflow: "flows/lane.ctrlyoke.yaml",
+            },
+            {
+              type: "workflow",
+              name: "merge lane",
+              workflow: {
+                prompt: "lane work",
+                worktree: { mode: WORKTREE_MODES.MANAGED, merge: true },
+              },
+            },
+          ],
+          parallelGroups: [
+            { id: "group", startIndex: 0, endIndex: 2, failFast: true },
+          ],
+        },
+      });
+
+      assert.deepStrictEqual(
+        preview.steps.map((step) => [
+          step.stepIndex,
+          step.type,
+          step.parallelGroupId,
+        ]),
+        [
+          [0, PREVIEW_STEP_TYPES.PROMPT, "group"],
+          [1, PREVIEW_STEP_TYPES.WORKFLOW, "group"],
+          [2, PREVIEW_STEP_TYPES.PROMPT, "group"],
+        ]
+      );
+      const merge = preview.steps[2].diagnostics.filter(
+        (diagnostic) =>
+          diagnostic.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT
+      );
+      assert.strictEqual(merge.length, 1, JSON.stringify(preview.steps[2]));
+      // The child's own diagnostics are addressed to the parent step.
+      for (const diagnostic of preview.steps[2].diagnostics) {
+        if (diagnostic.consumer?.kind === FINAL_STEP_PHASES.QUEUE) {
+          assert.strictEqual(diagnostic.consumer.stepIndex, 2);
+        }
+      }
+    });
+
+    test("previews a workflow finalStep, from a file or inline", async () => {
+      const file = await createService().build({
+        workflow: {
+          steps: [{ prompt: "work" }],
+          finalStep: {
+            type: "workflow",
+            workflow: "flows/final.ctrlyoke.yaml",
+          },
+        },
+      });
+      assert.strictEqual(file.steps[1].stepIndex, 1);
+      assert.strictEqual(file.steps[1].type, PREVIEW_STEP_TYPES.WORKFLOW);
+
+      // The editor's snapshot of an edited inline final step, previewed alone.
+      const inline = await createService().build({
+        workflowName: "Release",
+        workflow: {
+          steps: [{ prompt: "work" }],
+          finalStep: {
+            type: "workflow",
+            workflow: { prompt: "wrap up", worktree: "lane/final" },
+          },
+        },
+        scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 1 },
+      });
+      assert.strictEqual(inline.steps.length, 1);
+      const [step] = inline.steps;
+      assert.strictEqual(step.type, PREVIEW_STEP_TYPES.PROMPT);
+      assert.ok(step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE);
+      assert.strictEqual(
+        step.subWorkflow.childName,
+        "Release · final step pass 1"
+      );
+      assert.strictEqual(step.subWorkflow.worktree?.mode, WORKTREE_MODES.NAMED);
+      assert.strictEqual(step.subWorkflow.worktree?.branch, "lane/final");
+    });
+
+    test("leaves prompt and script steps beside a workflow step unchanged", async () => {
+      const steps: PromptFile["steps"] = [
+        { prompt: "first" },
+        { type: "script", script: "echo two" },
+      ];
+      const alone = await createService().build({ workflow: { steps } });
+      const beside = await createService().build({
+        workflow: {
+          steps: [
+            ...steps,
+            { type: "workflow", workflow: "flows/child.ctrlyoke.yaml" },
+          ],
+        },
+      });
+      // Only the queue length the limits count changes.
+      const withoutLimits = (step: StepExecutionPreview) => ({
+        ...step,
+        resolvedProperties: { ...step.resolvedProperties, limits: undefined },
+      });
+      assert.deepStrictEqual(
+        beside.steps.slice(0, 2).map(withoutLimits),
+        alone.steps.map(withoutLimits)
+      );
+      assert.strictEqual(beside.steps[0].subWorkflow, undefined);
+    });
   });
 });

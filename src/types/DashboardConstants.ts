@@ -5508,7 +5508,19 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
   mergeAbortFailed: "Merge abort failed",
   mergeAbortFailedReason:
     "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
+  /** Execution preview: a file child's entry reads "Runs <file>". */
+  previewRuns: "Runs",
+  previewFileNote:
+    "The child workflow uses its own harness, model and settings when it starts. Its steps are not previewed.",
+  previewChildRun: "Child run",
+  previewInlineNote:
+    "Runs as a child run with this workflow's settings and variables. Its earlier-step references address the child run.",
 } as const;
+
+/** The execution preview's "Runs <file>" entry for a file-referenced child. */
+export function formatSubWorkflowRunsLabel(workflowPath: string): string {
+  return `${SUB_WORKFLOW_DASHBOARD_LABELS.previewRuns} ${workflowPath}`;
+}
 
 /** The step editor's Prompt / Script / Workflow switch: each kind's label and tooltip. */
 export const STEP_EDITOR_MODE_LABELS = {

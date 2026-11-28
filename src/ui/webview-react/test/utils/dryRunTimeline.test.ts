@@ -12,6 +12,7 @@ import {
   buildStepTimeline,
   STEP_TIMELINE_ENTRY_KINDS,
 } from "@utils/dryRunTimeline";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "@root/types/SubWorkflowTypes";
 
 const command: CommandPreview = {
   cwd: "C:/workspace",
@@ -173,6 +174,23 @@ describe("buildStepTimeline", () => {
         kind: STEP_TIMELINE_ENTRY_KINDS.COMMAND,
         cwd: command.cwd,
         executable: command.executable,
+      },
+    ]);
+  });
+
+  it("gives a file workflow step one entry: the file it runs", () => {
+    const step = makeStep({
+      type: PREVIEW_STEP_TYPES.WORKFLOW,
+      subWorkflow: {
+        source: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+        workflowPath: "flows/child.ctrlyoke.yaml",
+      },
+    });
+
+    expect(buildStepTimeline(step)).toEqual([
+      {
+        kind: STEP_TIMELINE_ENTRY_KINDS.SUB_WORKFLOW,
+        workflowPath: "flows/child.ctrlyoke.yaml",
       },
     ]);
   });

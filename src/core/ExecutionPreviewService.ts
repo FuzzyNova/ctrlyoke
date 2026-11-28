@@ -56,13 +56,25 @@ import type {
 } from "../types/WebviewMessageTypes";
 import {
   assertNever,
+  describeInvalidInlineSubWorkflowDefinition,
   getStepType,
+  isInlineSubWorkflowDefinition,
   isPromptStep,
   isScriptStep,
   isSubWorkflowStep,
   getWorkflowStepText,
   type DynamicQueueConfig,
 } from "../types/CtrlYokeTypes";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "../types/SubWorkflowTypes";
+import {
+  getInlineSubWorkflowPosition,
+  materializeInlineSubWorkflow,
+  substituteInlineStepName,
+} from "../utils/InlineSubWorkflowMaterializer";
+import {
+  classifySubWorkflowWorktree,
+  subWorkflowCreatesWorktree,
+} from "../utils/WorktreeConfigShape";
 import type {
   ExecutionPropertyDefaults,
   ResolvedExecutionTarget,
@@ -241,6 +253,12 @@ interface PreviewStepTarget {
   readonly isFinalStep: boolean;
 }
 
+/** Where a previewed workflow runs: its worktree preview and remapped roots. */
+interface PreviewExecutionCheckout {
+  readonly dto?: WorktreeExecutionPreview;
+  readonly executionWorkspace?: ExecutionWorkspace;
+}
+
 const DEFAULT_SCOPE: ExecutionPreviewScope = { kind: PREVIEW_SCOPES.WORKFLOW };
 /** `stepIndex` that labels a step view as the workflow's `finalStep`. */
 const FINAL_STEP_VIEW_INDEX = -1;
@@ -275,8 +293,14 @@ export class ExecutionPreviewService {
     return redactExecutionPreview(preview);
   }
 
+  /**
+   * `inheritedCheckout` is set only for an inline child with no `worktree`
+   * key of its own, which runs where its parent runs (D4a) rather than
+   * resolving a worktree (or the settings default) for itself.
+   */
   private async buildUnredacted(
-    request: ExecutionPreviewRequest
+    request: ExecutionPreviewRequest,
+    inheritedCheckout?: PreviewExecutionCheckout
   ): Promise<WorkflowExecutionPreview> {
     const scope = request.scope ?? DEFAULT_SCOPE;
     const variables = {
@@ -334,14 +358,17 @@ export class ExecutionPreviewService {
     const managedMcpServers = await new McpRegistryFileManager(
       this.options.workspaceRoot
     ).readAll();
+    const checkout =
+      inheritedCheckout ??
+      (await this.buildWorktreePreview(
+        preparedWorkflow,
+        runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree(),
+        variables
+      ));
     const {
       dto: worktreePreview,
       executionWorkspace: worktreeExecutionWorkspace,
-    } = await this.buildWorktreePreview(
-      preparedWorkflow,
-      runStart.defaultWorktree ?? ConfigurationUtils.getDefaultWorktree(),
-      variables
-    );
+    } = checkout;
     const preflightMembers = new Map<number, ParallelGroupPreflightMember>();
     const parallelDiagnostics = new Map<number, CompatibilityDiagnostic[]>();
     const parallelGroupPreflights: ParallelGroupPreflightPreview[] = [];
@@ -499,6 +526,28 @@ export class ExecutionPreviewService {
 
     const steps: StepExecutionPreview[] = [];
     for (const target of targets) {
+      if (isSubWorkflowStep(target.step)) {
+        const subWorkflowStep = await this.buildSubWorkflowStepPreview(
+          target,
+          target.step,
+          preparedWorkflow,
+          variables,
+          request,
+          parallelDiagnostics.get(target.stepIndex) ?? [],
+          checkout,
+          this.authoredStep(authoredWorkflow, target),
+          authoredWorkflow
+        );
+        if (typeof subWorkflowStep === "string") {
+          blockers.set(target.stepIndex, {
+            stepIndex: target.stepIndex,
+            message: subWorkflowStep,
+          });
+        } else if (subWorkflowStep) {
+          steps.push(subWorkflowStep);
+        }
+        continue;
+      }
       steps.push(
         await this.buildStepPreview(
           target,
@@ -541,8 +590,16 @@ export class ExecutionPreviewService {
       ...(request.definitionRevision !== undefined
         ? { definitionRevision: String(request.definitionRevision) }
         : {}),
+      // A file child resolves its own harness when it starts.
       harnessIds: [
-        ...new Set(steps.map((step) => step.resolvedProperties.harnessId)),
+        ...new Set(
+          steps
+            .filter(
+              (step) =>
+                step.subWorkflow?.source !== SUB_WORKFLOW_SOURCE_KINDS.FILE
+            )
+            .map((step) => step.resolvedProperties.harnessId)
+        ),
       ],
       totalByteCount: steps.reduce(
         (total, step) => total + (step.prompt?.totalByteCount ?? 0),
@@ -945,11 +1002,178 @@ export class ExecutionPreviewService {
   }
 
   /**
+   * A `type: workflow` step's preview. The preview never expands a child's
+   * steps (v1): a file child is one "Runs <file>" entry, since the child
+   * resolves its own harness and settings when it starts. An inline child is
+   * materialized exactly as the launch does (D13) and previewed as the
+   * one-step workflow it becomes, so its harness, model and properties are
+   * the inherited ones, its `{{vars}}` are substituted once, by the child,
+   * and its `$previous`-style references address the child run, never the
+   * parent's output. Returns a blocker message when the child would fail
+   * substitution before running, and `undefined` when it has nothing to run.
+   */
+  private async buildSubWorkflowStepPreview(
+    target: PreviewStepTarget,
+    preparedStep: SubWorkflowStep,
+    workflow: PromptFile,
+    variables: Record<string, string>,
+    request: ExecutionPreviewRequest,
+    parallelDiagnostics: readonly CompatibilityDiagnostic[],
+    parentCheckout: PreviewExecutionCheckout,
+    authoredStep: WorkflowStep | undefined,
+    authoredWorkflow: PromptFile
+  ): Promise<StepExecutionPreview | string | undefined> {
+    const parallelGroupId = this.parallelGroupId(workflow, target.stepIndex);
+    const groupField = parallelGroupId ? { parallelGroupId } : {};
+    const authored =
+      authoredStep && isSubWorkflowStep(authoredStep)
+        ? authoredStep
+        : preparedStep;
+    if (typeof authored.workflow === "string") {
+      const step = this.substituteDispatchStep(target, variables);
+      const resolution = this.resolveTarget(step, workflow);
+      // The child has its own conditions, so the parent's are not shown.
+      const conditions = this.buildConditions(undefined, undefined, undefined);
+      return {
+        stepIndex: target.stepIndex,
+        ...groupField,
+        ...(step.name ? { stepName: step.name } : {}),
+        type: PREVIEW_STEP_TYPES.WORKFLOW,
+        resolvedProperties: this.toResolvedPropertiesPreview(
+          resolution.properties,
+          resolution,
+          conditions,
+          false,
+          [],
+          [],
+          workflow
+        ),
+        workspaceMutations: [],
+        variables: [],
+        conditions,
+        diagnostics: [...parallelDiagnostics],
+        subWorkflow: {
+          source: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+          workflowPath: authored.workflow,
+        },
+      };
+    }
+    if (!isInlineSubWorkflowDefinition(authored.workflow)) {
+      throw new Error(
+        describeInvalidInlineSubWorkflowDefinition(authored.workflow) ??
+          "Invalid inline workflow definition"
+      );
+    }
+
+    const viewIndex = target.isFinalStep
+      ? FINAL_STEP_VIEW_INDEX
+      : target.stepIndex;
+    const outerName = substituteInlineStepName(authored, variables, viewIndex);
+    const { definition, displayName } = materializeInlineSubWorkflow(
+      authoredWorkflow,
+      variables,
+      authored,
+      getInlineSubWorkflowPosition(
+        target.isFinalStep
+          ? { isFinalStep: true, passNumber: 1 }
+          : { isFinalStep: false, stepIndex: target.stepIndex }
+      ),
+      request.workflowName,
+      outerName
+    );
+    const ownsCheckout = definition.worktree !== undefined;
+    // The child's definition was authored in the parent's file, so it
+    // resolves references and trust from the parent's paths (D13).
+    const childPreview = await this.buildUnredacted(
+      {
+        workflow: definition,
+        scope: { kind: PREVIEW_SCOPES.STEP, stepIndex: 0 },
+        workflowName: displayName,
+        ...(request.variables ? { variables: request.variables } : {}),
+        sourcePath: request.sourcePath,
+        sourceDefinitionPath: request.sourceDefinitionPath,
+        ...("executionSourceDefinitionPath" in request
+          ? {
+              executionSourceDefinitionPath:
+                request.executionSourceDefinitionPath,
+            }
+          : {}),
+        workflowTrustSourcePath: request.workflowTrustSourcePath,
+        workingFilePath: request.workingFilePath,
+      },
+      ownsCheckout ? undefined : parentCheckout
+    );
+    const child = childPreview.steps[0];
+    if (!child) {
+      return childPreview.substitutionBlockers?.[0]?.message;
+    }
+    const ownWorktree =
+      ownsCheckout &&
+      subWorkflowCreatesWorktree(
+        classifySubWorkflowWorktree(definition.worktree)
+      )
+        ? childPreview.worktree
+        : undefined;
+    // A one-step child has no parallel group of its own.
+    return {
+      ...child,
+      stepIndex: target.stepIndex,
+      ...groupField,
+      stepName: outerName?.trim() || child.stepName || displayName,
+      diagnostics: this.dedupeDiagnostics([
+        ...child.diagnostics.map((diagnostic) =>
+          this.toParentDiagnostic(diagnostic, target)
+        ),
+        ...parallelDiagnostics,
+      ]),
+      subWorkflow: {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: displayName,
+        ...(ownWorktree ? { worktree: ownWorktree } : {}),
+      },
+    };
+  }
+
+  /**
+   * Re-address an inline child's diagnostic to the parent step it stands
+   * for. The child's root properties are the parent's (D13), so a root
+   * pointer already names the parent's field; the child's step is the
+   * parent step's `workflow` definition.
+   */
+  private toParentDiagnostic(
+    diagnostic: CompatibilityDiagnostic,
+    target: PreviewStepTarget
+  ): CompatibilityDiagnostic {
+    const childStepPointer = "/steps/0";
+    const parentStepPointer = target.isFinalStep
+      ? "/finalStep/workflow"
+      : `/steps/${target.stepIndex}/workflow`;
+    const pointer = diagnostic.propertyPointer;
+    return {
+      ...diagnostic,
+      ...(diagnostic.consumer
+        ? {
+            consumer: target.isFinalStep
+              ? { kind: FINAL_STEP_PHASES.FINAL_STEP }
+              : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.stepIndex },
+          }
+        : {}),
+      ...(pointer &&
+      (pointer === childStepPointer ||
+        pointer.startsWith(`${childStepPointer}/`))
+        ? {
+            propertyPointer:
+              parentStepPointer + pointer.slice(childStepPointer.length),
+          }
+        : {}),
+    };
+  }
+
+  /**
    * Group preflight issues on members with no step preview of their own (a
-   * member outside the scope, or a workflow step, which has no step preview
-   * yet), for every group a previewed step belongs to. Some issues name only
-   * such members (`WORKTREE_COLLISION` is always between workflow steps), and
-   * the group still fails on them.
+   * member outside the scope), for every group a previewed step belongs to.
+   * Some issues name only such members (`WORKTREE_COLLISION` is always
+   * between workflow steps), and the group still fails on them.
    */
   private unpreviewedMemberDiagnostics(
     workflow: PromptFile,

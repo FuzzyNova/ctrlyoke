@@ -21,7 +21,11 @@ import {
   SANDBOX_UI_LABELS,
   EFFECTIVE_SANDBOX_KINDS,
   effectiveSandboxLabel,
+  formatSubWorkflowRunsLabel,
+  STEP_TYPES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
 } from "@root/types/DashboardConstants";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "@root/types/SubWorkflowTypes";
 import type {
   CompatibilityDiagnostic,
   CompatibilityDiagnosticSeverity,
@@ -68,6 +72,7 @@ import {
   MAX_COLLAPSED_OUTPUT_MAX_CHARS,
 } from "@utils/outputTruncation";
 import { formatMagnitude } from "@utils/number";
+import { getStepKindIconClass } from "@utils/status";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import { HarnessIcon } from "./HarnessIcon";
 import { Modal } from "./Modal";
@@ -140,8 +145,60 @@ function getWorstSeverity(
   );
 }
 
+/** The path a file-referenced workflow step runs, when `step` is one. */
+function getFileSubWorkflowPath(
+  step: StepExecutionPreview
+): string | undefined {
+  return step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.FILE
+    ? step.subWorkflow.workflowPath
+    : undefined;
+}
+
+/** The child's own worktree, for an inline workflow step that has one. */
+function getInlineSubWorkflowWorktree(
+  step: StepExecutionPreview
+): WorktreeExecutionPreview | undefined {
+  return step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE
+    ? step.subWorkflow.worktree
+    : undefined;
+}
+
 function stepLabel(step: StepExecutionPreview): string {
-  return step.stepName?.trim() || `${step.type} step`;
+  const workflowPath = getFileSubWorkflowPath(step);
+  return (
+    step.stepName?.trim() ||
+    (workflowPath !== undefined
+      ? formatSubWorkflowRunsLabel(workflowPath)
+      : `${step.type} step`)
+  );
+}
+
+/**
+ * The harness a step runs on, or the workflow kind icon for a file child,
+ * which resolves its own harness when it starts.
+ */
+function StepKindIcon({
+  step,
+  size,
+}: {
+  step: StepExecutionPreview;
+  size: number;
+}): React.ReactElement {
+  return getFileSubWorkflowPath(step) !== undefined ? (
+    <Icon
+      name={getStepKindIconClass(STEP_TYPES.WORKFLOW)}
+      className="shrink-0 text-description-fg"
+      title={SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+    />
+  ) : (
+    <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={size} />
+  );
+}
+
+function stepKindDescription(step: StepExecutionPreview): string {
+  return getFileSubWorkflowPath(step) !== undefined
+    ? SUB_WORKFLOW_DASHBOARD_LABELS.workflow
+    : getHarnessDisplayName(step.resolvedProperties.harnessId);
 }
 
 function stepForScope(
@@ -518,6 +575,21 @@ function TimelineEntryRow({
     );
   }
 
+  if (entry.kind === STEP_TIMELINE_ENTRY_KINDS.SUB_WORKFLOW) {
+    return (
+      <div className="flex items-center gap-3 rounded-sm border border-panel-border px-3 py-2 text-xs">
+        <div className="min-w-0 truncate text-editor-fg">
+          <Icon
+            name={getStepKindIconClass(STEP_TYPES.WORKFLOW)}
+            className="mr-2 text-description-fg"
+          />
+          {SUB_WORKFLOW_DASHBOARD_LABELS.previewRuns}{" "}
+          <code>{entry.workflowPath}</code>
+        </div>
+      </div>
+    );
+  }
+
   if (entry.kind === STEP_TIMELINE_ENTRY_KINDS.COMMAND) {
     return (
       <div className="flex items-center justify-between gap-3 rounded-sm border border-panel-border px-3 py-2 text-xs">
@@ -670,7 +742,7 @@ function StepTimelineHeading({
       <span className="w-4 shrink-0 text-right text-xxs">
         {step.stepIndex + 1}
       </span>
-      <HarnessIcon harnessId={step.resolvedProperties.harnessId} size={15} />
+      <StepKindIcon step={step} size={15} />
       <span className="min-w-0 flex-1 truncate">{stepLabel(step)}</span>
     </div>
   );
@@ -891,6 +963,13 @@ function SummaryPanel({
         />
       </section>
 
+      {step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE && (
+        <InlineChildRunSection
+          childName={step.subWorkflow.childName}
+          worktree={step.subWorkflow.worktree}
+        />
+      )}
+
       <SubstitutionList
         title="Substituted fields"
         substitutions={step.substitutions}
@@ -913,6 +992,75 @@ function SummaryPanel({
           entries={buildStepTimeline(step)}
           onNavigate={onNavigate}
         />
+      </section>
+    </div>
+  );
+}
+
+/** An inline workflow step's child run: its name and own worktree. */
+function InlineChildRunSection({
+  childName,
+  worktree,
+}: {
+  childName: string;
+  worktree: WorktreeExecutionPreview | undefined;
+}): React.ReactElement {
+  return (
+    <section data-testid="dry-run-inline-child">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">
+        {SUB_WORKFLOW_DASHBOARD_LABELS.previewChildRun}
+      </h3>
+      <DefinitionList entries={[["Name", childName]]} />
+      <p className="mt-2 text-xs text-description-fg">
+        {SUB_WORKFLOW_DASHBOARD_LABELS.previewInlineNote}
+      </p>
+      {worktree && (
+        <div className="mt-4">
+          <p className="mb-2 flex items-center gap-1 text-xs text-editor-fg">
+            <Icon name="worktree-compact" className="shrink-0" />
+            {SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle}
+          </p>
+          <WorktreeSummary worktree={worktree} substitutions={undefined} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The whole preview of a file-referenced workflow step: the file it runs. */
+function FileSubWorkflowPanel({
+  step,
+  workflowPath,
+}: {
+  step: StepExecutionPreview;
+  workflowPath: string;
+}): React.ReactElement {
+  return (
+    <div className="flex flex-col gap-5 p-4" data-testid="dry-run-file-child">
+      <section>
+        <p className="flex items-center gap-2 text-sm text-editor-fg">
+          <Icon
+            name={getStepKindIconClass(STEP_TYPES.WORKFLOW)}
+            className="shrink-0 text-description-fg"
+          />
+          <span className="min-w-0 break-all">
+            {SUB_WORKFLOW_DASHBOARD_LABELS.previewRuns}{" "}
+            <code>{workflowPath}</code>
+          </span>
+        </p>
+        <p className="mt-2 text-xs text-description-fg">
+          {SUB_WORKFLOW_DASHBOARD_LABELS.previewFileNote}
+        </p>
+      </section>
+      <section>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">
+          Diagnostics
+        </h3>
+        {step.diagnostics.length > 0 ? (
+          <DiagnosticList diagnostics={step.diagnostics} />
+        ) : (
+          <p className="text-xs text-description-fg">No step diagnostics.</p>
+        )}
       </section>
     </div>
   );
@@ -1361,6 +1509,8 @@ function StepDetail({
     }
     return overrides;
   }, [step]);
+  const workflowPath = getFileSubWorkflowPath(step);
+  const ownWorktree = getInlineSubWorkflowWorktree(step);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -1370,51 +1520,71 @@ function StepDetail({
             {stepLabel(step)}
           </div>
           <div className="mt-1 flex items-center gap-2 text-xxs text-description-fg">
-            <HarnessIcon
-              harnessId={step.resolvedProperties.harnessId}
-              size={14}
-            />
-            <span>
-              {getHarnessDisplayName(step.resolvedProperties.harnessId)}
-            </span>
+            <StepKindIcon step={step} size={14} />
+            <span>{stepKindDescription(step)}</span>
+            {step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE && (
+              <span className="rounded-sm bg-badge-bg px-1 py-px text-badge-fg">
+                {SUB_WORKFLOW_DASHBOARD_LABELS.workflow}
+              </span>
+            )}
+            {ownWorktree && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-sm bg-badge-bg px-1 py-px text-badge-fg"
+                title={SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle}
+                data-testid="dry-run-worktree-badge"
+              >
+                <Icon name="worktree-compact" />
+                <span>
+                  {ownWorktree.branch ?? SUB_WORKFLOW_DASHBOARD_LABELS.worktree}
+                </span>
+              </span>
+            )}
           </div>
         </div>
         <span className="shrink-0 text-xxs text-description-fg">
           Step {step.stepIndex + 1}
         </span>
       </div>
-      <SegmentedTabBar
-        tabs={DRY_RUN_TAB_DEFINITIONS}
-        activeTab={activeTab}
-        onTabChange={onTabChange}
-        ariaLabel="Dry run sections"
-        harnessId={step.resolvedProperties.harnessId}
-        tabOverrides={tabOverrides}
-        className="flex shrink-0 items-center border-b border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {activeTab === DRY_RUN_TABS.SUMMARY && (
-          <SummaryPanel step={step} onNavigate={onNavigateToTab} />
-        )}
-        {activeTab === DRY_RUN_TABS.PAYLOAD && (
-          <PayloadPanel
-            step={step}
-            expandedChunks={expandedChunks}
-            onToggleChunk={onToggleChunk}
+      {workflowPath !== undefined ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <FileSubWorkflowPanel step={step} workflowPath={workflowPath} />
+        </div>
+      ) : (
+        <>
+          <SegmentedTabBar
+            tabs={DRY_RUN_TAB_DEFINITIONS}
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+            ariaLabel="Dry run sections"
+            harnessId={step.resolvedProperties.harnessId}
+            tabOverrides={tabOverrides}
+            className="flex shrink-0 items-center border-b border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
           />
-        )}
-        {activeTab === DRY_RUN_TABS.COMMAND && (
-          <CommandPanel
-            step={step}
-            worktree={worktree}
-            selectedShell={selectedShell}
-            onSelectShell={onSelectShell}
-          />
-        )}
-        {activeTab === DRY_RUN_TABS.CONDITIONS && (
-          <ConditionsPanel step={step} />
-        )}
-      </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {activeTab === DRY_RUN_TABS.SUMMARY && (
+              <SummaryPanel step={step} onNavigate={onNavigateToTab} />
+            )}
+            {activeTab === DRY_RUN_TABS.PAYLOAD && (
+              <PayloadPanel
+                step={step}
+                expandedChunks={expandedChunks}
+                onToggleChunk={onToggleChunk}
+              />
+            )}
+            {activeTab === DRY_RUN_TABS.COMMAND && (
+              <CommandPanel
+                step={step}
+                worktree={ownWorktree ?? worktree}
+                selectedShell={selectedShell}
+                onSelectShell={onSelectShell}
+              />
+            )}
+            {activeTab === DRY_RUN_TABS.CONDITIONS && (
+              <ConditionsPanel step={step} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1460,10 +1630,7 @@ function Rail({
               <span className="w-4 shrink-0 text-right text-xxs">
                 {step.stepIndex + 1}
               </span>
-              <HarnessIcon
-                harnessId={step.resolvedProperties.harnessId}
-                size={15}
-              />
+              <StepKindIcon step={step} size={15} />
               <span className="min-w-0 flex-1 truncate">{stepLabel(step)}</span>
               {style && (
                 <span
@@ -1606,7 +1773,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
     ...(preview?.steps.map((step) => ({
       value: String(step.stepIndex),
       label: `${step.stepIndex + 1}. ${stepLabel(step)}`,
-      description: getHarnessDisplayName(step.resolvedProperties.harnessId),
+      description: stepKindDescription(step),
     })) ?? []),
   ];
 
