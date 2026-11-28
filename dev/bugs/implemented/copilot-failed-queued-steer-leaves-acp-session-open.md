@@ -9,7 +9,7 @@
 A headless Copilot ACP step is running. The user sends a steer, and the
 running `session/prompt` then fails, for example with
 `{"id":3,"error":{"message":"rate limited"}}`. The steer is rejected with the
-*previous turn's* error ("rate limited"). stdin is never ended, so
+_previous turn's_ error ("rate limited"). stdin is never ended, so
 `copilot --acp` waits for input forever and the step never finishes. The same
 run without a steer settles normally and ends stdin.
 
@@ -38,8 +38,7 @@ The output was `steer rejected: rate limited`, then
   to `queuedSteersAwaitingTurn` and keeps `controlTurnActive = true`.
   `closeAfterTurnEnd` then returns early because `hasOutstandingSteers()` is
   true (around line 730).
-- When `controlChannel.sendUserMessage(text)` throws, the catch (around line
-  1011) only calls `releaseReservation()`. That empties the queue and clears
+- When `controlChannel.sendUserMessage(text)` throws, the catch (around line 1011) only calls `releaseReservation()`. That empties the queue and clears
   `controlTurnActive`, but nothing calls `closeAfterTurnEnd()` again. No
   prompt was sent, so no further TURN_END arrives, and stdin is never closed.
 - The throw comes from `CopilotHeadlessControlChannel.ts:164-167`:
@@ -50,7 +49,7 @@ The output was `steer rejected: rate limited`, then
 
 1. In the steer send's catch, after `releaseReservation()`, re-run the
    close-after-turn-end check: close when `!controlTurnActive &&
-   !hasOutstandingSteers()`. Doing this inside the release function itself
+!hasOutstandingSteers()`. Doing this inside the release function itself
    would also work.
 2. In `CopilotHeadlessControlChannel.sendQueuedUserMessage`, don't hand the
    earlier prompt's rejection to the steer. Wait with

@@ -38,7 +38,10 @@ act(() => {
   });
 });
 act(() => {
-  dispatch(MESSAGE_TYPES.EXECUTION_STARTED, { fileName: "wf.yaml", totalSteps: 2 });
+  dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+    fileName: "wf.yaml",
+    totalSteps: 2,
+  });
 });
 expect(useWorkflowStore.getState().liveContextWindow[0]).toBeUndefined();
 // Fails: { used: 150000, size: 200000 }

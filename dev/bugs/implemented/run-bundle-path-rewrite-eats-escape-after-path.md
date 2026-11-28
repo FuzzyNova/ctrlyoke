@@ -30,10 +30,20 @@ Against the compiled `out/utils/RunBundlePaths.js`:
 
 ```js
 const m = require("./out/utils/RunBundlePaths.js");
-const rw = m.createPortablePathRewriter({ workspaceRoot: "/Users/alex/dev/app", homeDir: "/Users/alex" });
-rw(JSON.stringify({ input: "*** Update File: /Users/alex/dev/app/src/a.ts\n@@\n-old" }));
+const rw = m.createPortablePathRewriter({
+  workspaceRoot: "/Users/alex/dev/app",
+  homeDir: "/Users/alex",
+});
+rw(
+  JSON.stringify({
+    input: "*** Update File: /Users/alex/dev/app/src/a.ts\n@@\n-old",
+  })
+);
 // → {"input":"*** Update File: ${workspaceFolder}/src/a.ts/n@@/n-old"}
-const rww = m.createPortablePathRewriter({ workspaceRoot: "C:\\dev\\app", homeDir: "C:\\Users\\alex" });
+const rww = m.createPortablePathRewriter({
+  workspaceRoot: "C:\\dev\\app",
+  homeDir: "C:\\Users\\alex",
+});
 JSON.parse(rww(JSON.stringify({ q: 'type "C:\\dev\\app\\b.txt"' })));
 // → SyntaxError: Expected ',' or '}' after property value
 ```

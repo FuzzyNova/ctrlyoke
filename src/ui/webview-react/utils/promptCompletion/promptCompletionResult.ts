@@ -374,7 +374,11 @@ export function findCustomCompletionContext(
   escape?: InsertTextEscape,
   jsonStyleEscapes = false
 ): { trigger: CompletionTrigger; query: string; from: number } | null {
-  const context = findPromptTriggerContext(textBefore, escape, jsonStyleEscapes);
+  const context = findPromptTriggerContext(
+    textBefore,
+    escape,
+    jsonStyleEscapes
+  );
   return context
     ? {
         trigger: context.trigger,

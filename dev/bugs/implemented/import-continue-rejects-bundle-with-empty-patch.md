@@ -13,14 +13,14 @@ The export reports `continuable: true` and `patch.files: 0`, and writes a
 
 - `--changes checkout` (default) and `--changes worktree` exit `0` with
   `"continued": false`. The warning reads: `Workspace changes were not applied;
-  the imported run is view-only. Command failed: git ... apply --index --3way
-  -- .../changes.patch error: No valid patches in input (allow with
-  "--allow-empty")`.
+the imported run is view-only. Command failed: git ... apply --index --3way
+-- .../changes.patch error: No valid patches in input (allow with
+"--allow-empty")`.
 - `--changes skip` continues, but warns "The checkout does not appear to
   contain the exported changes". That is false, because there are no changes.
 
 `docs/guide/export-import.md` makes a run view-only only when the base commit
-is missing or the patch is *rejected*. An empty patch has nothing to reject.
+is missing or the patch is _rejected_. An empty patch has nothing to reject.
 
 ## Steps to Reproduce
 

@@ -29,11 +29,11 @@ Run the real `CtrlYokeConfigService` with a `FileConfigBackend` and a
 `WorkspaceSettingsTrustStore` on temp files, against a trusted workspace
 identity. Then write at workspace scope:
 
-| Write path                                 | Resulting trust state for `defaults.toolPermissions` |
-| ------------------------------------------ | ---------------------------------------------------- |
+| Write path                                  | Resulting trust state for `defaults.toolPermissions`            |
+| ------------------------------------------- | --------------------------------------------------------------- |
 | `defaults.toolPermissions.mode` (dashboard) | `undecided`. The effective mode is still the user's `allowAll`. |
-| `defaults.toolPermissions` (whole object)  | `allow` (correct) |
-| `defaults.toolPermissions.allowedTools`    | `undecided` |
+| `defaults.toolPermissions` (whole object)   | `allow` (correct)                                               |
+| `defaults.toolPermissions.allowedTools`     | `undecided`                                                     |
 
 ## Root Cause
 
@@ -42,8 +42,8 @@ approves a new request only when its `settingPath` equals the written path or
 lies **below** it:
 
 ```ts
-(request.settingPath === writtenPath ||
-  request.settingPath.startsWith(`${writtenPath}.`))
+request.settingPath === writtenPath ||
+  request.settingPath.startsWith(`${writtenPath}.`);
 ```
 
 `defaults.toolPermissions` is registered as one whole-value setting
