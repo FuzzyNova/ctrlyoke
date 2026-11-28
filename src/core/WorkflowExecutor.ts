@@ -155,6 +155,7 @@ import type {
   SubWorkflowHost,
   SubWorkflowParentLink,
   SubWorkflowResult,
+  SubWorkflowWorktreePlan,
 } from "../types/SubWorkflowTypes";
 import { PromptFileParser } from "./PromptFileParser";
 import {
@@ -188,7 +189,10 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { RunSecretRedactor } from "../utils/SecretRedactionService";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
-import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootResolver";
+import {
+  mapExecutionPathToSourceCheckout,
+  mapSourceDefinitionPathToExecution,
+} from "../platform/WorkspaceRootResolver";
 import { pathsEqual } from "../utils/PathCasing";
 import {
   classifySubWorkflowWorktree,
@@ -3567,7 +3571,6 @@ export class WorkflowExecutor {
     const { source } = prepared;
     // An inline child has no file, so it records no resolved path.
     const filePath = prepared.resolvedPath;
-    const ancestors = context.ancestorPaths ?? [];
 
     const queueState = this.promptQueue.getState();
     const stepId = authoredStep._runtime?.stepId;
@@ -3596,7 +3599,8 @@ export class WorkflowExecutor {
         const recorded = await this.resolveRecordedChildRun(
           authoredStep,
           parent,
-          context
+          context,
+          filePath
         );
         completedChild = recorded?.completed === true;
         const resumeChildRun =
@@ -3648,8 +3652,11 @@ export class WorkflowExecutor {
                 ? [context.getExecutionLeaseOwnerToken()!]
                 : []),
             ],
-            ancestorPaths:
-              filePath === undefined ? ancestors : [...ancestors, filePath],
+            ancestorPaths: this.ancestorPathsForChild(
+              context,
+              filePath,
+              prepared.worktreePlan
+            ),
             // Siblings run beside each other only when the group fans out,
             // at the width its run was preflighted with: lowering the
             // setting mid-group must not hand this child the TTY beside a
@@ -3842,13 +3849,16 @@ export class WorkflowExecutor {
         return { ok: false, failureMessage: resolution.message };
       }
       const resolvedPath = path.resolve(resolution.path);
+      // The ancestors are in this workflow's source checkout (the root's
+      // authored file); the resolved path is in its execution checkout.
+      const comparable = this.toSourceCheckoutFrame(context, resolvedPath);
       const ancestors = context.ancestorPaths ?? [];
       if (
         ancestors.some((ancestor) =>
-          pathsEqual(path.resolve(ancestor), resolvedPath)
+          pathsEqual(path.resolve(ancestor), comparable)
         )
       ) {
-        const chain = [...ancestors, resolvedPath]
+        const chain = [...ancestors, comparable]
           .map((candidate) => path.basename(candidate))
           .join(" → ");
         return {
@@ -4057,15 +4067,83 @@ export class WorkflowExecutor {
   }
 
   /**
+   * D10/D6: a path as this workflow's source checkout names it. A file in a
+   * linked worktree and the same repo-relative file in the checkout it
+   * branched from are one workflow, so every comparison goes through here.
+   */
+  private toSourceCheckoutFrame(
+    context: WorkflowExecutionContext,
+    filePath: string
+  ): string {
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      context.executionWorkspace;
+    return mapExecutionPathToSourceCheckout(
+      filePath,
+      sourceCheckoutRoot,
+      executionCheckoutRoot
+    );
+  }
+
+  /** Whether two paths name one workflow file, in one checkout frame. */
+  private isSameSubWorkflowFile(
+    context: WorkflowExecutionContext,
+    recordedPath: string | undefined,
+    currentPath: string
+  ): boolean {
+    return (
+      recordedPath !== undefined &&
+      pathsEqual(
+        path.resolve(this.toSourceCheckoutFrame(context, recordedPath)),
+        path.resolve(this.toSourceCheckoutFrame(context, currentPath))
+      )
+    );
+  }
+
+  /**
+   * The ancestor chain a child receives, in the frame of the child's own
+   * source checkout: that is this run's execution checkout for a file child
+   * and for an inline child with its own worktree (D4b), and this run's source
+   * checkout for an inline child that inherits it. `ancestorPaths` arrives in
+   * this run's source checkout, so the first case maps it onward; the file
+   * child's own path is already in the execution checkout.
+   */
+  private ancestorPathsForChild(
+    context: WorkflowExecutionContext,
+    filePath: string | undefined,
+    worktreePlan: SubWorkflowWorktreePlan | undefined
+  ): readonly string[] {
+    const ancestors = context.ancestorPaths ?? [];
+    const childSourceIsExecutionCheckout =
+      filePath !== undefined ||
+      (worktreePlan !== undefined && subWorkflowCreatesWorktree(worktreePlan));
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      context.executionWorkspace;
+    const inChildFrame = childSourceIsExecutionCheckout
+      ? ancestors.map(
+          (ancestor) =>
+            mapSourceDefinitionPathToExecution(
+              ancestor,
+              sourceCheckoutRoot,
+              executionCheckoutRoot
+            ).executionPath ?? ancestor
+        )
+      : ancestors;
+    return filePath === undefined ? inChildFrame : [...inChildFrame, filePath];
+  }
+
+  /**
    * D6: the child run this step recorded on an earlier attempt, when it still
    * belongs to this exact parent step (run, phase and step or pass). A
    * completed child settles the step without a launch; any other state is
-   * continued. A missing, unreadable or foreign child launches fresh.
+   * continued. A missing, unreadable or foreign child launches fresh, and so
+   * does a file child recorded for a different file than the step now names
+   * (its `workflow` path was edited since the stop).
    */
   private async resolveRecordedChildRun(
     authoredStep: SubWorkflowStep,
     parent: SubWorkflowParentLink,
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    currentResolvedPath: string | undefined
   ): Promise<
     | { completed: boolean; run: { workflowKey: WorkflowKey; runRef: RunRef } }
     | undefined
@@ -4074,6 +4152,19 @@ export class WorkflowExecutor {
     const runRef = authoredStep._runtime?.childRunRef;
     const history = context.outputHistoryManager;
     if (!workflowKey || !runRef || !history) return undefined;
+    if (
+      currentResolvedPath !== undefined &&
+      !this.isSameSubWorkflowFile(
+        context,
+        authoredStep._runtime?.resolvedWorkflowPath,
+        currentResolvedPath
+      )
+    ) {
+      Log.warn(
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} ran ${authoredStep._runtime?.resolvedWorkflowPath ?? "no recorded file"}, not ${currentResolvedPath}; launching fresh`
+      );
+      return undefined;
+    }
     let manifest: WorkflowRunManifest;
     try {
       manifest = await history.readRunManifest(workflowKey, runRef);

@@ -76,7 +76,11 @@ export interface SubWorkflowLaunchRequest {
   /** Continue this exact child run instead of creating a new lineage. */
   resumeChildRun?: { workflowKey: WorkflowKey; runRef: RunRef };
   stateRoot: string;
-  /** Reserved for cycle detection; ignored by this launcher round. */
+  /**
+   * The workflow files already active above the child, root first (D10), in
+   * the frame of the child's own source checkout. The child refuses to run a
+   * file that is already one of its ancestors.
+   */
   ancestorPaths?: readonly string[];
   /**
    * True for a member of a parallel group that runs beside its siblings. The

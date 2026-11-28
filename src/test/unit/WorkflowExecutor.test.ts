@@ -6203,6 +6203,44 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
     assert.deepStrictEqual(feedback, []);
   });
+
+  test("a Continue that beats a confirmed pause's unwind carries on in place and clears the pause marker", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    integration.onSend = async (prompt) => ({
+      responseText: `ok:${prompt.prompt}`,
+      ...(prompt.prompt === "first"
+        ? { afterResponse: () => requestQueuePause(queue) }
+        : {}),
+    });
+    queue.loadPrompts({ steps: [{ prompt: "first" }, { prompt: "second" }] });
+
+    // The executor confirms the pause (PAUSING -> PAUSED) and commits it; the
+    // Continue lands inside that commit, before the queue loop has seen the
+    // PAUSED state, so the loop ends on a RUNNING run with a step left.
+    let resumed = false;
+    const subscription = queue.onDidChangeState((state) => {
+      if (!resumed && state.status === EXECUTION_STATES.PAUSED) {
+        resumed = true;
+        assert.ok(queue.getRuntimeStateMachine().resume());
+      }
+    });
+    try {
+      await executor.execute(integration, makeContext(integration));
+    } finally {
+      subscription.dispose();
+    }
+
+    assert.ok(resumed, "the pause was confirmed and resumed in place");
+    assert.deepStrictEqual(integration.sentPrompts, ["first", "second"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      executor.endedOnPause(),
+      false,
+      "the carry-on clears the pause it had confirmed"
+    );
+  });
 });
 
 suite("WorkflowExecutor sub-workflow steps", () => {
@@ -7207,22 +7245,38 @@ suite("WorkflowExecutor sub-workflow steps", () => {
      * A parent run with a real timeline whose step (queue step 0, or the
      * finalStep when `finalStep` is set) recorded `childKey`/`childRunRef`.
      */
-    async function setupRecordedRun(finalStep = false) {
-      const childRuntime = { childWorkflowKey: childKey, childRunRef };
+    async function setupRecordedRun(
+      finalStep = false,
+      /** The file the step names now, when it was edited since the stop. */
+      currentWorkflowPath = path.join(tempRoot, "child.ctrlyoke.yaml"),
+      /** `null`: the launch recorded no file (an inline step, say). */
+      recordedWorkflowPath: string | null = path.join(
+        tempRoot,
+        "child.ctrlyoke.yaml"
+      )
+    ) {
+      // A launch records the file it resolved beside the child's identity.
+      const childRuntime = {
+        childWorkflowKey: childKey,
+        childRunRef,
+        ...(recordedWorkflowPath === null
+          ? {}
+          : { resolvedWorkflowPath: recordedWorkflowPath }),
+      };
       const run = await setupRun(
         finalStep
           ? []
           : [
               {
                 type: STEP_TYPES.WORKFLOW,
-                workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+                workflow: currentWorkflowPath,
                 _runtime: { stepId: "step-1", ...childRuntime },
               },
             ]
       );
       const workflowStep = {
         type: STEP_TYPES.WORKFLOW,
-        workflow: run.childPath,
+        workflow: currentWorkflowPath,
         _runtime: childRuntime,
       } as NonNullable<PromptFile["finalStep"]>;
       if (finalStep) {
@@ -7484,6 +7538,55 @@ suite("WorkflowExecutor sub-workflow steps", () => {
           force: true,
         });
       }
+    });
+
+    test("a file child whose step now names another file launches fresh instead of continuing the recorded child", async () => {
+      const otherPath = path.join(tempRoot, "other.ctrlyoke.yaml");
+      await fs.writeFile(otherPath, "name: other\nsteps: []\n");
+      for (const state of [
+        EXECUTION_STATES.STOPPED,
+        EXECUTION_STATES.COMPLETED,
+      ]) {
+        const run = await setupRecordedRun(false, otherPath);
+        await writeChildManifest(state, run.queueParent);
+        const host = new RecordingSubWorkflowHost();
+        run.context.subWorkflowHost = host;
+
+        await run.executor.execute(run.integration, run.context);
+
+        assert.strictEqual(host.requests.length, 1, state);
+        const [request] = host.requests;
+        assert.strictEqual(request?.resumeChildRun, undefined, state);
+        assert.deepStrictEqual(
+          request?.source,
+          { kind: "file", resolvedPath: otherPath },
+          state
+        );
+        const step = run.queue.getState().steps[0];
+        assert.ok(step && isSubWorkflowStep(step));
+        assert.strictEqual(step._runtime?.childRunRef, freshRunRef, state);
+        assert.strictEqual(step._runtime?.resolvedWorkflowPath, otherPath);
+        await fs.rm(WorkflowPaths.runsRoot(tempRoot), {
+          recursive: true,
+          force: true,
+        });
+      }
+    });
+
+    test("a file child recorded with no resolved path cannot be confirmed and launches fresh", async () => {
+      const run = await setupRecordedRun(
+        false,
+        path.join(tempRoot, "child.ctrlyoke.yaml"),
+        null
+      );
+      await writeChildManifest(EXECUTION_STATES.STOPPED, run.queueParent);
+      const host = new RecordingSubWorkflowHost();
+      run.context.subWorkflowHost = host;
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(host.requests.length, 1);
+      assert.strictEqual(host.requests[0]?.resumeChildRun, undefined);
     });
 
     test("a finalStep child reattaches only within its own pass", async () => {

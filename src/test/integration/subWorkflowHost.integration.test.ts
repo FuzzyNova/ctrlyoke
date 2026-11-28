@@ -2356,6 +2356,84 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  /**
+   * `a` runs in a managed worktree and runs `b`, which runs `a` again. The
+   * root's ancestor entry is its authored file in the main checkout, while
+   * each child path resolves inside the execution checkout, so the cycle
+   * only shows once both are compared in one frame.
+   */
+  async function cycleThroughManagedParent(
+    prefix: string,
+    childWorktree: Record<string, unknown> | undefined
+  ): Promise<void> {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir(prefix);
+    const { createInstance, instances } = makeInstanceFactory(workspace);
+    try {
+      initGitRepository(workspace);
+      await writeJson(path.join(workspace, "a.ctrlyoke.json"), {
+        name: "a",
+        worktree: { mode: "managed", keep: true },
+        steps: [{ type: "workflow", workflow: "b.ctrlyoke.json" }],
+      });
+      await writeJson(path.join(workspace, "b.ctrlyoke.json"), {
+        name: "b",
+        ...(childWorktree ? { worktree: childWorktree } : {}),
+        steps: [{ type: "workflow", workflow: "a.ctrlyoke.json" }],
+      });
+      commitAll(workspace, "add cyclic workflows");
+      const root = createInstance();
+      instances.push(root);
+      assert.strictEqual(
+        await root.loadPromptFile(path.join(workspace, "a.ctrlyoke.json")),
+        true
+      );
+      await root.executeLoadedPromptFile();
+
+      const failures = instances.flatMap((instance) =>
+        instance.promptQueue
+          .getState()
+          .steps.map((step) => step._runtime?.failureMessage ?? "")
+      );
+      assert.ok(
+        failures.some((message) =>
+          message.includes(
+            "Sub-workflow cycle detected: a.ctrlyoke.json → b.ctrlyoke.json → a.ctrlyoke.json"
+          )
+        ),
+        failures.join("\n")
+      );
+      assert.strictEqual(root.promptQueue.getState().status, "error");
+      // The root and `b` only: the cycle is refused before a third level.
+      assert.strictEqual(
+        instances.length,
+        2,
+        "no workflow launched a third level"
+      );
+    } finally {
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  }
+
+  test("a cycle through a managed worktree parent and an inheriting child is refused before a third level launches", async function () {
+    this.timeout(120_000);
+    await cycleThroughManagedParent("ctrlyoke-cycle-inherit-", undefined);
+  });
+
+  test("a cycle through a managed worktree parent and a child with its own worktree is refused before a third level launches", async function () {
+    this.timeout(120_000);
+    await cycleThroughManagedParent("ctrlyoke-cycle-own-worktree-", {
+      mode: "managed",
+      keep: true,
+    });
+  });
+
   test("runs child scripts, links child runs, and fails through a child failure or cycle", async () => {
     const workspace = makeTempDir("ctrlyoke-subworkflow-");
     const instances: WorkflowInstance[] = [];
