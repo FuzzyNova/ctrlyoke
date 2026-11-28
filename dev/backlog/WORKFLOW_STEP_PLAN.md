@@ -1595,8 +1595,9 @@ The dropdown needs no other change.
   fields. All prompt-only and script-only sections are hidden. A **File / Inline** switch picks
   D13's inline form. Inline shows the existing prompt or script editor for the wrapped step, plus
   a worktree control. The control reuses the workflow-level worktree editor, so there is no
-  second copy. The workflow-properties editor gains a `worktreePresets` list next to
-  `conditions`.
+  second copy. (An earlier revision also gave the workflow-properties editor a
+  `worktreePresets` list "next to `conditions`". There is no `conditions` editor: both catalogs
+  are author-only YAML, preserved but not edited by the dashboard; see Decisions, round 15.)
 - **Building properties:** `buildScriptProperties` (`StepEditor.tsx:931`) is now a thin
   `useCallback` over `getScriptStepPropertyUpdate` (`utils/scriptStepProperties.ts:34`), which
   `utils/executionPreview.ts` shares. The duplication earlier revisions flagged is gone. Add
@@ -2824,31 +2825,104 @@ summaries instead.
     - Low, left: the steps-panel whole-store re-renders (bug filed); Script mode still shows the
       execution-mode picker; no file-exists/parse check when saving a typed path (launch fails
       under `onFail`).
+- **Round 15 (reviewed 2026-11-27): round-14 gaps, the inline (D13) editor; landing step 7
+  is all but done.** All four `claude-cli`/`opus` steps did what they were asked, each gated
+  by the `committed` preset; `npm test` green (8918 extension, 5046 UI, packaging), lint and
+  `check:docs` clean. Two parallel reviewers read the core and dashboard diffs, and this pass
+  checked the inline editor live in the hosted dashboard (an existing lane loads into the
+  Inline form with its prompt, properties drawer and Managed worktree controls; Update
+  saves). No review fix was committed this pass: everything found needs a test first and
+  went into round 16.
+  - `ff9453f57`: a Stop of a paused run waits for the pause's own settlement (`startPending`),
+    with the 5 s cap only on the executor's unwind; the executor reports `endedOnPause()`, so a
+    Continue that beats the settlement keeps the worktree (the review's window was narrower
+    than stated: only a pause confirmed after a final step appended queue work skipped the
+    in-place carry-on); Continue-then-Stop asserts STOPPED (already correct);
+    `settleIntegrationArtifacts` shared by the parked and live loops; the joiner
+    `WORKTREE_COLLISION` flake was the test's `laneChildOf` matching `runRef` alone (two lanes
+    started in one millisecond), now also `childWorkflowKey`.
+  - `5ab433940`: @src/core/PromptFileResolutionOptions.ts `buildPromptFileResolutionOptions`
+    used by the launch and the queue-time check (`WorkflowInstance.getPromptFileResolutionInput`);
+    a picked file inside the run's worktree is stored workspace-relative
+    (`mapExecutionPathToSourceCheckout`); the router's native picker goes through
+    `WorkflowOrchestrator.buildSubWorkflowStepReferenceForClient`; new
+    `NORMALIZE_SUB_WORKFLOW_STEP_FILE` → `SUB_WORKFLOW_STEP_FILE_SELECTED` or
+    `WORKFLOW_ACTION_FAILED`; `recordedRanWith` reads the latest started prompt step only;
+    named test waits and typed builders; executor-level late member under `maxParallelSteps`
+    failing `WORKTREE_COLLISION`.
+  - `408ddf8da`: hosted Browse normalized by the backend; `getEditorOnlyDraftKind` guards Move
+    to Editor and keeps script and workflow drafts; picker request/reply `targetKey`
+    (`newPrompt`, `queue:N`, `finalStep`); backslashes normalized on input; menu-value and
+    `STEP_EDITOR_MODE_LABELS` constants; a Vitest render test proves the content control ids
+    (the integration guard narrowed to what a source scan proves); `useQueueFilePicker`
+    captures Queue from File's target when chosen.
+  - `0a94c2def`: inline editor. File / Inline from `subWorkflowInline` (no boolean); the
+    wrapped prompt/script editors reused; `WorktreeConfigEditor`, `ModeSwitch`,
+    `SchemaFormField` extracted from the workflow properties panel (panel ids unchanged);
+    **Parent's checkout** option for no `worktree` key; File ↔ Inline keeps both forms in one
+    edit; inline steps editable and movable; two inline `schemaUiPropertyRoundTrip` surfaces
+    from the schema's `inlineSubWorkflowDefinition` (no opt-outs); preview through the shared
+    builder; docs and CHANGELOG.
+  - **Found in review, not yet fixed** (round 16 steps 1–2):
+    - Inline worktree writes schema-invalid empty strings (bug, **confirmed live**): toggling
+      Keep Directory on a lane saved `{ mode: managed, base: "", setup: "", merge: true,
+keep: true }`; `managedWorktreeConfig.base` has `minLength: 1`, so the file no longer
+      validates (`ctrlyoke validate` refuses it at the workflow level too).
+      `worktreeConfigForMode`/`editableWorktreeConfig` in
+      @src/ui/webview-react/components/shared/WorktreeConfigEditor.tsx seed and rebuild empty
+      `base`/`setup`; the workflow-level panel sends the same objects through
+      `UPDATE_WORKFLOW_PROPERTY` (likely pre-existing; verify).
+    - Settlement that throws hangs Stop forever (read): `settleWorkflowExecution` has no
+      try/finally, so `finishExecutionHistory` (which clears `startPending` and resolves
+      `executionSettledPromise`) never runs; the now-uncapped stop wait, every later Stop
+      (`pausedRunStop`) and every Continue are stuck.
+    - `pauseConfirmed` goes stale (read): reset only at the top of `execute()`. The in-place
+      carry-on (`WorkflowExecutor.ts` after `statusAfterQueue`) keeps it true, and a start that
+      fails before `execute()` (runner lock, lease, `restoreRetainedIntegrations`) settles with
+      the previous execution's value, so a RUNNING run can settle as paused and keep its
+      worktree, lease and lock.
+    - A Stop that arrives before `activeWorktreeSettlementAbort` exists can no longer cut a
+      queued worktree settlement short; it waits out a sibling's merge (delay, not deadlock).
+    - Editor: `convertPromptToFile`/`persistPromptFileReference` are reachable in inline prompt
+      mode, guarded only by the header (an `UPDATE_PROMPT` without `type` would replace the
+      wrapper); an insert into an inline script calls `setStepType(PROMPT)` and leaves
+      Workflow mode; the wrapped step's execution-mode picker is hidden; `targetKey` is
+      positional (`queue:N`; use the step id); the 15-field script mapping is repeated four
+      times (`buildScriptProperties`, `handleUpdate`, `executionPreview.ts`,
+      `buildInlineSubWorkflowDefinition`); `isNewStepDraftDirty` ignores `subWorkflowInline`;
+      the named-branch refusal test never clicks Update; stale comments above
+      `STEP_EDITOR_MODE_LABELS`/`WORKFLOW_CONTROLS_MENU_VALUES` and on
+      `normalizeWorkflowFilePath`; `handleModeChange` has no `assertNever`.
+    - Low, left: a settled NAMED-worktree run with no resident instance resolves a queued file
+      against the default workspace, so an untracked file only in that worktree is refused at
+      queue time (stricter than the launch, never looser); symlinked picker paths
+      (`/var` vs `/private/var`) are not mapped out of the worktree; the wrapped step's own
+      `name`/`enabled`/`color` have no inline control (kept as written; the header edits the
+      outer step's); saving an inline prompt does not run D13's boundary check (fails at
+      launch under `onFail`).
 
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 15 (queued 2026-11-27): round-14 gaps, then the inline editor.** All on
+- **Round 16 (queued 2026-11-27): round-15 gaps, preview, completions, leftovers.** All on
   `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Core pause/stop settlement: wait on the settlement, not liveness; Continue alone during
-     the unwind keeps the worktree reservation; manifest status of Continue-then-Stop; one
-     cleanup helper for parked and live integrations.
-  2. One resolver setup for queue-time and launch resolution, exposed for the router's editor
-     picker; `recordedRanWith`; test hygiene and casts; late-dispatch executor test.
-  3. Editor fixes: hosted and native Browse both normalized by the backend; Move to Editor
-     keeps or guards a Workflow-mode draft; picker reply target key; backslashes; literals;
-     stronger content-control guard; inline Queue from File captures its address.
-  4. Inline (D13) editor mode: File / Inline switch, the wrapped prompt/script editor, the
-     worktree control reusing the workflow-level editor, an inline `schemaUiPropertyRoundTrip`
-     surface; live check.
-- **Round 16:** `worktreePresets` list in the workflow properties editor (round-trip
-  coverage); execution preview ("Runs <file>"; inline child as its wrapped step plus "in its
-  own worktree"; preview parsing file children for `WORKTREE_COLLISION`/`MERGE_INTO_SHARED_ROOT`
-  if cheap); completions (`SUB_WORKFLOW_STEP` object kind, `workflow` path role,
-  `subWorkflowOnly` root keys, snippet, session-candidate exclusion).
-- **Round 17:** `StepReferenceShifts` skipping inline definitions, `ctrlyoke-syntax` skill and
-  tech-support agent `$previous` meaning; then the whole-spec requirement-by-requirement audit.
+  1. Core settlement robustness: settlement always finishes (try/finally), `pauseConfirmed`
+     reset on carry-on and at `beginExecution`, a stop aborts a worktree settlement wait
+     queued after it.
+  2. Editor fixes: no empty `base`/`setup` from `WorktreeConfigEditor` (both surfaces),
+     inline guards (prompt-file conversion, insert into inline script, execution-mode
+     picker), `targetKey` by step id, one script-field mapping, inline dirty tracking, test
+     and comment fixes.
+  3. Execution preview: "Runs <file>" for a file child; an inline child as its materialized
+     wrapped step plus "in its own worktree".
+  4. Completions (whole "Completions" section): `SUB_WORKFLOW_STEP` object kind and outline,
+     `workflow` path role, `subWorkflowOnly` root keys, snippet, session-candidate exclusion,
+     step-number completions skipping inline definitions.
+  5. `StepReferenceShifts` skipping inline definitions (verify first), `ctrlyoke-syntax` skill
+     and tech-support agent: what `$previous`/`$step` mean for a workflow step.
+- **Round 17:** whatever round 16's review leaves, then the whole-spec requirement-by-
+  requirement audit (Tests section included), then mark complete and move the spec.
 
 ### Decisions
 
@@ -3075,3 +3149,13 @@ Coarse roadmap; re-planned every pass.
   until the inline editor lands.
 - **The steps panel's per-chunk re-render is a separate bug, not this spec's**
   (`steps-panel-rerenders-on-every-output-entry.md`): it predates the sub-workflow work.
+- **No `worktreePresets` editor in the dashboard** (round 15 review). The spec put it "next to
+  `conditions`", but `conditions` has no editor: `schemaUiPropertyRoundTrip` lists both as
+  author-only catalogs that the dashboard preserves and does not edit. A preset holds a `setup`
+  script an agent can run, exactly like a condition script, so it stays author-written YAML.
+  Nathan: say if you want a catalog editor for both; it would be one change covering the two.
+- **The inline form edits the outer step's name, colour and enabled** (round 15); the wrapped
+  step's own copies are kept as written. Agent-queued lanes never write them.
+- **Hosted and native picks both go through the backend** (round 15): the editor stores what
+  `buildSubWorkflowStepReferenceForClient` returns, relative to the workspace even when picked
+  inside the run's worktree. A typed path is still saved unchecked.
