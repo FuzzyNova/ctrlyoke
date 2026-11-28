@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { asPromptStep, asScriptStep } from "../helpers/stepAssertions";
 import { suite, test } from "mocha";
 import {
   applyCliPropertyOverrides,
@@ -130,9 +131,15 @@ suite("CLI property overrides", () => {
     });
     assert.strictEqual(first.preCondition?.timeoutSec, 17);
     assert.strictEqual(first.endCondition?.timeoutSec, 17);
-    assert.strictEqual(workflow.steps![1].executionMode, "headless");
+    assert.strictEqual(
+      asScriptStep(workflow.steps![1]).executionMode,
+      "headless"
+    );
     assert.strictEqual((workflow.steps![1] as ScriptStep).timeoutSec, 17);
-    assert.strictEqual(workflow.finalStep?.executionMode, "headless");
+    assert.strictEqual(
+      asPromptStep(workflow.finalStep!).executionMode,
+      "headless"
+    );
     assert.strictEqual(
       (workflow.finalStep as PromptStep).sessionId,
       "forced-session"
@@ -493,7 +500,10 @@ suite("CLI property overrides", () => {
       })
     );
     assert.strictEqual(workflow.executionMode, "headless");
-    assert.strictEqual(workflow.steps?.[0].executionMode, "interactive");
+    assert.strictEqual(
+      asPromptStep(workflow.steps![0]).executionMode,
+      "interactive"
+    );
 
     const tty = resolveCliExecutionMode(true, true);
     const resolved = resolveExecutionProperties(

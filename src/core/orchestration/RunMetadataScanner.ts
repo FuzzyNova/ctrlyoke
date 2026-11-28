@@ -10,6 +10,10 @@ import type {
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { outputTargetKey } from "../../utils/OutputTargetKeys";
+import {
+  toSubWorkflowSettlement,
+  type SubWorkflowSettlement,
+} from "./SubWorkflowSettlements";
 
 /**
  * Narrow, streaming reads of a run's timeline for bookkeeping checks that only
@@ -45,11 +49,17 @@ export class RunMetadataScanner {
     return snapshot;
   }
 
-  /** Latest queue-step snapshots in one streaming pass. */
-  async findLatestQueueWorkspaceSnapshots(
-    manifestPath: string
-  ): Promise<Map<number, WorkspaceSnapshot>> {
-    const snapshots = new Map<number, WorkspaceSnapshot>();
+  /**
+   * What `workflow_status` needs from the timeline, in one streaming pass:
+   * the latest workspace snapshot per queue step and every sub-workflow
+   * settlement in event order.
+   */
+  async scanQueueStatusMetadata(manifestPath: string): Promise<{
+    workspaceSnapshots: Map<number, WorkspaceSnapshot>;
+    subWorkflowSettlements: SubWorkflowSettlement[];
+  }> {
+    const workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
+    const subWorkflowSettlements: SubWorkflowSettlement[] = [];
     for await (const event of this.recorder.streamEvents(manifestPath)) {
       if (
         (event.eventType === TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED ||
@@ -57,10 +67,17 @@ export class RunMetadataScanner {
             TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED) &&
         event.target.kind === FINAL_STEP_PHASES.QUEUE
       ) {
-        snapshots.set(event.target.stepIndex, event.payload.workspaceSnapshot);
+        workspaceSnapshots.set(
+          event.target.stepIndex,
+          event.payload.workspaceSnapshot
+        );
+      } else if (
+        event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+      ) {
+        subWorkflowSettlements.push(toSubWorkflowSettlement(event));
       }
     }
-    return snapshots;
+    return { workspaceSnapshots, subWorkflowSettlements };
   }
 
   /** Latest undo record recorded for `target`, or undefined if none. */
@@ -129,5 +146,35 @@ export class RunMetadataScanner {
       nextRunIndexByTarget.set(key, maxRunIndex + 1);
     }
     return nextRunIndexByTarget;
+  }
+
+  /** Every sub-workflow settlement the run recorded, in event order. */
+  async findSubWorkflowSettlements(
+    manifestPath: string
+  ): Promise<SubWorkflowSettlement[]> {
+    const settlements: SubWorkflowSettlement[] = [];
+    for await (const event of this.recorder.streamEvents(manifestPath)) {
+      if (event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED)
+        settlements.push(toSubWorkflowSettlement(event));
+    }
+    return settlements;
+  }
+
+  /** Whether the run already recorded the settlement of this exact child run. */
+  async hasSubWorkflowSettlement(
+    manifestPath: string,
+    childWorkflowKey: string,
+    childRunRef: string
+  ): Promise<boolean> {
+    for await (const event of this.recorder.streamEvents(manifestPath)) {
+      if (
+        event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED &&
+        event.payload.childWorkflowKey === childWorkflowKey &&
+        event.payload.childRunRef === childRunRef
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -154,6 +154,10 @@ export default defineConfig({
           text: "Steps",
           items: [
             { text: "Script steps", link: "/workflows/script-steps" },
+            {
+              text: "Sub-workflow steps",
+              link: "/workflows/sub-workflow-steps",
+            },
             { text: "Parallel steps", link: "/workflows/parallel-steps" },
             { text: "End conditions", link: "/workflows/end-conditions" },
             { text: "Variables", link: "/workflows/variables" },

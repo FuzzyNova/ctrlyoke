@@ -13,6 +13,10 @@ import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
 import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
 import type { ResolvedProperties } from "../../../utils/SettingsPropertyResolver";
 import { ctrlYokeToolFamilies } from "../../../types/ExecutionPropertyResolver";
+import {
+  resolveWorkflowTrustSourcePath,
+  type WorkflowTrustSource,
+} from "../../../types/WorkflowContextTypes";
 import { retryWithBackoff, stopRetrying } from "../../../utils/RetryUtils";
 import { withCtrlyokeBinOnPath } from "../../../utils/CtrlyokeCliPath";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -50,9 +54,7 @@ interface GetCliVersionOptions extends CliCommandOptions {
   parseVersion?: (stdout: string) => string | undefined;
 }
 
-export interface HarnessAdapterWorkflowContext {
-  filePath?: string;
-  sourceDefinitionPath?: string;
+export interface HarnessAdapterWorkflowContext extends WorkflowTrustSource {
   stateRoot?: string;
   workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
 }
@@ -361,8 +363,7 @@ export class HarnessAdapterUtils {
   ): WorkflowExternalRootsContext | undefined {
     // Approvals are recorded against the authored file. In a real run
     // `filePath` is the run's working copy, which has none of them.
-    const workflowSourcePath =
-      workflowContext.sourceDefinitionPath ?? workflowContext.filePath;
+    const workflowSourcePath = resolveWorkflowTrustSourcePath(workflowContext);
     if (
       !workflowSourcePath ||
       workflowSourcePath.startsWith("<") ||

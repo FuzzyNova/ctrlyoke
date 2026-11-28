@@ -760,6 +760,56 @@ describe("useStepContextMenu", () => {
       );
     });
 
+    it("disables Move to Editor while a non-empty workflow draft would be replaced", () => {
+      useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+      useEditorStore
+        .getState()
+        .setSubWorkflowPath("workflows/verify.ctrlyoke.yaml");
+      openMenuOnQueuedStep();
+
+      const move = screen.getByRole("menuitem", { name: "Move to Editor" });
+      expect(move).toBeDisabled();
+      expect(move).toHaveAttribute(
+        "title",
+        "Save or clear the workflow draft before moving a step into the editor"
+      );
+    });
+
+    it("moves an inline workflow step into an editable Workflow-mode draft", () => {
+      openMenuOnQueuedStep({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: {
+          prompt: "Implement the lane",
+          worktree: { mode: "managed" },
+        },
+      } as WorkflowStep);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Move to Editor" }));
+
+      expect(useEditorStore.getState()).toMatchObject({
+        stepType: STEP_TYPES.WORKFLOW,
+        promptText: "Implement the lane",
+        subWorkflowInline: {
+          kind: STEP_TYPES.PROMPT,
+          worktree: { mode: "managed" },
+        },
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      });
+    });
+
+    it("moves a file workflow step into a Workflow-mode draft", () => {
+      openMenuOnQueuedStep({
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "workflows/verify.ctrlyoke.yaml",
+      } as WorkflowStep);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Move to Editor" }));
+
+      expect(useEditorStore.getState()).toMatchObject({
+        stepType: STEP_TYPES.WORKFLOW,
+        subWorkflowPath: "workflows/verify.ctrlyoke.yaml",
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      });
+    });
+
     it("steers the step's prompt to the only live session and removes it", () => {
       openHeadlessTarget(0);
       openMenuOnQueuedStep();

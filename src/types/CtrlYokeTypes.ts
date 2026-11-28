@@ -49,6 +49,7 @@ import {
   type SandboxRequest,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import type { SubWorkflowResult } from "./SubWorkflowTypes";
 export type {
   HarnessId,
   HookEvent,
@@ -268,6 +269,13 @@ export type WorktreeConfig =
 /** Settings defaults reuse the same shorthand/object forms as workflow worktree. */
 export type WorktreeDefaultConfig = WorktreeConfig;
 export type WorktreeObjectConfig = Extract<WorktreeConfig, { mode: string }>;
+/** The managed object form of a worktree selection; the only form a preset takes. */
+export type ManagedWorktreeConfig = Extract<
+  WorktreeObjectConfig,
+  { mode: typeof WORKTREE_MODES.MANAGED }
+>;
+/** Author-defined worktree presets MCP agents may attach to appended steps. */
+export type WorktreePresets = Record<string, ManagedWorktreeConfig>;
 
 /** Worktree settings plus the tier that supplied the value for one run. */
 export interface WorktreeResolution {
@@ -460,6 +468,8 @@ export interface PromptFile extends ExecutionProperties {
   trustedExternalRoots?: string[] | null;
   /** Author-defined named condition presets available to MCP steps. */
   conditions?: Record<string, ConditionPreset>;
+  /** Author-defined worktree presets MCP agents may queue lanes with (D14). */
+  worktreePresets?: WorktreePresets;
   prompt?: string;
   steps?: WorkflowStep[];
   /** Normalized flat-step topology for authored parallel groups. */
@@ -988,6 +998,12 @@ export interface StepExecutionOutcome {
   failureReason?: string;
   /** False when a per-step continue policy resolved a failed attempt. */
   terminalFailure?: boolean;
+  /**
+   * A parallel member cancelled from outside the group (a lane whose child
+   * run was stopped directly): its siblings keep running, and the group
+   * stops the workflow once it joins instead of advancing without it.
+   */
+  stopsWorkflowAtJoin?: boolean;
 }
 
 export interface ParallelGroupOutcome {
@@ -1102,8 +1118,111 @@ export interface ScriptStep extends ScriptProperties, StepDisplayProperties {
   _runtime?: PromptRuntimeMetadata; // Reuse for startedAt/completedAt/terminalStatus
 }
 
+/** A step that executes another workflow as a child run. */
+export interface SubWorkflowStep extends StepDisplayProperties {
+  type: typeof STEP_TYPES.WORKFLOW;
+  workflow: string | InlineSubWorkflowDefinition;
+  onFail?: ScriptStepAction;
+  _runtime?: SubWorkflowRuntimeMetadata;
+}
+
+/** A single prompt or script step authored inline as a child workflow. */
+export type InlineSubWorkflowDefinition = (PromptStep | ScriptStep) & {
+  worktree?: WorktreeConfig;
+};
+
+/** The step kinds an inline sub-workflow definition can wrap (D13). */
+export type InlineSubWorkflowStepKind =
+  typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
+
+/** Runtime link to the child run launched by a sub-workflow step. */
+export interface SubWorkflowRuntimeMetadata extends StepLifecycleRuntime {
+  childWorkflowKey?: WorkflowKey;
+  childRunRef?: RunRef;
+  resolvedWorkflowPath?: string;
+}
+
+function hasNonEmptyText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/**
+ * Why a `workflow` value that is not a path is not an inline sub-workflow
+ * definition (D13), or `undefined` when it is one. An inline definition is a
+ * prompt step with non-empty `prompt` text or a script step with a non-empty
+ * `script`; anything else (`null`, `{}`, `{ name }`) would otherwise fail only
+ * when the child loads. The single source of the shape rule and its messages
+ * for the parser, the dashboard sanitizer and run continuation.
+ */
+export function describeInvalidInlineSubWorkflowDefinition(
+  value: unknown
+): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "A workflow step needs a workflow file path or an inline definition, which must be a single prompt or script step";
+  }
+  if ("_runtime" in value) {
+    return "Inline workflow definition cannot contain _runtime";
+  }
+  const candidate = value as {
+    type?: unknown;
+    prompt?: unknown;
+    script?: unknown;
+  };
+  if (
+    candidate.type === STEP_TYPES.WORKFLOW ||
+    "steps" in candidate ||
+    "finalStep" in candidate ||
+    "parallel" in candidate
+  ) {
+    return "Inline workflow definition must be a single prompt or script step; use a workflow file for anything larger";
+  }
+  if (candidate.type === STEP_TYPES.SCRIPT) {
+    return hasNonEmptyText(candidate.script)
+      ? undefined
+      : "Inline workflow definition must be a single prompt or script step: its script step needs a non-empty script";
+  }
+  if (candidate.type === undefined || candidate.type === STEP_TYPES.PROMPT) {
+    return hasNonEmptyText(candidate.prompt)
+      ? undefined
+      : "Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text, or type: script with a script";
+  }
+  return `Inline workflow definition must be a single prompt or script step, not type ${JSON.stringify(candidate.type)}`;
+}
+
+/** Type guard for an inline sub-workflow definition. */
+export function isInlineSubWorkflowDefinition(
+  value: unknown
+): value is InlineSubWorkflowDefinition {
+  return describeInvalidInlineSubWorkflowDefinition(value) === undefined;
+}
+
+/**
+ * True when an inline sub-workflow definition's `sessionId` would name a
+ * parent-run session (a step number or `finalStep`), which the child run
+ * cannot reach (D13). A session GUID crosses the boundary.
+ */
+export function isParentRunSessionId(value: unknown): boolean {
+  return typeof value === "number" || value === FINAL_STEP_PHASES.FINAL_STEP;
+}
+
+/**
+ * True when an inline sub-workflow definition's `priorContext` would select
+ * parent-run steps: a step-number list, `{ previous: N }`, or a relative
+ * keyword (D13). `none`, `null` and a run address cross the boundary.
+ */
+export function isParentRunPriorContext(value: unknown): boolean {
+  return (
+    Array.isArray(value) ||
+    value === PRIOR_CONTEXT_KEYWORDS.ALL ||
+    value === PRIOR_CONTEXT_KEYWORDS.PREVIOUS ||
+    value === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
+    value === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS ||
+    (value !== null && typeof value === "object" && "previous" in value)
+  );
+}
+
 /** Union type for all workflow steps */
-export type WorkflowStep = PromptStep | ScriptStep;
+export type WorkflowStep = PromptStep | ScriptStep | SubWorkflowStep;
 
 /**
  * Normalized topology for one authored `parallel:` item.
@@ -1121,6 +1240,86 @@ export function isScriptStep<T extends object>(
   step: T
 ): step is Extract<T, { type: typeof STEP_TYPES.SCRIPT }> {
   return "type" in step && step.type === STEP_TYPES.SCRIPT;
+}
+
+/** Type guard: returns true if the step is a SubWorkflowStep. */
+export function isSubWorkflowStep<T extends object>(
+  step: T
+): step is Extract<T, { type: typeof STEP_TYPES.WORKFLOW }> {
+  return "type" in step && step.type === STEP_TYPES.WORKFLOW;
+}
+
+/** Return the authored step kind, treating an omitted discriminator as prompt. */
+export function getStepType<T extends object>(step: T): WorkflowStepType {
+  return (("type" in step ? step.type : undefined) ??
+    STEP_TYPES.PROMPT) as WorkflowStepType;
+}
+
+/** Type guard for prompt steps, including legacy steps without a discriminator. */
+export function isPromptStep<T extends object>(
+  step: T
+): step is
+  | Extract<T, { type?: typeof STEP_TYPES.PROMPT }>
+  | Extract<T, { type?: undefined }> {
+  return (
+    !("type" in step) ||
+    step.type === undefined ||
+    step.type === STEP_TYPES.PROMPT
+  );
+}
+
+/** Prompt and script steps carry the shared execution-property contract. */
+export function isExecutionStep(
+  step: WorkflowStep
+): step is PromptStep | ScriptStep {
+  return isPromptStep(step) || isScriptStep(step);
+}
+
+/** Return prompt execution metadata where present; workflow steps have lifecycle metadata only. */
+export function getExecutionRuntime(
+  step:
+    | {
+        type?: string;
+        _runtime?: PromptRuntimeMetadata | SubWorkflowRuntimeMetadata;
+      }
+    | undefined
+): PromptRuntimeMetadata | undefined {
+  if (
+    !step ||
+    (step.type !== undefined &&
+      step.type !== STEP_TYPES.PROMPT &&
+      step.type !== STEP_TYPES.SCRIPT)
+  ) {
+    return undefined;
+  }
+  return step._runtime as PromptRuntimeMetadata | undefined;
+}
+
+/**
+ * Return the content an authored workflow step carries: the prompt, the script,
+ * or a sub-workflow's path (an inline child's inner prompt or script). This is
+ * content, never a label: editors write it back as the step's `workflow` path,
+ * so use `getSubWorkflowDisplayName` for display.
+ */
+export function getWorkflowStepText(step: WorkflowStep): string {
+  if (isPromptStep(step)) return step.prompt;
+  if (isScriptStep(step)) return step.script;
+  if (typeof step.workflow === "string") return step.workflow;
+  return isPromptStep(step.workflow)
+    ? step.workflow.prompt
+    : step.workflow.script;
+}
+
+/** Display a child by its authored name, or the inner prompt/script text. */
+export function getSubWorkflowDisplayName(step: SubWorkflowStep): string {
+  return step.name || getWorkflowStepText(step);
+}
+
+/** Fail at runtime when an exhaustive discriminated union gains an unhandled case. */
+export function assertNever(value: never, context?: string): never {
+  throw new Error(
+    `Unexpected value${context ? ` in ${context}` : ""}: ${String(value)}`
+  );
 }
 
 /**
@@ -1149,6 +1348,22 @@ export interface ScriptRuntimeOutput {
   stderr: string;
   exitCode?: number;
 }
+
+/** Durable metadata for a settled child workflow run. */
+export type SubWorkflowOutput = {
+  resolvedWorkflowPath?: string;
+  /**
+   * Absent when the step failed before a child run existed (an unresolvable
+   * path, a cycle, a bad inline definition, a refused launch): the event then
+   * records only the outcome and its `failureMessage`. Read tolerantly.
+   */
+  childWorkflowKey?: WorkflowKey;
+  childRunRef?: RunRef;
+  outcome: Omit<SubWorkflowResult, "worktree" | "ranWith">;
+  worktree?: SubWorkflowResult["worktree"];
+  /** Optional and read tolerantly: older events omit it (no format bump). */
+  ranWith?: SubWorkflowResult["ranWith"];
+};
 
 export interface ScriptVerdict {
   compareSource: CompareSource;
@@ -1198,51 +1413,41 @@ export interface ConditionEvaluationSummary {
  * Per-prompt runtime execution metadata.
  * Tracks execution state for individual prompts within a workflow.
  */
-export interface PromptRuntimeMetadata extends ExecutionProperties {
-  /** Preserves queue-index history ownership after an edited failure is rewound. */
-  rewoundFailure?: boolean;
-  /**
-   * Timestamp when the executor claimed this step for dispatch. This is not
-   * the timestamp when runtime metadata was written.
-   */
-  startedAt?: number;
-
+export interface StepLifecycleRuntime {
   /** Stable identity for this queue step within its run. */
   stepId?: string;
-
-  /** Timestamp when prompt completed (set for all terminal states, not just successful completion) */
+  /** Timestamp when the executor claimed this step for dispatch. */
+  startedAt?: number;
+  /** Timestamp when this prompt completed, for any terminal state. */
   completedAt?: number;
-
-  /**
-   * Terminal state of this prompt. Absent or 'completed' means successful completion.
-   * Used to restore the correct visual status after a working file reload.
-   */
+  /** Terminal state of this prompt. */
   terminalStatus?: PromptTerminalStatus;
+  /** Completed prompt duration in seconds. */
+  elapsed?: number;
+  /** Human-readable message describing the last harness/session failure. */
+  failureMessage?: string;
+  /** Structured runtime failure classification for this step. */
+  failureKind?: FailureKind;
+  /** Preserves queue-index history ownership after a failed step is rewound. */
+  rewoundFailure?: boolean;
+  /** False when the failed step was resolved by its per-step continue policy. */
+  terminalFailure?: boolean;
+}
 
+export interface PromptRuntimeMetadata
+  extends ExecutionProperties, StepLifecycleRuntime {
   /** Retry count if applicable */
   retryCount?: number;
 
   /** Session ID associated with the completed prompt output. */
   sessionId?: string;
 
-  /** Completed prompt duration in seconds. */
-  elapsed?: number;
-
   /** Context window usage captured from the last completed output. */
   contextWindowUsed?: number;
   contextWindowSize?: number;
 
-  /** Structured runtime failure classification for this prompt attempt. */
-  failureKind?: FailureKind;
-
-  /** Human-readable failure message persisted for UI/history display. */
-  failureMessage?: string;
-
   /** Source that detected the failure, when known. */
   failureSource?: import("./DashboardConstants").FailureSource;
-
-  /** False when the failed step was resolved by its per-step continue policy. */
-  terminalFailure?: boolean;
 }
 
 /**

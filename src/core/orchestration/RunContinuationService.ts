@@ -8,7 +8,16 @@ import type {
   WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+  isSubWorkflowStep,
+  describeInvalidInlineSubWorkflowDefinition,
+} from "../../types/CtrlYokeTypes";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import type { SubWorkflowWorktreePlan } from "../../types/SubWorkflowTypes";
 import {
   EXECUTION_STATES,
   ACTIVE_EXECUTION_STATES,
@@ -58,6 +67,13 @@ import {
 } from "../ParallelGroupTopology";
 import { isActiveQueueWorkRunning } from "../ParallelGroupRuntime";
 import {
+  mergeIntoSharedRootIssueAmong,
+  runsInMainCheckout,
+  stepParentCheckoutUse,
+  type ParallelGroupPreflightIssue,
+  type ParentCheckoutUser,
+} from "../ParallelGroupPreflight";
+import {
   mergeWorkflowStepUpdate,
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
@@ -65,6 +81,7 @@ import {
 import {
   assertStartedStepPositionsPreserved,
   assertStepMutable,
+  carryQueueSlotRuntime,
   ensureStepIds,
   findStepIndexById,
   resetStepRuntimeForRewind,
@@ -606,7 +623,14 @@ export class RunContinuationService {
     globalMaxSteps: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     position: QueuePosition = QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-    configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
+    configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
+    executionRoot?: string,
+    /**
+     * The worktree plan of each incoming step's child, by position in
+     * `steps`, when the caller already parsed it (a file child). Lets the
+     * merge-lane check see a file child, which it otherwise never parses.
+     */
+    incomingWorktreePlans?: readonly (SubWorkflowWorktreePlan | undefined)[]
   ): Promise<RunParallelJoinMutationResult> {
     if (position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       throw new Error(
@@ -790,6 +814,24 @@ export class RunContinuationService {
             `Cannot join parallel group ${joinedGroupId}: group is missing after insertion`
           );
         }
+        const plansByStepId = new Map<string, SubWorkflowWorktreePlan>();
+        identifiedSteps.forEach((step, index) => {
+          const plan = incomingWorktreePlans?.[index];
+          const stepId = step._runtime?.stepId;
+          if (plan && stepId) plansByStepId.set(stepId, plan);
+        });
+        const mergeIssue = mergeIntoSharedRootIssueInGroup(
+          source,
+          nextTopology.steps,
+          joinedGroup,
+          runExecutesInMainCheckout(source, workspaceRoot, executionRoot),
+          plansByStepId
+        );
+        if (mergeIssue) {
+          throw new Error(
+            `${QUEUE_POSITION.PARALLEL_WITH_CURRENT} was rejected: ${mergeIssue.message}`
+          );
+        }
         const placement: ParallelGroupInsertPlacement = {
           requestedIndex: insertionIndex,
           insertedIndex: insertionIndex,
@@ -942,7 +984,8 @@ export class RunContinuationService {
     change: RunStepChange,
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    allowInterruptedRun = false
+    allowInterruptedRun = false,
+    executionRoot?: string
   ): Promise<RunContinuationMutationResult> {
     return this.mutateRunDefinition(
       workspaceRoot,
@@ -966,10 +1009,13 @@ export class RunContinuationService {
               : (change.updates as WorkflowStep),
           ])[0]
         );
-        const mergedStep = mergeWorkflowStepUpdate(
+        const mergedStep = carryQueueSlotRuntime(
           topology.steps[index],
-          incomingStep,
-          change.clearProperties
+          mergeWorkflowStepUpdate(
+            topology.steps[index],
+            incomingStep,
+            change.clearProperties
+          )
         );
         assertStepHasRequiredContent(mergedStep);
         const nextTopology = replaceParallelGroupStep(
@@ -978,6 +1024,13 @@ export class RunContinuationService {
           mergedStep
         );
         assertNoParallelSiblingReferences(nextTopology, source);
+        assertEditDoesNotMergeIntoSharedRoot(
+          source,
+          topology,
+          nextTopology.steps,
+          index,
+          runExecutesInMainCheckout(source, workspaceRoot, executionRoot)
+        );
         assertStartedStepPositionsPreserved(
           topology.steps,
           nextTopology.steps,
@@ -1347,6 +1400,20 @@ export class RunContinuationService {
     });
   }
 
+  /**
+   * The run file's current `definitionRevision`, for an additive caller
+   * (the dashboard's "run alongside") that has no revision of its own to
+   * assert; the transaction re-checks it under the run-file lock.
+   */
+  static async readRunDefinitionRevision(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<number> {
+    const run = await this.readRun(workspaceRoot, workflowKey, runRef);
+    return run.definitionRevision ?? 1;
+  }
+
   private static async readRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
@@ -1369,6 +1436,133 @@ export class RunContinuationService {
 
 function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
   return state !== undefined && IN_FLIGHT_EXECUTION_STATES.has(state);
+}
+
+/**
+ * Whether this run executes in the workspace's main checkout. The caller
+ * passes the run's execution root when it knows it (the MCP server attached
+ * to the run does); otherwise the run's own worktree record names it, and a
+ * run without one runs where it was started. That fallback is wrong only for
+ * an inherited child (D4a), which has no record yet runs in its parent's
+ * worktree, so callers that serve a child must pass `executionRoot`.
+ */
+function runExecutesInMainCheckout(
+  source: WorkingFile,
+  stateRoot: string,
+  executionRoot: string | undefined
+): boolean {
+  return runsInMainCheckout(
+    executionRoot ?? source._runtime?.worktree?.executionRoot ?? stateRoot,
+    stateRoot
+  );
+}
+
+/**
+ * D14: the `MERGE_INTO_SHARED_ROOT` issue among the members of a group that
+ * is running: a lane whose child merges into this run's checkout beside a
+ * member that edits that checkout. Members that already completed, and
+ * disabled ones, no longer edit it. Every other member, running or still
+ * pending, runs beside the rest. A workflow member with no `worktree` (an
+ * inheriting child) runs in this run's root, so it counts as editing it, as
+ * in group preflight. A file child is never parsed here and counts as
+ * neither, unless its caller parsed it and passed its plan in `plans`.
+ * Shared by the `parallelWithCurrent` join and an edit of a running group's
+ * member, so both refuse with the preflight's text.
+ */
+function mergeIntoSharedRootIssueInGroup(
+  source: WorkingFile,
+  steps: readonly WorkflowStep[],
+  group: ParallelGroupDefinition,
+  parentRunsInMainCheckout: boolean,
+  plans?: ReadonlyMap<string, SubWorkflowWorktreePlan>
+): ParallelGroupPreflightIssue | undefined {
+  const users: ParentCheckoutUser[] = [];
+  for (let index = group.startIndex; index <= group.endIndex; index += 1) {
+    const step = steps[index];
+    if (
+      !step ||
+      step.enabled === false ||
+      step._runtime?.completedAt !== undefined
+    ) {
+      continue;
+    }
+    users.push({
+      stepIndex: index,
+      use: stepParentCheckoutUse(
+        step,
+        parentRunsInMainCheckout,
+        step._runtime?.stepId ? plans?.get(step._runtime.stepId) : undefined
+      ),
+    });
+  }
+  return mergeIntoSharedRootIssueAmong({ ...source, steps: [...steps] }, users);
+}
+
+/**
+ * The parallel group whose members run now: the group holding the execution
+ * head while a step is in flight, or once any of its members has started
+ * (a run paused or interrupted inside it resumes those members together).
+ * A group the head has not reached, or that no member has entered, is
+ * decided by its own preflight when it is dispatched.
+ */
+function runningParallelGroup(
+  source: WorkingFile,
+  topology: ParallelGroupTopology
+): ParallelGroupDefinition | undefined {
+  if (!isExecutionActiveState(source._runtime?.executionState))
+    return undefined;
+  const currentIndex = source._runtime?.currentIndex ?? 0;
+  const group = topology.parallelGroups.find(
+    (candidate) =>
+      currentIndex >= candidate.startIndex && currentIndex <= candidate.endIndex
+  );
+  if (!group) return undefined;
+  const underWay =
+    hasInFlightStep(
+      source._runtime?.executionState,
+      source._runtime?.finalStep?.phase
+    ) ||
+    source._runtime?.activeParallelGroup?.groupId === group.id ||
+    topology.steps
+      .slice(group.startIndex, group.endIndex + 1)
+      .some((step) => hasStarted(step));
+  return underWay ? group : undefined;
+}
+
+/**
+ * D14: an edit of a member of the running group is refused exactly as a
+ * `parallelWithCurrent` join would be, when it puts that member in a
+ * `MERGE_INTO_SHARED_ROOT` conflict: making it a merging lane beside a member
+ * that edits this run's checkout, or making it such a member beside a
+ * merging lane. An edit that leaves the member outside any conflict, or
+ * outside the running group, is not checked here.
+ */
+function assertEditDoesNotMergeIntoSharedRoot(
+  source: WorkingFile,
+  topology: ParallelGroupTopology,
+  nextSteps: readonly WorkflowStep[],
+  index: number,
+  parentRunsInMainCheckout: boolean
+): void {
+  const group = runningParallelGroup(source, topology);
+  if (!group || index < group.startIndex || index > group.endIndex) return;
+  const involves = (issue: ParallelGroupPreflightIssue | undefined) =>
+    issue?.memberIndices.includes(index) ?? false;
+  const after = mergeIntoSharedRootIssueInGroup(
+    source,
+    nextSteps,
+    group,
+    parentRunsInMainCheckout
+  );
+  if (!involves(after)) return;
+  const before = mergeIntoSharedRootIssueInGroup(
+    source,
+    topology.steps,
+    group,
+    parentRunsInMainCheckout
+  );
+  if (involves(before)) return;
+  throw new Error(`edit was rejected: ${after!.message}`);
 }
 
 /**
@@ -1503,14 +1697,49 @@ function assertClearablePropertiesAreEditable(
 }
 
 function assertStepHasRequiredContent(step: WorkflowStep): void {
-  if (step.type === STEP_TYPES.SCRIPT) {
-    if (typeof step.script !== "string" || step.script.trim().length === 0) {
-      throw new Error("A script step must keep a non-empty script");
-    }
-    return;
-  }
-  if (typeof step.prompt !== "string" || step.prompt.trim().length === 0) {
-    throw new Error("A prompt step must keep a non-empty prompt");
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      if (
+        !isScriptStep(step) ||
+        typeof step.script !== "string" ||
+        step.script.trim().length === 0
+      ) {
+        throw new Error("A script step must keep a non-empty script");
+      }
+      return;
+    case STEP_TYPES.PROMPT:
+      if (
+        !isPromptStep(step) ||
+        typeof step.prompt !== "string" ||
+        step.prompt.trim().length === 0
+      ) {
+        throw new Error("A prompt step must keep a non-empty prompt");
+      }
+      return;
+    case STEP_TYPES.WORKFLOW:
+      if (!isSubWorkflowStep(step)) {
+        throw new Error("A workflow step must keep its workflow kind");
+      }
+      if (typeof step.workflow === "string") {
+        if (step.workflow.trim().length === 0) {
+          throw new Error(
+            "A workflow step must keep a non-empty workflow path"
+          );
+        }
+      } else {
+        const invalid = describeInvalidInlineSubWorkflowDefinition(
+          step.workflow
+        );
+        if (invalid) {
+          throw new Error(
+            `A workflow step must keep a valid inline step: ${invalid}`
+          );
+        }
+      }
+      return;
+    default:
+      return assertNever(stepType);
   }
 }
 

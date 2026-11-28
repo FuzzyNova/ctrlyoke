@@ -167,8 +167,6 @@ function AnchorVirtualizedHost(): ReactElement {
 }
 
 describe("DiffFileList responsive ownership", () => {
-  const originalGetBoundingClientRect =
-    HTMLElement.prototype.getBoundingClientRect;
   const originalResizeObserver = window.ResizeObserver;
 
   beforeEach(() => {
@@ -189,8 +187,9 @@ describe("DiffFileList responsive ownership", () => {
   });
 
   afterEach(() => {
+    // restoreAllMocks undoes the spy; re-assigning the inherited method here
+    // would leave an own property hiding other files' Element.prototype spies.
     vi.restoreAllMocks();
-    HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
     window.ResizeObserver = originalResizeObserver;
   });
 

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { getExecutionRuntime } from "../../types/CtrlYokeTypes";
 import { queueTargetKey } from "../../utils/OutputTargetKeys";
 import { formatStepTargetLabel } from "../../utils/FinalStepLabels";
 import {
@@ -81,7 +82,7 @@ function deriveTerminalFailureSummary(
       results: (workingFile.steps ?? []).map((step) => ({
         status: step._runtime?.terminalStatus ?? STEP_STATUS.PENDING,
         error: step._runtime?.failureMessage,
-        failureKind: step._runtime?.failureKind,
+        failureKind: getExecutionRuntime(step)?.failureKind,
       })),
     },
     workingFile._runtime?.finalStep

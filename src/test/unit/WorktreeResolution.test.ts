@@ -300,20 +300,26 @@ suite("WorktreeResolution", () => {
     ) as {
       $defs: {
         worktreeConfig: {
-          oneOf: Array<{ properties?: Record<string, unknown> }>;
+          oneOf: Array<{ $ref?: string; properties?: Record<string, unknown> }>;
         };
+        managedWorktreeConfig: { properties?: Record<string, unknown> };
       };
     };
+    const variants = workflowSchema.$defs.worktreeConfig.oneOf.map((variant) =>
+      variant.$ref === "#/$defs/managedWorktreeConfig"
+        ? workflowSchema.$defs.managedWorktreeConfig
+        : variant
+    );
 
     assert.strictEqual(
       settingsSchema.properties.defaults.properties.worktree.$ref,
       // Settings live under /schema/v2/, so the ref names the v1 workflow schema.
       "../v1/workflow.json#/$defs/worktreeConfig"
     );
-    const managed = workflowSchema.$defs.worktreeConfig.oneOf.find(
+    const managed = variants.find(
       (variant) => variant.properties && "merge" in variant.properties
     );
-    const named = workflowSchema.$defs.worktreeConfig.oneOf.find(
+    const named = variants.find(
       (variant) => variant.properties && "branch" in variant.properties
     );
     assert.ok(managed);

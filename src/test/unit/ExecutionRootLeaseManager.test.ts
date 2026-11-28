@@ -4,10 +4,14 @@ import { execFileSync } from "child_process";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { RUNNER_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_LEASE_PURPOSES,
+  RUNNER_IDS,
+} from "../../types/DashboardConstants";
 import {
   ExecutionLeaseConflictError,
   ExecutionRootLeaseManager,
+  isSiblingMergeLeaseConflict,
   type ExecutionLease,
   type ExecutionLeaseRequest,
 } from "../../core/orchestration/ExecutionRootLeaseManager";
@@ -97,6 +101,174 @@ suite("ExecutionRootLeaseManager", function () {
     } finally {
       await removeDirectory(root);
     }
+  });
+
+  test("allows only leases named by a delegated request chain", async () => {
+    const root = await tempDirectory("delegation");
+    try {
+      const rootLease = await ExecutionRootLeaseManager.acquire(
+        request(root, "shared-native", "ancestor")
+      );
+      const secondAncestor = await ExecutionRootLeaseManager.acquire(
+        request(root, "shared-native", "second-ancestor")
+      );
+      const delegatedRequest = {
+        ...request(root, "exclusive-worktree", "child"),
+        delegationChain: [rootLease.ownerToken, secondAncestor.ownerToken],
+      };
+      const child = await ExecutionRootLeaseManager.acquire(delegatedRequest);
+      assert.deepStrictEqual(
+        child.delegationChain,
+        delegatedRequest.delegationChain
+      );
+      await child.release();
+
+      await assert.rejects(
+        ExecutionRootLeaseManager.acquire({
+          ...request(root, "exclusive-worktree", "unrelated"),
+          delegationChain: ["not-an-owner-token"],
+        }),
+        ExecutionLeaseConflictError
+      );
+      await rootLease.release();
+      await secondAncestor.release();
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  suite("D4d rule 2: inheriting siblings", () => {
+    // Exclusive requests, so the shared-native + shared-native rule cannot be
+    // what admits them.
+    async function withParent(
+      name: string,
+      body: (root: string, parentToken: string) => Promise<void>
+    ): Promise<void> {
+      const root = await tempDirectory(name);
+      try {
+        const parent = await ExecutionRootLeaseManager.acquire(
+          request(root, "exclusive-worktree", "parent")
+        );
+        try {
+          await body(root, parent.ownerToken);
+        } finally {
+          await parent.release();
+        }
+      } finally {
+        await removeDirectory(root);
+      }
+    }
+
+    function sibling(
+      root: string,
+      suffix: string,
+      chain: string[],
+      purpose?: ExecutionLeaseRequest["purpose"]
+    ): ExecutionLeaseRequest {
+      return {
+        ...request(root, "exclusive-worktree", suffix),
+        delegationChain: chain,
+        ...(purpose ? { purpose } : {}),
+      };
+    }
+
+    test("two delegated editing leases with the same immediate delegator share the root", async () => {
+      await withParent("siblings", async (root, parentToken) => {
+        const first = await ExecutionRootLeaseManager.acquire(
+          sibling(root, "first", ["root-token", parentToken])
+        );
+        // A sibling's chain need only end with the same delegator.
+        const second = await ExecutionRootLeaseManager.acquire(
+          sibling(root, "second", [parentToken])
+        );
+        assert.strictEqual(
+          (await ExecutionRootLeaseManager.inspectLeases(root)).length,
+          3
+        );
+        await first.release();
+        await second.release();
+      });
+    });
+
+    test("chains ending in different delegators still conflict", async () => {
+      await withParent("other-delegator", async (root, parentToken) => {
+        const first = await ExecutionRootLeaseManager.acquire(
+          sibling(root, "first", [parentToken])
+        );
+        try {
+          await assert.rejects(
+            ExecutionRootLeaseManager.acquire(
+              sibling(root, "nephew", [parentToken, "another-child"])
+            ),
+            (error: unknown) => {
+              assert.ok(error instanceof ExecutionLeaseConflictError);
+              assert.strictEqual(
+                error.conflict.lease.ownerToken,
+                first.ownerToken
+              );
+              return true;
+            }
+          );
+          await assert.rejects(
+            ExecutionRootLeaseManager.acquire(
+              request(root, "exclusive-worktree", "chainless")
+            ),
+            ExecutionLeaseConflictError
+          );
+        } finally {
+          await first.release();
+        }
+      });
+    });
+
+    test("a sibling's merge lease and an inheriting sibling's lease exclude each other", async () => {
+      const merge = EXECUTION_LEASE_PURPOSES.MERGE;
+      await withParent("merge-beside-editor", async (root, parentToken) => {
+        const editor = await ExecutionRootLeaseManager.acquire(
+          sibling(root, "editor", [parentToken])
+        );
+        try {
+          await assert.rejects(
+            ExecutionRootLeaseManager.acquire(
+              sibling(root, "merge", [parentToken], merge)
+            ),
+            (error: unknown) => {
+              assert.ok(error instanceof ExecutionLeaseConflictError);
+              assert.deepStrictEqual(
+                error.conflictingLeases.map((lease) => lease.ownerToken),
+                [editor.ownerToken]
+              );
+              return true;
+            }
+          );
+        } finally {
+          await editor.release();
+        }
+
+        const mergeLease = await ExecutionRootLeaseManager.acquire(
+          sibling(root, "merge", [parentToken], merge)
+        );
+        try {
+          await assert.rejects(
+            ExecutionRootLeaseManager.acquire(
+              sibling(root, "late-editor", [parentToken])
+            ),
+            ExecutionLeaseConflictError
+          );
+          // Shared-native, the mode an inheriting child actually requests,
+          // is refused too.
+          await assert.rejects(
+            ExecutionRootLeaseManager.acquire({
+              ...request(root, "shared-native", "late-shared"),
+              delegationChain: [parentToken],
+            }),
+            ExecutionLeaseConflictError
+          );
+        } finally {
+          await mergeLease.release();
+        }
+      });
+    });
   });
 
   test("arbitrates through the shared file lock and frees it after every operation", async () => {
@@ -307,5 +479,123 @@ suite("ExecutionRootLeaseManager", function () {
     } finally {
       await removeDirectory(parent);
     }
+  });
+  test("D4d: persists a merge purpose and reports every conflicting lease", async () => {
+    const root = await tempDirectory("merge-purpose");
+    try {
+      const first = await ExecutionRootLeaseManager.acquire(
+        request(root, "shared-native", "first")
+      );
+      const second = await ExecutionRootLeaseManager.acquire(
+        request(root, "shared-native", "second")
+      );
+      try {
+        const error = await ExecutionRootLeaseManager.acquire({
+          ...request(root, "exclusive-worktree", "merge"),
+          purpose: EXECUTION_LEASE_PURPOSES.MERGE,
+        }).then(
+          () => assert.fail("two shared leases must refuse an exclusive one"),
+          (caught: unknown) => caught
+        );
+        assert.ok(error instanceof ExecutionLeaseConflictError);
+        assert.strictEqual(
+          error.conflict.lease.ownerToken,
+          error.conflictingLeases[0]?.ownerToken
+        );
+        assert.deepStrictEqual(
+          error.conflictingLeases.map((lease) => lease.ownerToken).sort(),
+          [first.ownerToken, second.ownerToken].sort()
+        );
+      } finally {
+        await first.release();
+        await second.release();
+      }
+
+      const merge = await ExecutionRootLeaseManager.acquire({
+        ...request(root, "exclusive-worktree", "merge"),
+        purpose: EXECUTION_LEASE_PURPOSES.MERGE,
+        delegationChain: ["parent-token"],
+      });
+      try {
+        assert.strictEqual(merge.purpose, EXECUTION_LEASE_PURPOSES.MERGE);
+        const [persisted] = await ExecutionRootLeaseManager.inspectLeases(root);
+        assert.strictEqual(
+          persisted?.lease.purpose,
+          EXECUTION_LEASE_PURPOSES.MERGE
+        );
+        const editing = await ExecutionRootLeaseManager.acquire(
+          request(root, "exclusive-worktree", "editing")
+        ).then(
+          () => assert.fail("a merge lease is still exclusive"),
+          (caught: unknown) => caught
+        );
+        assert.ok(editing instanceof ExecutionLeaseConflictError);
+      } finally {
+        await merge.release();
+      }
+      // An ordinary lease records no purpose.
+      const plain = await ExecutionRootLeaseManager.acquire(
+        request(root, "exclusive-worktree", "plain")
+      );
+      assert.strictEqual(plain.purpose, undefined);
+      await plain.release();
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  suite("D4d sibling merge conflict classification", () => {
+    const merge = EXECUTION_LEASE_PURPOSES.MERGE;
+    const chain = ["root", "parent"];
+
+    test("waits only on merge leases with the same immediate delegator", () => {
+      assert.strictEqual(
+        isSiblingMergeLeaseConflict(chain, [
+          { purpose: merge, delegationChain: ["root", "parent"] },
+          { purpose: merge, delegationChain: ["parent"] },
+        ]),
+        true
+      );
+    });
+
+    test("an editing lease, even a delegated sibling's, never waits", () => {
+      assert.strictEqual(
+        isSiblingMergeLeaseConflict(chain, [
+          { delegationChain: ["root", "parent"] },
+        ]),
+        false
+      );
+      assert.strictEqual(
+        isSiblingMergeLeaseConflict(chain, [
+          { purpose: merge, delegationChain: ["root", "parent"] },
+          { delegationChain: ["root", "parent"] },
+        ]),
+        false,
+        "one editing lease among sibling merges is enough to fail fast"
+      );
+    });
+
+    test("a merge lease from another delegator or with no chain never waits", () => {
+      assert.strictEqual(
+        isSiblingMergeLeaseConflict(chain, [
+          { purpose: merge, delegationChain: ["root"] },
+        ]),
+        false
+      );
+      assert.strictEqual(
+        isSiblingMergeLeaseConflict(chain, [{ purpose: merge }]),
+        false
+      );
+    });
+
+    test("a request with no chain, or no conflict, never waits", () => {
+      const sibling = { purpose: merge, delegationChain: ["parent"] };
+      assert.strictEqual(
+        isSiblingMergeLeaseConflict(undefined, [sibling]),
+        false
+      );
+      assert.strictEqual(isSiblingMergeLeaseConflict([], [sibling]), false);
+      assert.strictEqual(isSiblingMergeLeaseConflict(chain, []), false);
+    });
   });
 });

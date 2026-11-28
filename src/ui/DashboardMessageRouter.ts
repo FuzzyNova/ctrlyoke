@@ -18,6 +18,10 @@ import {
   LOG_LEVELS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  APPEND_MODES,
+  INLINE_PARALLEL_APPEND_REFUSAL,
+  isAppendMode,
+  isQueuePosition,
   USER_FEEDBACK_SEVERITY,
   isStatusLineHarnessId,
   isRerunConfirmationMode,
@@ -127,6 +131,9 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
+  NormalizeSubWorkflowStepFileMessage,
+  SelectSubWorkflowStepFileMessage,
+  SubWorkflowStepFileSelectedMessage,
   WorkflowVariantCreatedMessage,
   WorkflowVariantFailedMessage,
 } from "../types/WebviewMessageTypes";
@@ -183,6 +190,9 @@ function isValidOutputExecutionTarget(
       (target.loopIndex as number) >= 0)
   );
 }
+
+/** The action a refused sub-workflow step file is reported under. */
+const SUB_WORKFLOW_STEP_FILE_ACTION = "use the workflow file for this step";
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -1182,6 +1192,44 @@ export class DashboardMessageRouter {
   }
 
   /**
+   * Answer a step-editor workflow-file pick with the reference the
+   * orchestrator builds for the workflow this client edits, or report the
+   * refusal as every other picker failure is reported.
+   */
+  private async replySubWorkflowStepFile(
+    filePath: string,
+    targetKey: string | undefined,
+    ctx: DashboardClientContext
+  ): Promise<void> {
+    try {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) {
+        throw new Error(
+          "ctrlyoke is still starting up — try again in a moment"
+        );
+      }
+      const reference =
+        await orchestrator.buildSubWorkflowStepReferenceForClient(
+          filePath,
+          ctx.clientId
+        );
+      if (!reference.ok) throw new Error(reference.message);
+      const reply: SubWorkflowStepFileSelectedMessage = {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: reference.workflow,
+        ...(typeof targetKey === "string" ? { targetKey } : {}),
+      };
+      ctx.emit(reply);
+    } catch (error) {
+      this.mutationCoordinator.showRunActionFailure(
+        ctx,
+        SUB_WORKFLOW_STEP_FILE_ACTION,
+        error
+      );
+    }
+  }
+
+  /**
    * Resolve a workflow file path supplied by a dashboard client.
    *
    * Client-supplied paths are not guaranteed absolute: `WorkflowFilePickerModal`
@@ -1189,8 +1237,9 @@ export class DashboardMessageRouter {
    * and nothing downstream resolves one — `PromptFileParser.parsePromptFile`
    * does a bare `fs.readFile`, so a relative path would silently resolve
    * against the extension host's cwd and fail (or worse, hit an unrelated
-   * file). Both file-addressed actions — LOAD_WORKFLOW and APPEND_FILE —
-   * therefore resolve here, at the transport edge, so they cannot drift apart.
+   * file). Every file-addressed action — LOAD_WORKFLOW, APPEND_FILE and
+   * NORMALIZE_SUB_WORKFLOW_STEP_FILE — therefore resolves here, at the
+   * transport edge, so they cannot drift apart.
    * Folder-name-prefixed multi-root paths (`otherFolder/flows/x.yaml`, the form
    * workflow discovery reports) go through the same resolver as `@`-references.
    */
@@ -1228,6 +1277,48 @@ export class DashboardMessageRouter {
         ctx.clientId
       );
     });
+
+    // The step editor's Workflow mode: the file a sub-workflow step runs,
+    // picked natively here or in the hosted browser's own modal (which sends
+    // NORMALIZE_SUB_WORKFLOW_STEP_FILE), handed back as its `workflow`
+    // reference. The orchestrator builds and checks it exactly as the
+    // "queue as sub-workflow" entries do, so a file the launch would refuse
+    // is refused at pick time.
+    table.set(
+      MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+      async (message: SelectSubWorkflowStepFileMessage, ctx) => {
+        const selectPath = this.hostDependencies.actions.selectWorkspacePath;
+        if (!selectPath) return;
+        const filePath = await selectPath.call(this.hostDependencies.actions, {
+          kind: PATH_SELECTION_KINDS.FILE,
+          title: PATH_SELECTION_TITLES.SUB_WORKFLOW_STEP_FILE,
+        });
+        if (!filePath) return;
+        await this.replySubWorkflowStepFile(
+          this.resolveClientWorkflowFilePath(filePath),
+          message.targetKey,
+          ctx
+        );
+      }
+    );
+    table.set(
+      MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+      async (message: NormalizeSubWorkflowStepFileMessage, ctx) => {
+        if (typeof message.filePath !== "string" || !message.filePath.trim()) {
+          this.mutationCoordinator.showRunActionFailure(
+            ctx,
+            SUB_WORKFLOW_STEP_FILE_ACTION,
+            new Error("No workflow file was named")
+          );
+          return;
+        }
+        await this.replySubWorkflowStepFile(
+          this.resolveClientWorkflowFilePath(message.filePath.trim()),
+          message.targetKey,
+          ctx
+        );
+      }
+    );
 
     table.set(MESSAGE_TYPES.SELECT_RUN_BUNDLE, async (_message, ctx) => {
       const selectPath = this.hostDependencies.actions.selectWorkspacePath;
@@ -1355,6 +1446,41 @@ export class DashboardMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message, ctx) => {
+      if (
+        (message.appendMode !== undefined &&
+          !isAppendMode(message.appendMode)) ||
+        (message.position !== undefined && !isQueuePosition(message.position))
+      ) {
+        this.mutationCoordinator.showRunActionFailure(
+          ctx,
+          "queue from file",
+          new Error(
+            `Unknown append mode or position (${String(message.appendMode)}, ${String(message.position)}); nothing was queued`
+          )
+        );
+        return;
+      }
+      const appendMode = message.appendMode ?? APPEND_MODES.INLINE;
+      const position = message.position ?? QUEUE_POSITION.END;
+      const failureAction =
+        position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+          ? "run the workflow alongside the current step"
+          : appendMode === APPEND_MODES.INLINE
+            ? "append and continue from file"
+            : "queue the workflow as a sub-workflow";
+      // Refused before any file is picked, on either branch: the inline
+      // picker path below has no failure channel of its own.
+      if (
+        appendMode === APPEND_MODES.INLINE &&
+        position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+      ) {
+        this.mutationCoordinator.showRunActionFailure(
+          ctx,
+          failureAction,
+          new Error(INLINE_PARALLEL_APPEND_REFUSAL)
+        );
+        return;
+      }
       if (message.filePath) {
         const mutation =
           this.mutationCoordinator.asWorkflowDefinitionMutation(message);
@@ -1365,13 +1491,18 @@ export class DashboardMessageRouter {
             mutation,
             this.resolveClientWorkflowFilePath(message.filePath),
             ctx.clientId,
-            QUEUE_POSITION.END
+            position,
+            appendMode
           );
         } catch (error) {
-          if (!isRunAddressed) throw error;
+          // Inline drafts keep their original rethrow; a sub-workflow queue
+          // reports every refusal, since "run alongside" has no other channel.
+          if (!isRunAddressed && appendMode === APPEND_MODES.INLINE) {
+            throw error;
+          }
           this.mutationCoordinator.showRunActionFailure(
             ctx,
-            "append and continue from file",
+            failureAction,
             error
           );
         }
@@ -1386,12 +1517,32 @@ export class DashboardMessageRouter {
         kind: PATH_SELECTION_KINDS.FILE,
         title: PATH_SELECTION_TITLES.APPEND_WORKFLOW,
       });
-      if (filePath) {
+      if (!filePath) return;
+      if (appendMode === APPEND_MODES.INLINE) {
         await this.getOrchestrator()?.appendFromFileForClient(
           undefined,
           this.resolveClientWorkflowFilePath(filePath),
           ctx.clientId,
-          QUEUE_POSITION.END
+          position
+        );
+        return;
+      }
+      // A sub-workflow queue is routed by its target's state, so it needs
+      // the address the client is viewing; the inline picker path above
+      // keeps its original instance-bound behaviour.
+      try {
+        await this.getOrchestrator()?.appendFromFileForClient(
+          this.mutationCoordinator.asWorkflowDefinitionMutation(message),
+          this.resolveClientWorkflowFilePath(filePath),
+          ctx.clientId,
+          position,
+          appendMode
+        );
+      } catch (error) {
+        this.mutationCoordinator.showRunActionFailure(
+          ctx,
+          failureAction,
+          error
         );
       }
     });

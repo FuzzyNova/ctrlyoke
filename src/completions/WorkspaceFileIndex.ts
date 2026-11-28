@@ -21,6 +21,7 @@ import {
   WORKSPACE_ENTRY_KINDS,
   WORKSPACE_FILE_CHANGE_KINDS,
   WORKSPACE_FILE_INDEX_STATES,
+  type PathQueryFileSet,
   type WorkspaceFileChangeKind,
   type WorkspaceFileIndexState,
   type WorkspaceFileTreeEntryKind,
@@ -650,6 +651,7 @@ export type WorkspaceFileIndexRequest =
       limit?: number;
       kind?: WorkspaceFileTreeEntryKind;
       maxResults?: number;
+      fileSet?: PathQueryFileSet;
     }
   | {
       id: number;
@@ -708,10 +710,15 @@ export function runPipelineQuery(
     limit?: number;
     kind?: WorkspaceFileTreeEntryKind;
     maxResults?: number;
+    fileSet?: PathQueryFileSet;
   },
   options: WorkspacePathQueryOptions = {}
 ): Promise<WorkspacePathResult[]> {
-  const queryOptions = { ...options, limit: request.limit ?? options.limit };
+  const queryOptions = {
+    ...options,
+    limit: request.limit ?? options.limit,
+    fileSet: request.fileSet ?? options.fileSet,
+  };
   switch (request.type) {
     case WORKSPACE_FILE_INDEX_MESSAGE_TYPES.QUERY_FILES:
       return pipeline.queryFiles(request.query, queryOptions);
@@ -919,7 +926,7 @@ export class WorkspaceFileIndex implements WorkspaceFileQueries {
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
       return (await this.request(
-        { ...request, queryId, limit: options.limit },
+        { ...request, queryId, limit: options.limit, fileSet: options.fileSet },
         id,
         options.onProgress
       )) as WorkspacePathResult[];

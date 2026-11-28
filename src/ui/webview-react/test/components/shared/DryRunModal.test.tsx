@@ -16,7 +16,11 @@ import {
   WORKTREE_CONFIG_ORIGINS,
   WORKTREE_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  PREVIEW_STEP_TYPES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
+  formatSubWorkflowRunsLabel,
 } from "@root/types/DashboardConstants";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "@root/types/SubWorkflowTypes";
 import { useHarnessCapabilityStore } from "@store/harnessCapabilityStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -1248,5 +1252,127 @@ describe("DryRunModal", () => {
     expect(
       screen.getByRole("alert", { name: "Variable substitution blockers" })
     ).toHaveTextContent('Run start blocked: harness: variable "h" is "nope"');
+  });
+
+  describe("workflow steps", () => {
+    const fileChild: WorkflowExecutionPreview["steps"][number] = {
+      ...preview.steps[1],
+      stepIndex: 2,
+      stepName: undefined,
+      type: PREVIEW_STEP_TYPES.WORKFLOW,
+      command: undefined,
+      diagnostics: [],
+      subWorkflow: {
+        source: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+        workflowPath: "flows/verify.ctrlyoke.yaml",
+      },
+    };
+    const inlineLane: WorkflowExecutionPreview["steps"][number] = {
+      ...preview.steps[0],
+      stepIndex: 3,
+      stepName: "Lint lane",
+      subWorkflow: {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: "Lint lane",
+        worktree: {
+          mode: WORKTREE_MODES.NAMED,
+          origin: WORKTREE_CONFIG_ORIGINS.AUTHORED,
+          branch: "lane/lint",
+          eligible: true,
+          plannedDirectoryIsExact: false,
+        },
+      },
+    };
+    const withChildren: WorkflowExecutionPreview = {
+      ...preview,
+      steps: [...preview.steps, fileChild, inlineLane],
+    };
+
+    it("lists a file child as 'Runs <file>' in the rail and the timeline", () => {
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        width: 800,
+        height: 400,
+        x: 0,
+        y: 0,
+        top: 0,
+        right: 800,
+        bottom: 400,
+        left: 0,
+        toJSON: () => ({}),
+      });
+      openPreview({ kind: "workflow" }, withChildren);
+
+      render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+      const label = formatSubWorkflowRunsLabel("flows/verify.ctrlyoke.yaml");
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+      expect(screen.getByLabelText(`Step 3: ${label}`)).toBeInTheDocument();
+    });
+
+    it("shows a file child's step as the file it runs, with no tabs", () => {
+      openPreview({ kind: "step", stepIndex: 2 }, withChildren);
+
+      render(<DryRunModal scope={{ kind: "step", stepIndex: 2 }} />);
+
+      const panel = screen.getByTestId("dry-run-file-child");
+      expect(panel).toHaveTextContent(
+        formatSubWorkflowRunsLabel("flows/verify.ctrlyoke.yaml")
+      );
+      expect(panel).toHaveTextContent(
+        SUB_WORKFLOW_DASHBOARD_LABELS.previewFileNote
+      );
+      expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+      expect(screen.queryByText("Resolved execution")).not.toBeInTheDocument();
+    });
+
+    it("shows an inline lane as its wrapped step plus its own worktree", () => {
+      openPreview({ kind: "step", stepIndex: 3 }, withChildren);
+
+      render(<DryRunModal scope={{ kind: "step", stepIndex: 3 }} />);
+
+      // The wrapped prompt keeps the ordinary step tabs and summary.
+      expect(screen.getByRole("tab", { name: "Command" })).toBeInTheDocument();
+      expect(screen.getByText("Resolved execution")).toBeInTheDocument();
+      expect(screen.getByTestId("dry-run-worktree-badge")).toHaveTextContent(
+        "lane/lint"
+      );
+      const child = screen.getByTestId("dry-run-inline-child");
+      expect(child).toHaveTextContent(
+        SUB_WORKFLOW_DASHBOARD_LABELS.previewInlineNote
+      );
+      expect(child).toHaveTextContent(
+        SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle
+      );
+      expect(within(child).getByText("Branch").parentElement).toHaveTextContent(
+        "Branchlane/lint"
+      );
+    });
+
+    it("shows no worktree note for an inline child in the parent's checkout", () => {
+      openPreview(
+        { kind: "step", stepIndex: 3 },
+        {
+          ...preview,
+          steps: [
+            {
+              ...inlineLane,
+              subWorkflow: {
+                source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+                childName: "Lint lane",
+              },
+            },
+          ],
+        }
+      );
+
+      render(<DryRunModal scope={{ kind: "step", stepIndex: 3 }} />);
+
+      expect(screen.getByTestId("dry-run-inline-child")).not.toHaveTextContent(
+        SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle
+      );
+      expect(
+        screen.queryByTestId("dry-run-worktree-badge")
+      ).not.toBeInTheDocument();
+    });
   });
 });

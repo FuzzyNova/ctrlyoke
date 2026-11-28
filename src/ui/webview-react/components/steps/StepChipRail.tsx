@@ -11,7 +11,8 @@
 import React, { useMemo } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
-  isScriptStep,
+  getStepType,
+  isPromptStep,
   type ParallelGroupDefinition,
 } from "@root/types/CtrlYokeTypes";
 import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
@@ -33,16 +34,19 @@ import {
 import {
   KEYBOARD_KEYS,
   STEP_COLOR_MODES,
-  STEP_TYPES,
+  type StepType,
 } from "@root/types/DashboardConstants";
 import {
   getStepAccentClass,
   getStepKindIconClass,
+  getStepKindLabel,
   executionOwnsCurrentStep,
   isFinalStepExecuting,
   isStepExecuting,
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import { resolveEffectiveStepHarness } from "@utils/subWorkflowDisplay";
+import { useSubWorkflowRanWithIndex } from "@hooks/useSubWorkflowRanWithIndex";
 import {
   calcContextPct,
   resolveEffectiveContextWindow,
@@ -154,7 +158,7 @@ type ChipProps = {
    */
   hideExecutingHighlight?: boolean;
   showPauseBoundaryBefore: boolean;
-  isScript: boolean;
+  stepType: StepType;
   stepColor?: string;
   tooltip: string;
   onChipClick: () => void;
@@ -169,7 +173,7 @@ function ChipContent({
   isExecuting,
   hideExecutingHighlight = false,
   showPauseBoundaryBefore,
-  isScript,
+  stepType,
   stepColor,
   tooltip,
   onChipClick,
@@ -191,7 +195,7 @@ function ChipContent({
       }}
       {...longPressHandlers}
       title={tooltip}
-      aria-label={`${isScript ? "Script" : "Prompt"} ${slotNumber}`}
+      aria-label={`${getStepKindLabel(stepType)} ${slotNumber}`}
     >
       {showPauseBoundaryBefore && <PauseBoundary />}
       {isExecuting && !hideExecutingHighlight && (
@@ -226,9 +230,7 @@ function ChipContent({
         </span>
         <StatusIcon status={status} />
         <Icon
-          name={getStepKindIconClass(
-            isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
-          )}
+          name={getStepKindIconClass(stepType)}
           className="text-xs text-description-fg"
         />
       </div>
@@ -431,17 +433,18 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
 
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 
+  const recordedRanWith = useSubWorkflowRanWithIndex();
   const getChipHarnessId = (
     step: WorkflowStep,
     status: StepStatus
   ): HarnessId | undefined => {
-    if (isScriptStep(step)) return undefined;
     if (getStepHarnessModel) return getStepHarnessModel(step, status).harnessId;
-    return (
-      (step._runtime?.harness as HarnessId | undefined) ??
-      (step.harness as HarnessId | undefined) ??
+    return resolveEffectiveStepHarness(
+      step,
       (workflowProperties.harness as HarnessId | undefined) ??
-      globalSettings.harness
+        globalSettings.harness,
+      recordedRanWith,
+      status
     );
   };
 
@@ -493,7 +496,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     isCurrentChip: boolean
   ): string => {
     const latestOutput = getLatestOutput(index);
-    const runtimeMeta = !isScriptStep(step) ? step._runtime : undefined;
+    const runtimeMeta = isPromptStep(step) ? step._runtime : undefined;
     const ctx = resolveEffectiveContextWindow({
       isCurrent: isCurrentChip,
       liveContextWindow: liveContextWindow?.[index],
@@ -501,7 +504,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
       runtimeContextWindow: runtimeMeta,
     });
     return buildStepHoverTooltip({
-      primaryAction: `${isScriptStep(step) ? "Script" : "Prompt"} ${index + 1} — click to edit, right-click for options`,
+      primaryAction: `${getStepKindLabel(step.type)} ${index + 1} — click to edit, right-click for options`,
       contextWindow: ctx,
       harness: getChipHarnessId(step, status),
       attemptTokens: resolveDisplayedAttemptTokens(latestOutput),
@@ -553,7 +556,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
         showPauseBoundaryBefore={
           isPaused && currentStep > 0 && index === currentStep
         }
-        isScript={isScriptStep(prompt)}
+        stepType={getStepType(prompt)}
         tooltip={buildChipTooltip(prompt, index, status, isExecuting)}
         onChipClick={() => handleStepClick(index)}
         onOpenContextMenu={(x, y) =>
@@ -565,7 +568,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
             isExecutionTargetLocked,
             direction: index < currentStep ? "rewind" : "forward",
             latestOutput: getLatestOutput(index),
-            runtimeMeta: !isScriptStep(prompt) ? prompt._runtime : undefined,
+            runtimeMeta: isPromptStep(prompt) ? prompt._runtime : undefined,
             liveContextWindow: liveContextWindow?.[index],
           })
         }
@@ -639,7 +642,7 @@ export const StepChipRail: React.FC<StepChipRailProps> = ({
     liveContextWindow: liveFinalStepContextWindow[finalStepLoopCount],
     latestOutput: finalStepLatestOutput,
     runtimeContextWindow:
-      finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
+      finalStep && isPromptStep(finalStep) ? finalStep._runtime : undefined,
   });
 
   return (

@@ -163,7 +163,12 @@ function destinationPromptFileReference(
   return resolvedPath;
 }
 
-function workspaceRelativeReference(
+/**
+ * `absolutePath` relative to the primary workspace root, else to the named
+ * root that contains it (prefixed with that root's name), else unchanged.
+ * Always uses forward slashes.
+ */
+export function workspaceRelativeReference(
   absolutePath: string,
   workspaceRoot: string,
   namedRoots: readonly ResolverWorkspaceFolder[] = []

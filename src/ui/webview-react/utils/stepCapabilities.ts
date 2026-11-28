@@ -1,10 +1,10 @@
 import {
   BULK_EDIT_DISABLED_REASONS,
   EXECUTION_STATES,
-  STEP_TYPES,
   type ExecutionState,
 } from "@root/types/DashboardConstants";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import { isPromptStep } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import { isWorkflowActive } from "./status";
 import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
@@ -119,7 +119,7 @@ export function getStepCapabilities(
   const canMutate =
     index >= 0 && !ctx.isExternallyManaged && !hostLocked && !executingTarget;
   const isResumableFailure = editableFailure;
-  const isPrompt = step.type !== STEP_TYPES.SCRIPT;
+  const isPrompt = isPromptStep(step);
 
   return {
     // Color has its own cosmetic update path and is allowed on locked steps.

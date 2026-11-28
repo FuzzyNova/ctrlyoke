@@ -15,8 +15,18 @@ import {
   type FinalStepPhase,
 } from "../../types/messages";
 import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  assertNever,
+  getExecutionRuntime,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+  isSubWorkflowStep,
+  getWorkflowStepText,
+  type PromptStep,
+  type ScriptStep,
+} from "@root/types/CtrlYokeTypes";
 import { Icon } from "../shared/Icon";
 import { truncateNormalized } from "@utils/string";
 import {
@@ -31,7 +41,17 @@ import {
 } from "./InOutputView";
 
 function getStepDisplayText(step: WorkflowStep): string {
-  return isScriptStep(step) ? step.script : (step.name ?? step.prompt);
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      return step.name ?? (step as PromptStep).prompt;
+    case STEP_TYPES.SCRIPT:
+      return (step as ScriptStep).script;
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? getWorkflowStepText(step) : "";
+    default:
+      return assertNever(stepType);
+  }
 }
 
 interface FinalStepFooterProps {
@@ -114,7 +134,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     isCurrent: isWorkflowRunningForFinalStep(status, phase),
     liveContextWindow,
     latestOutput,
-    runtimeContextWindow: finalStep?._runtime,
+    runtimeContextWindow: getExecutionRuntime(finalStep ?? undefined),
   });
   // The details panel and the bar are one selectable unit, so hovering either
   // highlights both (matching how selection already highlights both).
@@ -194,20 +214,20 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
               <StepDetailRows
                 status={effectiveStatus}
-                harnessId={isScriptStep(finalStep) ? undefined : harnessId}
+                harnessId={isPromptStep(finalStep) ? harnessId : undefined}
                 harnessLabel={
-                  isScriptStep(finalStep) ? undefined : harnessLabel
+                  isPromptStep(finalStep) ? harnessLabel : undefined
                 }
                 harnessIsDefault={
-                  isScriptStep(finalStep) ? undefined : harnessIsDefault
+                  isPromptStep(finalStep) ? harnessIsDefault : undefined
                 }
-                modelLabel={isScriptStep(finalStep) ? undefined : modelLabel}
+                modelLabel={isPromptStep(finalStep) ? modelLabel : undefined}
                 modelIsDefault={
-                  isScriptStep(finalStep) ? undefined : modelIsDefault
+                  isPromptStep(finalStep) ? modelIsDefault : undefined
                 }
                 latestOutput={latestOutput}
                 isSelected={isSelected}
-                overrides={isScriptStep(finalStep) ? undefined : overrides}
+                overrides={isPromptStep(finalStep) ? overrides : undefined}
               />
             </div>
             <ContextWindowBar

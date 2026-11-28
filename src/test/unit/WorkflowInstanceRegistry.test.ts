@@ -42,6 +42,22 @@ function fakeInstance(
 }
 
 suite("WorkflowInstanceRegistry", () => {
+  test("passes its launcher to externally created instances without viewing them", () => {
+    const registry = new WorkflowInstanceRegistry(
+      new TestWorkflowInstanceRegistryHost()
+    );
+    const instance = registry.createExternalWorkflowInstance();
+    const options = (
+      instance as unknown as {
+        executionOptions: { subWorkflowHost?: unknown };
+      }
+    ).executionOptions;
+    assert.ok(options.subWorkflowHost);
+    assert.strictEqual(registry.getViewedWorkflowId("panel"), null);
+    assert.strictEqual(registry.getInstances().get(instance.id), instance);
+    instance.dispose();
+  });
+
   test("keeps a client's viewer and address registries synchronized", () => {
     const registry = new WorkflowInstanceRegistry(
       new TestWorkflowInstanceRegistryHost()

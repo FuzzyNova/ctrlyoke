@@ -8,11 +8,20 @@ import {
   PromptFile,
   ParsedPromptFile,
   PromptStep,
+  InlineSubWorkflowDefinition,
+  describeInvalidInlineSubWorkflowDefinition,
+  isParentRunPriorContext,
+  isParentRunSessionId,
   WorkflowStep,
   ScriptStep,
+  SubWorkflowStep,
   StepDisplayProperties,
   EXECUTION_PROPERTY_KEYS,
   isScriptStep,
+  isPromptStep,
+  isSubWorkflowStep,
+  getStepType,
+  assertNever,
   hasExecutableSteps,
   type ScriptProperties,
   type WorkflowValidationResult,
@@ -47,6 +56,8 @@ import {
   USER_FEEDBACK_SEVERITY,
   WORKTREE_MODES,
   SCRIPT_STEP_COPY_FIELDS,
+  SUB_WORKFLOW_STEP_COPY_FIELDS,
+  PROMPT_FILE_RESOLUTION_STATUSES,
 } from "../types/DashboardConstants";
 import {
   CTRLYOKE_FILE_KINDS,
@@ -79,6 +90,10 @@ import {
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { loadYamlDocument, WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import {
+  getPromptReferenceTexts,
+  parseInlinePriorContextRefs,
+} from "../utils/FileReferenceParser";
 
 type ParallelValidationProperties = Pick<
   PromptFile,
@@ -107,6 +122,48 @@ class WorkflowStructureValidationError extends Error {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+/** References that would address the parent run cannot be used by a child run. */
+export function inlineRunBoundaryErrors(
+  step: SubWorkflowStep,
+  label: string
+): string[] {
+  const inline = step.workflow;
+  if (typeof inline === "string") return [];
+  const invalid = describeInvalidInlineSubWorkflowDefinition(inline);
+  if (invalid) return [`${label}: ${invalid}`];
+  const errors: string[] = [];
+  const boundary = `${label}: Inline sub-workflow starts a new run boundary`;
+  if ("sessionId" in inline && isParentRunSessionId(inline.sessionId)) {
+    errors.push(
+      `${boundary}; numeric and final-pass sessionId references select parent-run sessions`
+    );
+  }
+  if ("_runtime" in inline) {
+    errors.push(
+      `${boundary}; inline definitions cannot author child runtime metadata`
+    );
+  }
+  const priorContext =
+    "priorContext" in inline ? inline.priorContext : undefined;
+  if (isParentRunPriorContext(priorContext)) {
+    errors.push(
+      `${boundary}; numeric or relative priorContext selectors cannot cross into the child run`
+    );
+  }
+  // A script step has no prompt text, so only a prompt step can carry one.
+  const hasRunLocalReferences =
+    isPromptStep(inline) &&
+    getPromptReferenceTexts(inline).some(
+      (text) => parseInlinePriorContextRefs(text).length > 0
+    );
+  if (hasRunLocalReferences) {
+    errors.push(
+      `${boundary}; inline prior-context references cannot select parent-run output`
+    );
+  }
+  return errors;
 }
 
 /** A step's `name` is capped at this length by the workflow schema. */
@@ -533,6 +590,71 @@ export class PromptFileParser {
         severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       });
     }
+    if (isObject(parsed)) {
+      const inlineCandidates: Array<{
+        step: Record<string, unknown>;
+        pointer: string;
+        label: string;
+      }> = [];
+      if (Array.isArray(parsed.steps)) {
+        // Flattened numbering, as the loaded queue and its messages use.
+        let stepNumber = 0;
+        parsed.steps.forEach((step, index) => {
+          const members =
+            isObject(step) && Array.isArray(step.parallel)
+              ? step.parallel.map((member, memberIndex) => ({
+                  member,
+                  pointer: `/steps/${index}/parallel/${memberIndex}/workflow`,
+                }))
+              : [{ member: step, pointer: `/steps/${index}/workflow` }];
+          for (const { member, pointer } of members) {
+            stepNumber += 1;
+            if (isObject(member) && member.type === STEP_TYPES.WORKFLOW) {
+              inlineCandidates.push({
+                step: member,
+                pointer,
+                label: `Step ${stepNumber}`,
+              });
+            }
+          }
+        });
+      }
+      if (
+        isObject(parsed.finalStep) &&
+        parsed.finalStep.type === STEP_TYPES.WORKFLOW
+      ) {
+        inlineCandidates.push({
+          step: parsed.finalStep,
+          pointer: "/finalStep/workflow",
+          label: "Final step",
+        });
+      }
+      if (parsed.type === STEP_TYPES.WORKFLOW) {
+        inlineCandidates.push({
+          step: parsed,
+          pointer: "/workflow",
+          label: "Root workflow step",
+        });
+      }
+      // A malformed inline definition fails every arm of the schema's oneOf,
+      // so its own message goes ahead of that noise.
+      const shapeIssues: WorkflowTextValidationIssue[] = [];
+      for (const candidate of inlineCandidates) {
+        const step = candidate.step as unknown as SubWorkflowStep;
+        const shapeInvalid =
+          typeof step.workflow !== "string" &&
+          describeInvalidInlineSubWorkflowDefinition(step.workflow) !==
+            undefined;
+        for (const message of inlineRunBoundaryErrors(step, candidate.label)) {
+          (shapeInvalid ? shapeIssues : issues).push({
+            instancePath: candidate.pointer,
+            message,
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+          });
+        }
+      }
+      issues.unshift(...shapeIssues);
+    }
     const uniqueIssues = new Map<string, WorkflowTextValidationIssue>();
     for (const issue of issues) {
       uniqueIssues.set(`${issue.instancePath}\0${issue.message}`, issue);
@@ -685,9 +807,7 @@ export class PromptFileParser {
         const rootAlternatives = defs.singleStepRoot?.oneOf;
         schemas = [
           Array.isArray(rootAlternatives)
-            ? rootAlternatives[
-                isObject(target) && target.type === STEP_TYPES.SCRIPT ? 1 : 0
-              ]
+            ? rootAlternatives[isObject(target) ? stepSchemaIndex(target) : 0]
             : defs.singleStepRoot,
         ];
       } else {
@@ -707,9 +827,9 @@ export class PromptFileParser {
       schemas =
         suggestionCandidatesOnly && isObject(target)
           ? [
-              target.type === STEP_TYPES.SCRIPT
-                ? defs.scriptStep
-                : defs.promptStep,
+              [defs.promptStep, defs.scriptStep, defs.subWorkflowStep][
+                stepSchemaIndex(target)
+              ],
             ]
           : [defs.workflowStep];
     }
@@ -964,8 +1084,15 @@ export class PromptFileParser {
     promptValue: string,
     promptFilePath: string
   ): Promise<string> {
+    const resolver = this.createPromptFileResolver();
+
+    await resolver.validatePromptReference(promptValue, promptFilePath);
+    return promptValue;
+  }
+
+  private createPromptFileResolver(): PromptFileResolver {
     const trustedRoots = this.platform?.getWorkspaceRoots();
-    const resolver = new PromptFileResolver({
+    return new PromptFileResolver({
       workspaceRoot: this.platform?.getWorkspaceRoot(),
       namedRoots: this.platform?.getNamedWorkspaceRoots() ?? [],
       trustedRoots: trustedRoots?.length ? trustedRoots : undefined,
@@ -973,9 +1100,6 @@ export class PromptFileParser {
         this.platform?.getWorkspaceRoot()
       ),
     });
-
-    await resolver.validatePromptReference(promptValue, promptFilePath);
-    return promptValue;
   }
 
   /**
@@ -1031,15 +1155,26 @@ export class PromptFileParser {
     parsed: any,
     promptFilePath: string
   ): Promise<PromptFile> {
-    if (
-      parsed.type === STEP_TYPES.SCRIPT &&
-      typeof parsed.script === "string"
-    ) {
-      const promptFile: PromptFile = {
-        steps: [this.buildScriptStep(parsed)],
-      };
-      this.copyWorkflowLevelProperties(parsed, promptFile);
-      return promptFile;
+    const rootStepType = getStepType(parsed);
+    switch (rootStepType) {
+      case STEP_TYPES.SCRIPT: {
+        if (typeof parsed.script !== "string") break;
+        const promptFile: PromptFile = {
+          steps: [this.buildScriptStep(parsed)],
+        };
+        this.copyWorkflowLevelProperties(parsed, promptFile);
+        return promptFile;
+      }
+      case STEP_TYPES.PROMPT:
+        break;
+      case STEP_TYPES.WORKFLOW: {
+        const step = await this.buildSubWorkflowStep(parsed, promptFilePath);
+        const promptFile: PromptFile = { steps: [step] };
+        this.copyWorkflowLevelProperties(parsed, promptFile);
+        return promptFile;
+      }
+      default:
+        assertNever(rootStepType);
     }
 
     // Handle single prompt format
@@ -1075,16 +1210,9 @@ export class PromptFileParser {
             );
           }
           const resolvedMembers: WorkflowStep[] = await Promise.all(
-            (item.parallel as any[]).map(async (member) => {
-              if (member.type === STEP_TYPES.SCRIPT) {
-                return this.buildScriptStep(member);
-              }
-              const promptValue = await this.validatePromptReference(
-                member.prompt,
-                promptFilePath
-              );
-              return this.buildPromptStep(promptValue, member);
-            })
+            (item.parallel as any[]).map((member) =>
+              this.buildNormalizedStep(member, promptFilePath)
+            )
           );
           resolvedItems.push({
             parallel: resolvedMembers,
@@ -1095,16 +1223,9 @@ export class PromptFileParser {
           continue;
         }
 
-        if (item.type === STEP_TYPES.SCRIPT) {
-          resolvedItems.push(this.buildScriptStep(item));
-          resolvedStepCount += 1;
-          continue;
-        }
-        const promptValue = await this.validatePromptReference(
-          item.prompt,
-          promptFilePath
+        resolvedItems.push(
+          await this.buildNormalizedStep(item, promptFilePath)
         );
-        resolvedItems.push(this.buildPromptStep(promptValue, item));
         resolvedStepCount += 1;
       }
 
@@ -1148,18 +1269,10 @@ export class PromptFileParser {
 
       const rawFinalStep = parsed.finalStep;
       if (rawFinalStep) {
-        if (rawFinalStep.type === STEP_TYPES.SCRIPT) {
-          promptFile.finalStep = this.buildScriptStep(rawFinalStep);
-        } else if (typeof rawFinalStep.prompt === "string") {
-          const promptValue = await this.validatePromptReference(
-            rawFinalStep.prompt,
-            promptFilePath
-          );
-          promptFile.finalStep = this.buildPromptStep(
-            promptValue,
-            rawFinalStep
-          );
-        }
+        promptFile.finalStep = await this.buildNormalizedStep(
+          rawFinalStep,
+          promptFilePath
+        );
       }
 
       // Copy workflow-level properties (if present)
@@ -1222,7 +1335,7 @@ export class PromptFileParser {
       }
       if (item.parallel.length < 2) {
         throw new WorkflowStructureValidationError(
-          `Step ${stepIndex + 1}: parallel must contain at least two prompt or script steps`,
+          `Step ${stepIndex + 1}: parallel must contain at least two steps`,
           `/steps/${stepIndex}/parallel`
         );
       }
@@ -1233,9 +1346,9 @@ export class PromptFileParser {
             `/steps/${stepIndex}/parallel/${memberIndex}/parallel`
           );
         }
-        if (!this.isPromptOrScriptSource(member)) {
+        if (!this.isParallelMemberSource(member)) {
           throw new WorkflowStructureValidationError(
-            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step`,
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt, script or workflow step`,
             `/steps/${stepIndex}/parallel/${memberIndex}`
           );
         }
@@ -1243,17 +1356,114 @@ export class PromptFileParser {
     });
   }
 
-  private isPromptOrScriptSource(source: unknown): boolean {
+  /** Prompt, script and sub-workflow steps can be parallel members (P1). */
+  private isParallelMemberSource(source: unknown): boolean {
     if (!isObject(source)) {
       return false;
     }
-    if (source.type === STEP_TYPES.SCRIPT) {
-      return true;
+    if (
+      source.type !== undefined &&
+      source.type !== STEP_TYPES.PROMPT &&
+      source.type !== STEP_TYPES.SCRIPT &&
+      source.type !== STEP_TYPES.WORKFLOW
+    ) {
+      return false;
     }
-    return (
-      (source.type === undefined || source.type === STEP_TYPES.PROMPT) &&
-      typeof source.prompt === "string"
+    const sourceType = getStepType(source);
+    switch (sourceType) {
+      case STEP_TYPES.SCRIPT:
+        return true;
+      case STEP_TYPES.PROMPT:
+        return typeof source.prompt === "string";
+      case STEP_TYPES.WORKFLOW:
+        return true;
+      default:
+        return assertNever(sourceType);
+    }
+  }
+
+  private async buildNormalizedStep(
+    source: Record<string, any>,
+    promptFilePath: string
+  ): Promise<WorkflowStep> {
+    const sourceType = getStepType(source);
+    switch (sourceType) {
+      case STEP_TYPES.SCRIPT:
+        return this.buildScriptStep(source);
+      case STEP_TYPES.WORKFLOW:
+        return this.buildSubWorkflowStep(source, promptFilePath);
+      case STEP_TYPES.PROMPT: {
+        const promptValue = await this.validatePromptReference(
+          source.prompt,
+          promptFilePath
+        );
+        return this.buildPromptStep(promptValue, source);
+      }
+      default:
+        return assertNever(sourceType);
+    }
+  }
+
+  private async buildSubWorkflowStep(
+    source: Record<string, unknown>,
+    promptFilePath: string
+  ): Promise<WorkflowStep> {
+    if (typeof source.workflow !== "string") {
+      const invalid = describeInvalidInlineSubWorkflowDefinition(
+        source.workflow
+      );
+      if (invalid) {
+        throw new Error(invalid);
+      }
+      const inlineStep = source.workflow as InlineSubWorkflowDefinition;
+      if (isPromptStep(inlineStep)) {
+        await this.validatePromptReference(inlineStep.prompt, promptFilePath);
+      }
+      const step = {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: source.workflow,
+      } as Extract<WorkflowStep, { type: typeof STEP_TYPES.WORKFLOW }>;
+      for (const key of SUB_WORKFLOW_STEP_COPY_FIELDS) {
+        const value = source[key];
+        if (value !== undefined) Object.assign(step, { [key]: value });
+      }
+      if (source._runtime !== undefined)
+        step._runtime = source._runtime as typeof step._runtime;
+      return step;
+    }
+    if (source.workflow.trim() === "") {
+      throw new Error("Sub-workflow step requires a non-empty workflow path");
+    }
+    const resolution = await this.createPromptFileResolver().resolvePath(
+      source.workflow,
+      promptFilePath
     );
+    if (resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
+      const reason = (() => {
+        switch (resolution.status) {
+          case PROMPT_FILE_RESOLUTION_STATUSES.MISSING:
+            return "could not be found";
+          case PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE:
+            return `could not be read: ${getErrorMessage(resolution.error)}`;
+          default:
+            return assertNever(resolution);
+        }
+      })();
+      throw new Error(
+        `Sub-workflow file reference "${source.workflow}" ${reason}`
+      );
+    }
+    const step = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: source.workflow,
+    } as Extract<WorkflowStep, { type: typeof STEP_TYPES.WORKFLOW }>;
+    for (const key of SUB_WORKFLOW_STEP_COPY_FIELDS) {
+      const value = source[key];
+      if (value !== undefined) Object.assign(step, { [key]: value });
+    }
+    if (source._runtime !== undefined)
+      step._runtime = source._runtime as typeof step._runtime;
+    return step;
   }
 
   private getParallelReferenceErrors(
@@ -1306,6 +1516,8 @@ export class PromptFileParser {
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
     if (parsed.conditions !== undefined)
       promptFile.conditions = parsed.conditions;
+    if (parsed.worktreePresets !== undefined)
+      promptFile.worktreePresets = parsed.worktreePresets;
   }
 
   /** Copy every schema-backed execution property while preserving null values. */
@@ -1393,6 +1605,7 @@ export class PromptFileParser {
     if (isScriptStep(step)) {
       return [{ config: step, pointer: stepPointer }];
     }
+    if (!isPromptStep(step)) return [];
 
     const sites: { config: ScriptProperties; pointer: string }[] = [];
     if (step.endCondition) {
@@ -1483,6 +1696,11 @@ export class PromptFileParser {
         )
       );
 
+      if (isSubWorkflowStep(item) && typeof item.workflow !== "string") {
+        errors.push(...inlineRunBoundaryErrors(item, `Step ${index + 1}`));
+        return;
+      }
+
       // Script steps only require a non-empty script field
       if (isScriptStep(item)) {
         if (!item.script || item.script.trim().length === 0) {
@@ -1490,6 +1708,8 @@ export class PromptFileParser {
         }
         return;
       }
+
+      if (!isPromptStep(item)) return;
 
       if (!item.prompt || item.prompt.trim().length === 0) {
         errors.push(`Prompt ${index + 1}: Empty prompt text`);
@@ -1518,6 +1738,14 @@ export class PromptFileParser {
           "Final step"
         )
       );
+      if (
+        isSubWorkflowStep(options.finalStep) &&
+        typeof options.finalStep.workflow !== "string"
+      ) {
+        errors.push(
+          ...inlineRunBoundaryErrors(options.finalStep, "Final step")
+        );
+      }
     }
 
     return {
@@ -1549,5 +1777,20 @@ export class PromptFileParser {
       ).message,
       propertyPointer: workflowMaxSteps === undefined ? "/steps" : "/maxSteps",
     };
+  }
+}
+
+/** Index of a step kind in the schema's prompt/script single-step union. */
+function stepSchemaIndex(step: Record<string, unknown>): number {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      return 0;
+    case STEP_TYPES.SCRIPT:
+      return 1;
+    case STEP_TYPES.WORKFLOW:
+      return 2;
+    default:
+      return assertNever(stepType);
   }
 }

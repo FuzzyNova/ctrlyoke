@@ -3,6 +3,7 @@ import {
   PromptStep,
   WorkflowStep,
   HarnessId,
+  getExecutionRuntime,
 } from "../types/CtrlYokeTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { SettingsPropertyResolver } from "./SettingsPropertyResolver";
@@ -194,7 +195,7 @@ export class SessionResolver {
     }
 
     const referencedPrompt = allPrompts[refIndex];
-    const sessionId = referencedPrompt._runtime?.sessionId;
+    const sessionId = getExecutionRuntime(referencedPrompt)?.sessionId;
 
     if (!sessionId) {
       if (logWarnings) {
@@ -220,7 +221,7 @@ export class SessionResolver {
     }
 
     // Validate harness compatibility using shared method
-    const refHarness = referencedPrompt._runtime?.harness;
+    const refHarness = getExecutionRuntime(referencedPrompt)?.harness;
     const currentHarness = resolvedHarness ?? prompt.harness;
 
     if (!this.areHarnessesCompatible(refHarness, currentHarness)) {
@@ -270,8 +271,8 @@ export class SessionResolver {
     // Find most recent completed prompt with same harness
     for (let i = groupStartBoundary - 1; i >= 0; i--) {
       const prevPrompt = allPrompts[i];
-      const prevHarness = prevPrompt._runtime?.harness;
-      const prevSessionId = prevPrompt._runtime?.sessionId;
+      const prevHarness = getExecutionRuntime(prevPrompt)?.harness;
+      const prevSessionId = getExecutionRuntime(prevPrompt)?.sessionId;
       const currentHarness = resolvedHarness ?? prompt.harness;
 
       // Check harness compatibility using shared method

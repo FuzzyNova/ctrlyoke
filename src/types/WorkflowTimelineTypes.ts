@@ -18,7 +18,9 @@ import type {
   WorktreeConfig,
   WorktreeRunProjection,
   WorkflowStopReason,
+  SubWorkflowOutput,
 } from "./CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "./SubWorkflowTypes";
 import type {
   OutputExecutionTarget,
   WorkspaceSnapshot,
@@ -48,6 +50,7 @@ export const TIMELINE_EVENT_TYPES = {
   ATTEMPT_STARTED: "attemptStarted",
   ATTEMPT_TERMINATED: "attemptTerminated",
   SCRIPT_EXECUTION_RECORDED: "scriptExecutionRecorded",
+  SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
   RETRY_SCHEDULED: "retryScheduled",
   FOLLOW_UP_RESPONSE_APPENDED: "followUpResponseAppended",
   RUN_TERMINATED: "runTerminated",
@@ -109,6 +112,8 @@ export interface WorkflowRunManifest {
   completedAt?: number;
   /** Pause-aware active execution time; absent on runs created before this field. */
   activeExecutionMs?: number;
+  /** The sub-workflow step that launched this run, when it has a parent. */
+  parentRun?: SubWorkflowParentLink;
   executionState: ExecutionState;
   /** Structured reason when a run ended because an execution guardrail fired. */
   stopReason?: WorkflowStopReason;
@@ -137,6 +142,7 @@ export interface WorkflowRunManifest {
 export interface RunSummary {
   workflowKey: WorkflowKey;
   runRef: RunRef;
+  parentRun?: SubWorkflowParentLink;
   runDirectory: string;
   runId: number;
   startedAt: number;
@@ -410,6 +416,21 @@ export interface ScriptExecutionRecordedEventDraft extends TargetedTimelineEvent
   };
 }
 
+export interface SubWorkflowSettledEventDraft extends TargetedTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+  definitionRevision: number;
+  /**
+   * The parent queue step's `_runtime.stepId`, which survives reorders where
+   * `target.stepIndex` does not. Optional and additive: events written before
+   * it existed omit it, and readers fall back to the current step list.
+   */
+  stepId?: string;
+  payload: SubWorkflowOutput;
+}
+
 /** Captures the exact retry prompt before the next attempt is constructed/sent. */
 export interface RetryScheduledEventDraft extends TargetedTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.RETRY_SCHEDULED;
@@ -511,6 +532,7 @@ export type WorkflowTimelineEventDraft =
   | AttemptStartedEventDraft
   | AttemptTerminatedEventDraft
   | ScriptExecutionRecordedEventDraft
+  | SubWorkflowSettledEventDraft
   | RetryScheduledEventDraft
   | FollowUpResponseAppendedEventDraft
   | RunTerminatedEventDraft
@@ -582,6 +604,21 @@ export interface ScriptExecutionRecordedEvent extends TargetedTimelineEventBase 
   phase?: ExecutionPhase;
   definitionRevision: number;
   payload: ScriptExecutionRecordedEventDraft["payload"];
+}
+
+export interface SubWorkflowSettledEvent extends TargetedTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+  definitionRevision: number;
+  /**
+   * The parent queue step's `_runtime.stepId`, which survives reorders where
+   * `target.stepIndex` does not. Optional and additive: events written before
+   * it existed omit it, and readers fall back to the current step list.
+   */
+  stepId?: string;
+  payload: SubWorkflowOutput;
 }
 
 export interface RetryScheduledEvent extends TargetedTimelineEventBase {
@@ -686,6 +723,7 @@ export type WorkflowTimelineEvent =
   | AttemptStartedEvent
   | AttemptTerminatedEvent
   | ScriptExecutionRecordedEvent
+  | SubWorkflowSettledEvent
   | RetryScheduledEvent
   | FollowUpResponseAppendedEvent
   | RunTerminatedEvent

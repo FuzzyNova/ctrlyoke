@@ -17,6 +17,10 @@ import {
 } from "@root/types/DashboardConstants";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 
+vi.mock("@hooks/useVsCodeApi", () => ({ getVsCodeApi: () => ({}) }));
+vi.mock("@utils/runNavigation", () => ({ navigateToWorkflowAddress: vi.fn() }));
+import { navigateToWorkflowAddress } from "@utils/runNavigation";
+
 const summary = {
   workflowKey: "wf" as never,
   runRef: "run-14" as never,
@@ -58,6 +62,63 @@ function renderRow(tier: WorkflowRowTier) {
 }
 
 describe("RunSummaryRow", () => {
+  it("links Started by to the parent run when that workflow is available", () => {
+    const parentRun = {
+      workflowKey: "parent" as never,
+      runRef: "parent-run" as never,
+      phase: "queue" as const,
+      stepId: "step-id",
+    };
+    render(
+      <RunSummaryRow
+        row={{
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          summary: { ...summary, parentRun },
+          parentWorkflowName: "Parent workflow",
+        }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        canDelete={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Parent workflow" }));
+    expect(navigateToWorkflowAddress).toHaveBeenCalledWith(
+      {},
+      { workflowKey: "parent", kind: "run", runRef: "parent-run" },
+      "Parent workflow"
+    );
+  });
+
+  it("shows an unavailable Started by label without a broken link", () => {
+    const parentRun = {
+      workflowKey: "external-parent" as never,
+      runRef: "parent-run" as never,
+      phase: "queue" as const,
+      stepId: "step-id",
+    };
+    render(
+      <RunSummaryRow
+        row={{
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          summary: { ...summary, parentRun },
+        }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        canDelete={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Started by unavailable")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "unavailable" })).toBeNull();
+  });
+
   it("shows the run's settled run time after its usage", () => {
     const { container } = render(
       <RunSummaryRow

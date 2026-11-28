@@ -5,7 +5,6 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import type { PropertyValues, EditorSelectionTarget } from "@store/editorStore";
 import {
   FINAL_STEP_PHASES,
-  STEP_TYPES,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import {
@@ -20,8 +19,8 @@ import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolve
 import type {
   PromptFile,
   PromptStep as CorePromptStep,
-  ScriptStep as CoreScriptStep,
 } from "@root/types/CtrlYokeTypes";
+import { isPromptStep } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
 import { parseAllFileReferences } from "@root/utils/FileReferenceParser";
@@ -87,12 +86,10 @@ function isConsumedBy(
 }
 
 function applyPromptProperties(
-  step: WorkflowStep,
+  step: Extract<WorkflowStep, { prompt: string }>,
   properties: PropertyValues
 ): CorePromptStep {
-  const coreStep = toCorePromptStep(
-    step as Exclude<WorkflowStep, CoreScriptStep>
-  );
+  const coreStep = toCorePromptStep(step);
   return {
     ...coreStep,
     harness: properties.harness as HarnessId | undefined,
@@ -157,7 +154,7 @@ export function useCompatibilityDiagnostics(
         workflow = {
           ...workflow,
           steps: (workflow.steps ?? []).map((step, index) =>
-            index === promptTarget.index && step.type !== STEP_TYPES.SCRIPT
+            index === promptTarget.index && isPromptStep(steps[index])
               ? applyPromptProperties(steps[index], promptProperties)
               : step
           ),
@@ -165,7 +162,7 @@ export function useCompatibilityDiagnostics(
       } else if (
         promptTarget.kind === FINAL_STEP_PHASES.FINAL_STEP &&
         finalStep &&
-        finalStep.type !== STEP_TYPES.SCRIPT
+        isPromptStep(finalStep)
       ) {
         workflow = {
           ...workflow,
@@ -192,7 +189,7 @@ export function useCompatibilityDiagnostics(
             target.consumer.kind === FINAL_STEP_PHASES.QUEUE
               ? workflow.steps?.[target.consumer.stepIndex]
               : workflow.finalStep;
-          return step && step.type !== STEP_TYPES.SCRIPT ? step.prompt : "";
+          return step && isPromptStep(step) ? step.prompt : "";
         })()
       );
     const executionTargets = enumerateCompatibilityTargets(

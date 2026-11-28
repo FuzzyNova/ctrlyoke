@@ -190,6 +190,21 @@ export function FileBrowserSortHeader({
   );
 }
 
+/** Spell every path separator `/`, the one form UI-facing paths use. */
+export function toForwardSlashPath(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
+}
+
+/**
+ * A workflow file path as the hosted workflow-file modal lists and submits
+ * it: trimmed, with forward slashes. The step editor's workflow-file field
+ * spells a typed path with `toForwardSlashPath` as it changes (trimming it
+ * on save), so a typed and a picked path are spelled alike.
+ */
+export function normalizeWorkflowFilePath(filePath: string): string {
+  return toForwardSlashPath(filePath.trim());
+}
+
 /**
  * Strip a workspace root prefix from an absolute path, returning a
  * workspace-relative path. Returns the original string unchanged when the
@@ -204,9 +219,9 @@ export function toWorkspaceRelative(
   filePath: string,
   workspaceRoot: string | null | undefined
 ): string {
-  if (!workspaceRoot || !filePath) return filePath.replace(/\\/g, "/");
-  const norm = filePath.replace(/\\/g, "/");
-  const root = workspaceRoot.replace(/\\/g, "/").replace(/\/$/, "");
+  if (!workspaceRoot || !filePath) return toForwardSlashPath(filePath);
+  const norm = toForwardSlashPath(filePath);
+  const root = toForwardSlashPath(workspaceRoot).replace(/\/$/, "");
   if (norm.toLowerCase() === root.toLowerCase()) return "";
   // Case-insensitive comparison: Windows paths are case-insensitive, and
   // VS Code uri.fsPath may differ in drive letter or folder casing from

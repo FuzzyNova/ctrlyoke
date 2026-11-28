@@ -1,4 +1,5 @@
 import {
+  SUB_WORKFLOW_WORKTREE_PLACEMENTS,
   WORKTREE_DIRECTORY_VALUE_KINDS,
   WORKTREE_DIRECTORY_FIELD,
   WORKTREE_MODES,
@@ -7,6 +8,8 @@ import type {
   WorktreeConfig,
   WorktreeObjectConfig,
 } from "../types/CtrlYokeTypes";
+import type { SubWorkflowWorktreePlan } from "../types/SubWorkflowTypes";
+import { normalizeNamedWorktreeBranch } from "./BranchName";
 
 export type WorktreeDirectoryValueKind =
   (typeof WORKTREE_DIRECTORY_VALUE_KINDS)[keyof typeof WORKTREE_DIRECTORY_VALUE_KINDS];
@@ -69,6 +72,25 @@ export function effectiveWorktreeObjectConfig(
   return effective === false ? false : { ...effective };
 }
 
+/** Shown, and refused on save, for a named worktree without a branch. */
+export const NAMED_WORKTREE_BRANCH_REQUIRED =
+  "Branch is required for named worktree mode.";
+
+/**
+ * Why a worktree config cannot be saved as it stands, or undefined: a named
+ * worktree needs a branch. The worktree editor's one blocking check.
+ */
+export function namedWorktreeBranchError(
+  value: WorktreeConfig | undefined
+): string | undefined {
+  const config = toWorktreeObjectConfig(value);
+  return config !== false &&
+    config.mode === WORKTREE_MODES.NAMED &&
+    !config.branch?.trim()
+    ? NAMED_WORKTREE_BRANCH_REQUIRED
+    : undefined;
+}
+
 /**
  * Set one field of an object worktree config. An empty `directory` removes
  * the key, because a stored `directory: ""` is invalid and "empty" means
@@ -88,4 +110,75 @@ export function withWorktreeField<T extends object>(
     delete next.directory;
   }
   return next;
+}
+
+/**
+ * The optional string fields of an object worktree config. An empty one means
+ * "not set", and the schema refuses some of them empty (`base` has
+ * `minLength: 1`), so an editor omits them rather than storing `""`.
+ */
+const OPTIONAL_WORKTREE_STRING_FIELDS = [
+  WORKTREE_DIRECTORY_FIELD,
+  "base",
+  "setup",
+] as const;
+
+/**
+ * `config` without its blank optional string fields (`directory`, `base`,
+ * `setup`). A named worktree's required `branch` is left as it is, so its own
+ * refusal (`namedWorktreeBranchError`) still applies.
+ */
+export function withoutBlankOptionalWorktreeFields<
+  T extends WorktreeObjectConfig,
+>(config: T): T {
+  const next: Record<string, unknown> = { ...config };
+  for (const field of OPTIONAL_WORKTREE_STRING_FIELDS) {
+    const value = next[field];
+    if (typeof value === "string" && !value.trim()) delete next[field];
+  }
+  return next as T;
+}
+
+/** Classify a child definition's `worktree` key by the D4 table. */
+export function classifySubWorkflowWorktree(
+  worktree: WorktreeConfig | undefined
+): SubWorkflowWorktreePlan {
+  if (worktree === undefined) {
+    return {
+      placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.INHERITED,
+      mergesIntoParent: false,
+    };
+  }
+  const config = toWorktreeObjectConfig(worktree);
+  if (config === false) {
+    return {
+      placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.MAIN_CHECKOUT,
+      mergesIntoParent: false,
+    };
+  }
+  return config.mode === WORKTREE_MODES.MANAGED
+    ? {
+        placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.MANAGED,
+        mergesIntoParent: config.merge === true,
+      }
+    : {
+        placement: SUB_WORKFLOW_WORKTREE_PLACEMENTS.NAMED,
+        mergesIntoParent: false,
+        ...namedBranchField(config.branch),
+      };
+}
+
+function namedBranchField(branch: string): { namedBranch?: string } {
+  const namedBranch = normalizeNamedWorktreeBranch(branch);
+  return namedBranch && !namedBranch.includes("{{") ? { namedBranch } : {};
+}
+
+/** Whether a classified child creates (or reuses) a worktree of its own. */
+export function subWorkflowCreatesWorktree(
+  plan: SubWorkflowWorktreePlan | undefined
+): boolean {
+  return (
+    plan?.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.MANAGED ||
+    plan?.placement === SUB_WORKFLOW_WORKTREE_PLACEMENTS.NAMED
+  );
 }

@@ -13,6 +13,7 @@ import {
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 import type { CommandDisplayShell } from "./CommandDisplayFormatter";
 import type { ParallelGroupDefinition } from "./CtrlYokeTypes";
+import type { SUB_WORKFLOW_SOURCE_KINDS } from "./SubWorkflowTypes";
 
 export type { CommandDisplayShell } from "./CommandDisplayFormatter";
 
@@ -133,7 +134,41 @@ export interface StepExecutionPreview {
   diagnostics: CompatibilityDiagnostic[];
   /** This step's fields whose authored placeholders were substituted. */
   substitutions?: SubstitutedFieldPreview[];
+  /** Present for a `type: workflow` step; see {@link SubWorkflowStepPreview}. */
+  subWorkflow?: SubWorkflowStepPreview;
 }
+
+/**
+ * What a `type: workflow` step's preview stands for. The preview never
+ * expands a child workflow's steps (v1).
+ *
+ * - `file`: the step previews as one `workflow`-type entry, "Runs <file>".
+ *   The child resolves its own harness, model and settings when it starts,
+ *   so the entry carries no prompt or command, and its `resolvedProperties`
+ *   (kept for the DTO's shape) are not the child's; show `workflowPath`.
+ * - `inline`: the step previews as the prompt or script step it wraps,
+ *   materialized as at launch (D13): the parent's workflow-level properties
+ *   and effective vars, substituted by the child. `worktree` is the child's
+ *   own managed or named worktree; absent when it runs in the parent's
+ *   checkout or the main checkout.
+ */
+export type SubWorkflowStepPreview =
+  | {
+      source: typeof SUB_WORKFLOW_SOURCE_KINDS.FILE;
+      /** The authored path; a workflow path is never substituted (D11). */
+      workflowPath: string;
+    }
+  | {
+      source: typeof SUB_WORKFLOW_SOURCE_KINDS.INLINE;
+      /** The child run's name: the step's name, else parent and position. */
+      childName: string;
+      worktree?: WorktreeExecutionPreview;
+      /**
+       * Set when the wrapped step is disabled: the child still starts, skips
+       * it and runs nothing, so the entry has no prompt or command to show.
+       */
+      note?: string;
+    };
 
 export interface EffectiveSandboxPreview {
   kind: "on" | "off" | "harness";

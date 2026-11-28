@@ -1,6 +1,11 @@
 import * as path from "path";
+import {
+  getWorkflowStepText,
+  hasExecutableSteps,
+} from "../types/CtrlYokeTypes";
 import * as os from "os";
 import { PromptFileParser } from "./PromptFileParser";
+import type { PromptFileResolutionInput } from "./PromptFileResolutionOptions";
 import { rebaseWorkflowStepPaths } from "./WorkflowStepPathRebaser";
 import { PromptQueue, type ParallelGroupMemberInsertion } from "./PromptQueue";
 import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
@@ -20,8 +25,7 @@ import {
   buildDefinitionSnapshot,
   buildEphemeralWorkflowStep,
   buildFinalStepUpdate,
-  buildPromptStepProperties,
-  buildScriptStepFromProperties,
+  buildWorkflowStepFromProperties,
   mergeWorkflowStepUpdate,
   sanitizeClipboardWorkflowStep,
   stripViewOnlyWorkflowStepFields,
@@ -43,7 +47,8 @@ import {
   PromptFile,
   PromptStep,
   WorkflowStep,
-  isScriptStep,
+  SubWorkflowStep,
+  isPromptStep,
   QueueState,
   HarnessId,
   EXECUTION_STATES,
@@ -53,6 +58,7 @@ import {
   WorkflowRuntimeTransition,
   WorkflowSummary,
   type WorktreeRunProjection,
+  type WorktreeCompletionResult,
   DynamicQueueConfig,
   deriveWorkflowFinalStepSummary,
   type RunRef,
@@ -62,6 +68,14 @@ import {
   type RunnerHostIdentity,
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
+import type {
+  SubWorkflowControl,
+  SubWorkflowHost,
+  SubWorkflowInstance,
+  SubWorkflowLoadOptions,
+  SubWorkflowParentLink,
+  InlineParentDefinition,
+} from "../types/SubWorkflowTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
@@ -95,7 +109,6 @@ import {
   FAILURE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   STEP_STATUS,
-  STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_RUNTIME_COMMANDS,
   WORKFLOW_TELEMETRY_OUTCOMES,
@@ -146,12 +159,14 @@ import {
 } from "../platform/PlatformAdapter";
 import {
   getExecutionWorkspaceIdentity,
+  resolveWorkflowTrustSourcePath,
   type ExecutionWorkspace,
   type HeadlessApprovalRequestContext,
   type HeadlessApprovalResolution,
   type McpToolSkillRunContext,
 } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import { forwardSubWorkflowControl } from "./orchestration/SubWorkflowControlRelay";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import {
   ExecutionRootLeaseManager,
@@ -161,6 +176,8 @@ import {
 import { CoordinationParticipantRegistry } from "./orchestration/ExecutionRootCoordination";
 import {
   WorktreeManager,
+  prepareParentCheckoutForWorktreeChild,
+  type CompleteManagedRunOptions,
   type WorktreeInfo,
   type WorktreeSetupRunner,
 } from "./orchestration/WorktreeManager";
@@ -188,6 +205,7 @@ import { SessionActivityRecorder } from "./orchestration/SessionActivityRecorder
 import { RunnerLockCoordinator } from "./orchestration/RunnerLockCoordinator";
 import {
   WorkflowStartupPipeline,
+  type ManagedWorktreeCleanup,
   type WorkflowStartupContextPort,
   type WorkflowStartupLifecyclePort,
   type WorkflowStartupPipelinePort,
@@ -275,13 +293,83 @@ interface ActiveTargetResources {
   integration?: HarnessIntegration;
   processRunner?: ScriptProcessRunner;
   ptySessionId?: string;
+  subWorkflow?: SubWorkflowControl;
+}
+
+/**
+ * Shown when a Continue arrives while a Stop of the paused run is still
+ * ending it: the Stop was pressed first, so the Continue is ignored.
+ */
+export const PAUSED_STOP_IGNORES_CONTINUE_MESSAGE =
+  "Continue ignored: the paused workflow is being stopped.";
+
+/** What a run's end keeps of its worktree reservation, and what it settles. */
+interface RunEndReservation {
+  /** Kept: worktree, lease and runner lock stay held. */
+  readonly preserveWorktreeReservation: boolean;
+  /** The run's worktree is settled. */
+  readonly terminalWorktreeRun: boolean;
+  /** ...and it is a managed one (commit, land, merge per config). */
+  readonly managedTerminalRun: boolean;
+}
+
+/**
+ * The strict artifact cleanup of the integrations a run's end settled: it
+ * decides whether a managed worktree may land.
+ */
+interface StrictArtifactCleanup {
+  readonly strictArtifactCleanupSucceeded: boolean;
+  readonly strictArtifactCleanupMessage: string | undefined;
+}
+
+/** `cleanup` with one more failure, which blocks the worktree's landing. */
+function withStrictCleanupFailure(
+  cleanup: StrictArtifactCleanup,
+  message: string | undefined
+): StrictArtifactCleanup {
+  return {
+    strictArtifactCleanupSucceeded: false,
+    strictArtifactCleanupMessage: [
+      cleanup.strictArtifactCleanupMessage,
+      message,
+    ]
+      .filter(Boolean)
+      .join("; "),
+  };
+}
+
+/** A managed worktree's `merge` and `keep`, as its settlement applies them. */
+interface ManagedWorktreeSettlement {
+  readonly merge: boolean;
+  readonly keep: boolean;
+}
+
+/** The settlement a worktree config asks for; non-managed configs ask none. */
+function managedWorktreeSettlement(
+  config: WorkspaceWorktreeResolution["config"]
+): ManagedWorktreeSettlement {
+  const managed = config?.mode === WORKTREE_MODES.MANAGED ? config : undefined;
+  return { merge: managed?.merge === true, keep: managed?.keep === true };
+}
+
+export interface WorkflowInstanceExecutionOptions {
+  /**
+   * Host-level changes to a workflow file after it parses and before its
+   * working file is written (the CLI's `--var` overrides, D11). Runs only for
+   * a file load, never for an inline definition. A throw fails the load.
+   */
+  prepareParsedWorkflow?: (workflow: PromptFile) => void;
+  subWorkflowHost?: SubWorkflowHost;
+  ancestorPaths?: readonly string[];
+  delegationChain?: readonly string[];
 }
 
 export class WorkflowInstance
   implements
     RunLifecycleInstancePort,
     RunViewPublisherInstance,
-    ExternalRunWatchInstance
+    ExternalRunWatchInstance,
+    SubWorkflowInstance
 {
   private readonly lineageRepository = new WorkflowLineageRepository();
   /** Unique identifier — stable for this instance's lifetime */
@@ -292,6 +380,11 @@ export class WorkflowInstance
   filePath: string = "";
   /** Authored source used as the semantic base for standalone prompt-file refs. */
   private sourceDefinitionPath?: string;
+  /**
+   * An inline child's trust identity, inherited from its parent (D13); only
+   * {@link getWorkflowTrustSourcePath} reads it, never reference resolution.
+   */
+  private inheritedTrustIdentityPath?: string;
   /** Creation timestamp (ms since epoch) */
   readonly createdAt: number;
   /** Timestamp when execution last started (ms since epoch), 0 if never started */
@@ -332,13 +425,33 @@ export class WorkflowInstance
    * time a stale `activeWorktree` needs settling, `worktreeResolution.config`
    * no longer describes it — this does.
    */
-  private activeWorktreeSettlement:
-    { merge: boolean; keep: boolean } | undefined;
+  private activeWorktreeSettlement: ManagedWorktreeSettlement | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
+  private loadedParentRun?: SubWorkflowParentLink;
+  private inheritedParentExecution?: {
+    executionRoot: string;
+    executionCheckoutRoot: string;
+  };
+  private loadedDelegationChain: readonly string[] = [];
+  /** The parent definition an inline child was authored in, if this is one. */
+  private inheritedParentDefinition?: InlineParentDefinition;
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
+  /**
+   * A `resume()` of a PAUSED run has made it RUNNING but has not begun its
+   * setup yet (it may be waiting for the paused execution to unwind, or
+   * have only just marked its `preDispatchStartup`): nothing is in flight
+   * and nothing is in setup, so `stop()` treats it as the pause it still is.
+   */
+  private resumeEnteringSetup = false;
+  /**
+   * The `stop()` ending a paused run (`stopIdlePausedRun`), while it runs. A
+   * second stop joins it instead of driving the run through the
+   * cancellation path, and `resume()` leaves the run alone meanwhile.
+   */
+  private pausedRunStop: Promise<void> | undefined;
   /**
    * Set while a start or resume is preflighting / running worktree setup and
    * has not dispatched a step yet (cleared by `beginExecution`). A stop in
@@ -362,6 +475,26 @@ export class WorkflowInstance
    * script step.
    */
   private activeWorktreeSetupRunner: ScriptProcessRunner | undefined;
+  /**
+   * Armed only while a managed worktree settles (`settleManagedWorktree`).
+   * Stop aborts it so a lane queued behind a sibling's settlement or merge
+   * ends that wait at once instead of after `WORKTREE_MERGE_LEASE_WAIT_MS`.
+   * A stop that arrived before settlement began and has returned leaves the
+   * settlement alone: a stopped managed run still lands its work, queued
+   * behind its siblings. One still waiting for this execution to settle
+   * does not (`stopAwaitingExecutionSettlement`). Either way a free lock is
+   * still taken, so an aborted wait changes only a contended settlement.
+   */
+  private activeWorktreeSettlementAbort: AbortController | undefined;
+  /**
+   * A stop of a paused run is waiting for its execution to unwind and settle
+   * (`waitForPausedExecutionToSettle`). A managed worktree settlement that
+   * starts meanwhile (a Continue made the run RUNNING, so the stop's request
+   * ends it as terminal) starts with its wait already aborted: that stop
+   * would otherwise wait out a sibling's settlement or merge, and checked
+   * `activeWorktreeSettlementAbort` only on entry.
+   */
+  private stopAwaitingExecutionSettlement = false;
   /** Deduplicates overlapping eager working-file creation requests */
   private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
@@ -398,6 +531,14 @@ export class WorkflowInstance
    * already repairs a run that never settled.
    */
   private static readonly SHUTDOWN_SETTLE_TIMEOUT_MS = 1_500;
+
+  /**
+   * How long `stop()` waits for an execution that has already confirmed
+   * PAUSED to finish unwinding. It ends in milliseconds; the bound only keeps
+   * a stop from hanging if it never does (the stop then takes the
+   * cancellation path, as it did before).
+   */
+  private static readonly PAUSED_UNWIND_TIMEOUT_MS = 5_000;
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
@@ -513,6 +654,21 @@ export class WorkflowInstance
   // Streaming event forwarding — aggregates events from all execution integrations
   // so callers (e.g. the standalone CLI) can subscribe once on the instance.
   // ─────────────────────────────────────────────────────────────────────────
+  private readonly disposeEmitter = new TypedEmitter<void>();
+  private disposed = false;
+  /**
+   * The top-level execution context's `abortSignal`. Aborted only by a stop
+   * of a disposed instance: `dispose()` drops every integration listener, so
+   * an in-flight response wait would otherwise never wake.
+   */
+  private readonly disposedExecutionAbort = new AbortController();
+  /** Fires once from `dispose()` (`SubWorkflowInstance`). */
+  public readonly onDidDispose = this.disposeEmitter.event;
+  private readonly executionCycleStartedEmitter = new TypedEmitter<void>();
+  /** See `SubWorkflowInstance.onDidStartExecutionCycle`. */
+  public readonly onDidStartExecutionCycle =
+    this.executionCycleStartedEmitter.event;
+
   private readonly _streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
   /** Fires structured CLI events (Claude/Codex) from the active execution integration. */
   public readonly onStreamingEvents = this._streamingEventsEmitter.event;
@@ -642,7 +798,8 @@ export class WorkflowInstance
     /** Host file watcher for the working file; headless hosts poll instead. */
     fileWatcherFactory?: FileWatcherFactory,
     private readonly workflowSessionIdFromOverride: boolean = false,
-    private readonly dashboardHostActions?: DashboardHostActions
+    private readonly dashboardHostActions?: DashboardHostActions,
+    private readonly executionOptions: WorkflowInstanceExecutionOptions = {}
   ) {
     const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
@@ -1002,6 +1159,11 @@ export class WorkflowInstance
     const processRunner =
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     processRunner?.dispose();
+    await forwardSubWorkflowControl(
+      resource?.subWorkflow,
+      "stop",
+      "WorkflowInstance"
+    );
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -1085,6 +1247,11 @@ export class WorkflowInstance
     const processRunner =
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     await processRunner?.cancel();
+    await forwardSubWorkflowControl(
+      resource?.subWorkflow,
+      "stop",
+      "WorkflowInstance"
+    );
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -1261,7 +1428,14 @@ export class WorkflowInstance
     ]);
   }
 
+  /** True once `dispose()` has run. */
+  get isDisposed(): boolean {
+    return this.disposed;
+  }
+
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles
     // releaseLock for normal termination; crash path is covered by staleness detection).
     this.runnerLockCoordinator.stopHeartbeat();
@@ -1302,6 +1476,11 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
       this.activeWorktree = undefined;
     }
+    // `executionCycleStartedEmitter` stays live: a launcher whose child is
+    // disposed before its cycle starts stops that cycle when it does start.
+    // Last: a launcher waiting on this child settles its parent step.
+    this.disposeEmitter.fire();
+    this.disposeEmitter.dispose();
   }
 
   /**
@@ -1508,6 +1687,21 @@ export class WorkflowInstance
     return this.executionWorkspace.executionRoot;
   }
 
+  /**
+   * What this instance's next launch resolves references from: the execution
+   * workspace it holds now (a running worktree run's checkout; the default
+   * workspace once that has settled) and its authored definition, exactly as
+   * the execution context carries them (`createWorkflowStartupContextPort`).
+   */
+  getPromptFileResolutionInput(): PromptFileResolutionInput {
+    return {
+      executionWorkspace: this.executionWorkspace,
+      workspaceFolderPath: this.workspaceFolderPath,
+      namedWorkspaceRoots: this.executionWorkspace.namedWorkspaceRoots,
+      sourceDefinitionPath: this.sourceDefinitionPath,
+    };
+  }
+
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
     const finalRuntime = this.promptQueue.getFinalStepRuntime();
@@ -1586,7 +1780,7 @@ export class WorkflowInstance
     return {
       fileName: path.basename(this.currentPromptFile.filePath),
       steps: this.currentPromptFile.promptFile.steps.map((p) => ({
-        prompt: isScriptStep(p) ? p.script : p.prompt,
+        prompt: getWorkflowStepText(p),
       })),
     };
   }
@@ -1596,13 +1790,94 @@ export class WorkflowInstance
     return this.currentPromptFile?.filePath;
   }
 
+  /** Record what a launching parent handed this child instance. */
+  private adoptSubWorkflowLoadOptions(
+    options: SubWorkflowLoadOptions | undefined
+  ): void {
+    this.loadedParentRun = options?.parentRun;
+    this.inheritedParentExecution = options?.parentExecution;
+    this.loadedDelegationChain = options?.delegationChain ?? [];
+    this.inheritedParentDefinition = options?.parentDefinition;
+  }
+
+  /**
+   * D4a: a child whose definition has no `worktree` key runs in its parent's
+   * execution root. Every way a child is loaded (a file, an inline definition,
+   * a continued child run) applies this one rule. An inline child's paths are
+   * mapped from its parent's source checkout, the checkout its definition
+   * (the parent's file) lives in; a file child's definition was resolved in
+   * the parent's execution checkout, so that is its source checkout.
+   */
+  private inheritParentExecutionRoot(definition: PromptFile): void {
+    const parentExecution = this.inheritedParentExecution;
+    if (
+      !parentExecution ||
+      Object.prototype.hasOwnProperty.call(definition, "worktree")
+    ) {
+      return;
+    }
+    const executionRoot = parentExecution.executionRoot;
+    const checkoutRoot = parentExecution.executionCheckoutRoot;
+    const workspace = this.executionWorkspace;
+    this.executionWorkspace = {
+      ...workspace,
+      executionRoot,
+      sourceCheckoutRoot: this.inheritedParentDefinition
+        ? (this.inheritedParentDefinition.sourceCheckoutRoot ?? checkoutRoot)
+        : checkoutRoot,
+      executionCheckoutRoot: checkoutRoot,
+      workspaceRoots: workspace.workspaceRoots.map((root) =>
+        root === workspace.stateRoot ? executionRoot : root
+      ),
+    };
+  }
+
   /**
    * The path workflow-scoped trust approvals are keyed by: the authored file.
    * Once a run starts, the current prompt file is the run's working copy, so
    * it is only the fallback for workflows with no authored file.
    */
   getWorkflowTrustSourcePath(): string | undefined {
-    return this.sourceDefinitionPath ?? this.currentPromptFile?.filePath;
+    return resolveWorkflowTrustSourcePath({
+      workflowTrustSourcePath: this.inheritedTrustIdentityPath,
+      sourceDefinitionPath: this.sourceDefinitionPath,
+      filePath: this.currentPromptFile?.filePath,
+    });
+  }
+
+  /**
+   * The authored definition workflow-relative references resolve against.
+   * For an inline child this is the parent's authored file (or none), never
+   * its trust identity.
+   */
+  getSourceDefinitionPath(): string | undefined {
+    return this.sourceDefinitionPath;
+  }
+
+  /**
+   * Set the authored definition this instance resolves workflow-relative
+   * references against. Any definition this instance loads for itself has its
+   * own trust identity, so an inherited one is dropped.
+   */
+  private setSourceDefinition(sourceDefinitionPath: string | undefined): void {
+    this.sourceDefinitionPath = sourceDefinitionPath;
+    this.inheritedTrustIdentityPath = undefined;
+  }
+
+  /**
+   * An inline child has no file of its own (D13). It resolves references
+   * against the parent's authored file, and nothing else: a parent with no
+   * file gives the child none, so `./x` fails exactly as it would in the
+   * parent. Trust is keyed by the parent's trust identity, which can be a
+   * path no reference may resolve against (a template's display name, a run
+   * working copy), so it is held apart and read only by
+   * {@link getWorkflowTrustSourcePath}.
+   */
+  private adoptInheritedParentDefinition(
+    parentDefinition: InlineParentDefinition | undefined
+  ): void {
+    this.sourceDefinitionPath = parentDefinition?.sourceDefinitionPath;
+    this.inheritedTrustIdentityPath = parentDefinition?.trustIdentityPath;
   }
 
   /**
@@ -1659,13 +1934,22 @@ export class WorkflowInstance
    */
   async loadPromptFile(
     filePath: string,
-    parsedPromptFile?: ParsedPromptFile | null
+    parsedPromptFile?: ParsedPromptFile | null,
+    options?: SubWorkflowLoadOptions
   ): Promise<boolean> {
+    this.adoptSubWorkflowLoadOptions(options);
     // Clear queue to reset cached workflow name — ensures fresh name from filename
     this.promptQueue.clearQueue();
     // Track the source file path for summaries and state sync
     this.filePath = filePath;
-    this.sourceDefinitionPath = filePath;
+    this.setSourceDefinition(filePath);
+
+    // Parse once when a host hook must change the file before it is written.
+    const prepare = this.executionOptions.prepareParsedWorkflow;
+    if (prepare && parsedPromptFile === undefined) {
+      parsedPromptFile = await this.promptFileParser.parsePromptFile(filePath);
+    }
+    if (prepare && parsedPromptFile) prepare(parsedPromptFile);
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
@@ -1687,6 +1971,8 @@ export class WorkflowInstance
       return false;
     }
 
+    this.inheritParentExecutionRoot(promptFile);
+
     this.currentPromptFile = { filePath, promptFile };
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
@@ -1705,7 +1991,7 @@ export class WorkflowInstance
   ): Promise<void> {
     this.promptQueue.clearQueue();
     this.filePath = displayName;
-    this.sourceDefinitionPath = undefined;
+    this.setSourceDefinition(undefined);
 
     const workingFilePath = await this.promptFileLoader.loadFromMemory(
       promptFile,
@@ -1722,6 +2008,37 @@ export class WorkflowInstance
   }
 
   /**
+   * Load an in-memory definition as a new lineage, throwing on failure. An
+   * inline sub-workflow child loads this way: `displayName` is its exact
+   * lineage name, and `options.parentDefinition` makes the parent's file its
+   * semantic base for references and trust (it has no file of its own).
+   */
+  async loadFromMemoryOrThrow(
+    promptFile: PromptFile,
+    displayName: string,
+    options?: SubWorkflowLoadOptions
+  ): Promise<string | undefined> {
+    this.adoptSubWorkflowLoadOptions(options);
+    this.promptQueue.clearQueue();
+    this.filePath = displayName;
+    this.adoptInheritedParentDefinition(this.inheritedParentDefinition);
+    const workingFilePath = await this.promptFileLoader.loadFromMemoryOrThrow(
+      promptFile,
+      displayName,
+      this.workspaceFolderPath,
+      displayName,
+      this.inheritedParentDefinition?.sourceDefinitionPath
+    );
+    if (workingFilePath) {
+      this.inheritParentExecutionRoot(promptFile);
+      this.currentPromptFile = { filePath: displayName, promptFile };
+      this.setupPromptFileWatcher(workingFilePath);
+    }
+    this.propagateWorkflowNameToIntegrations();
+    return workingFilePath;
+  }
+
+  /**
    * Load an inline prompt string into the queue without a file.
    * Behaves like loading a single-prompt .prompt.md file.
    */
@@ -1731,7 +2048,7 @@ export class WorkflowInstance
   ): void {
     this.promptQueue.clearQueue();
     this.filePath = "";
-    this.sourceDefinitionPath = undefined;
+    this.setSourceDefinition(undefined);
     const promptFile: PromptFile = {
       steps: [{ prompt: promptText }],
       ...workflowOverrides,
@@ -1756,7 +2073,7 @@ export class WorkflowInstance
   ): Promise<void> {
     this.promptQueue.clearQueue();
     this.filePath = "";
-    this.sourceDefinitionPath = undefined;
+    this.setSourceDefinition(undefined);
     const promptFile: PromptFile = {
       steps: [{ prompt: promptText }],
       ...workflowOverrides,
@@ -1801,7 +2118,7 @@ export class WorkflowInstance
     if (workingFile?.steps) {
       const filePath = originalFile || workingFilePath;
       this.filePath = filePath;
-      this.sourceDefinitionPath = originalFile;
+      this.setSourceDefinition(originalFile);
       this.currentPromptFile = {
         filePath,
         promptFile: {
@@ -1861,7 +2178,7 @@ export class WorkflowInstance
     if (workingFile?.steps) {
       const filePath = originalFile || workingFilePath;
       this.filePath = filePath;
-      this.sourceDefinitionPath = originalFile;
+      this.setSourceDefinition(originalFile);
       this.currentPromptFile = {
         filePath,
         promptFile: {
@@ -1932,6 +2249,7 @@ export class WorkflowInstance
         clearOutputBuffers: () => this.clearOutputBuffers(),
         prepareExecutionWorktree: (historyFilePath) =>
           this.prepareExecutionWorktree(historyFilePath),
+        onExecutionCycleStarted: () => this.executionCycleStartedEmitter.fire(),
         createIntegrationForMode: (modeOverride) =>
           this.createIntegrationForMode(modeOverride),
         startWorkflowExecution: (
@@ -1953,6 +2271,9 @@ export class WorkflowInstance
         getMissingAssetDedupeKey: (missingDirectories) =>
           this.getMissingAssetDedupeKey(missingDirectories),
         getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+        getParentRun: () => this.loadedParentRun,
+        getInheritedParentExecution: () =>
+          Boolean(this.inheritedParentExecution),
         getResolvedHistoryFilePath: () => this.resolveHistoryFilePath(),
         getActiveHistoryFilePath: () => this.activeHistoryFilePath,
         setActiveHistoryFilePath: (filePath) => {
@@ -2001,6 +2322,8 @@ export class WorkflowInstance
           this.executionLease = undefined;
         },
         manager: this.worktreeManager,
+        settleManagedWorktree: (worktree, cleanup) =>
+          this.settleManagedWorktree(worktree, cleanup),
         ensureRunnerLock: (workingFilePath) =>
           this.ensureRunnerLock(workingFilePath),
         releaseRunnerLock: () => this.releaseRunnerLock(),
@@ -2191,6 +2514,47 @@ export class WorkflowInstance
       get sourceDefinitionPath() {
         return instance.sourceDefinitionPath;
       },
+      get workflowTrustSourcePath() {
+        return instance.getWorkflowTrustSourcePath();
+      },
+      subWorkflowHost: this.executionOptions.subWorkflowHost,
+      prepareSubWorkflowWorktreeChild: async () => {
+        const worktree = this.activeWorktree;
+        const checkoutRoot =
+          this.executionWorkspace.executionCheckoutRoot ??
+          this.executionWorkspace.executionRoot;
+        // Classifies the checkout this instance shares, not its own config: a
+        // D4a child inside its parent's managed worktree has no worktree of
+        // its own. Lookup failures are logged there and resolve "not managed".
+        const managedOwner =
+          await this.worktreeManager.findManagedWorktreeRecordForCheckout(
+            checkoutRoot,
+            checkoutRoot
+          );
+        const ownerLabel = managedOwner
+          ? await this.lineageRepository.readWorkflowDisplayName(
+              managedOwner.stateRoot,
+              managedOwner.workflowKey
+            )
+          : undefined;
+        await prepareParentCheckoutForWorktreeChild({
+          checkoutRoot,
+          managed: Boolean(managedOwner),
+          managedLabel:
+            ownerLabel || worktree?.workflowName || worktree?.branchName,
+        });
+      },
+      get ancestorPaths() {
+        if (instance.executionOptions.ancestorPaths) {
+          return instance.executionOptions.ancestorPaths;
+        }
+        const rootPath =
+          instance.sourceDefinitionPath ?? instance.currentPromptFile?.filePath;
+        return rootPath ? [path.resolve(rootPath)] : [];
+      },
+      delegationChain: this.executionOptions.delegationChain,
+      getExecutionLeaseOwnerToken: () => this.executionLease?.ownerToken,
+      abortSignal: this.disposedExecutionAbort.signal,
       statusReporter: this.statusMessageReporter,
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
@@ -2227,11 +2591,12 @@ export class WorkflowInstance
       getScriptProcessRunner: (target) => this.getScriptProcessRunner(target),
       ensureHarnessReady: (harnessId) =>
         this.getHarnessReadinessError(harnessId),
-      registerActiveTarget: (target, attemptIndex) =>
-        this.registerActiveTarget(target, attemptIndex),
+      registerActiveTarget: (target, attemptIndex, subWorkflow) =>
+        this.registerActiveTarget(target, attemptIndex, subWorkflow),
       registerTargetPtySession: (target, sessionId) =>
         this.registerTargetPtySession(target, sessionId),
       clearTargetPtySession: (target) => this.clearTargetPtySession(target),
+      clearTargetIntegration: (target) => this.clearTargetIntegration(target),
       unregisterActiveTarget: (target) => this.unregisterActiveTarget(target),
       markTargetIntegrationNotReusable: (target) => {
         const integration = this.activeTargetResources.get(
@@ -2310,6 +2675,7 @@ export class WorkflowInstance
       beginExecution: (historyFilePath) => {
         this.endPreDispatchStartup();
         this.startPending = true;
+        this.workflowExecutor.beginExecution();
         // An executing run cannot have a pending continuation.
         this.promptQueue.clearPendingRewind();
         this.executionSettledPromise = new Promise<void>((resolve) => {
@@ -2352,6 +2718,7 @@ export class WorkflowInstance
             executionRoot: this.executionWorkspace.executionRoot,
             workflowKey,
             runRef,
+            delegationChain: [...this.loadedDelegationChain],
           });
         }
       },
@@ -2402,6 +2769,8 @@ export class WorkflowInstance
     harnessOverride?: HarnessId,
     onPrepared?: () => Promise<void>
   ): Promise<void> {
+    // A seeded re-run is a new top-level execution, even when its source was a child.
+    this.loadedParentRun = undefined;
     await this.closeRetainedTerminalsForFreshRun();
     await this.loadWorkingFile(seeded.workingFilePath);
     await onPrepared?.();
@@ -2436,8 +2805,17 @@ export class WorkflowInstance
     workflowKey: WorkflowKey,
     runRef: RunRef,
     expectedDefinitionRevision: number,
-    onPrepared?: () => Promise<void>
+    onPrepared?: () => Promise<void>,
+    subWorkflowOptions?: {
+      parentRun: SubWorkflowParentLink;
+      parentExecution: { executionRoot: string; executionCheckoutRoot: string };
+      delegationChain: readonly string[];
+      parentDefinition?: InlineParentDefinition;
+    }
   ): Promise<void> {
+    if (subWorkflowOptions) {
+      this.adoptSubWorkflowLoadOptions(subWorkflowOptions);
+    }
     const workspaceRoot = this.getStateRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
@@ -2450,6 +2828,14 @@ export class WorkflowInstance
 
     // Binding is intentionally done only here, as part of an explicit action.
     await this.loadWorkingFile(workingFilePath);
+    if (subWorkflowOptions) {
+      // An inline child's lineage records no source file, so restoring it
+      // cleared the parent definition it resolves against.
+      if (this.inheritedParentDefinition) {
+        this.adoptInheritedParentDefinition(this.inheritedParentDefinition);
+      }
+      this.inheritParentExecutionRoot(this.promptQueue.getWorkflowFile());
+    }
     const state = this.promptQueue.getState();
     if (state.workflowKey !== workflowKey || state.runRef !== runRef) {
       throw new Error("Continuation target did not bind to the requested run");
@@ -2461,6 +2847,11 @@ export class WorkflowInstance
     await onPrepared?.();
 
     await this.promptQueue.rewindTerminalFailureForContinuation();
+    // A child continued by its parent's step (D6) re-runs the step its stop
+    // interrupted; continuing any other stopped run resumes after it.
+    await this.promptQueue.rewindCancelledStepForContinuation({
+      anyStepKind: subWorkflowOptions !== undefined,
+    });
 
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
       workflowKey,
@@ -2532,8 +2923,9 @@ export class WorkflowInstance
    * Waits out any startup still in its pre-dispatch phase (e.g. one the user
    * stopped mid-setup, which is still releasing its lock and worktree), then
    * marks a new one as begun. Returns its token for `endPreDispatchStartup`.
+   * Protected so a test subclass can land a stop just after the mark.
    */
-  private async beginPreDispatchStartup(
+  protected async beginPreDispatchStartup(
     stopRequestBaseline?: number
   ): Promise<NonNullable<WorkflowInstance["preDispatchStartup"]>> {
     while (this.preDispatchStartup) {
@@ -2586,7 +2978,14 @@ export class WorkflowInstance
       return;
     }
 
+    await this.forwardSubWorkflowControlToActiveTargets("pause");
+
     await this.promptQueue.commitRuntimeTransition();
+  }
+
+  /** Settles when the current execution cycle ends (`SubWorkflowInstance`). */
+  whenExecutionSettled(): Promise<void> {
+    return this.executionSettledPromise;
   }
 
   /**
@@ -2596,6 +2995,8 @@ export class WorkflowInstance
     if (!this.workflowRuntime.cancelPause()) {
       return;
     }
+
+    await this.forwardSubWorkflowControlToActiveTargets("cancelPause");
 
     await this.promptQueue.commitRuntimeTransition();
   }
@@ -2607,6 +3008,11 @@ export class WorkflowInstance
     historyFilePath?: string,
     targetRunIndices?: Map<string, number>
   ): Promise<void> {
+    if (this.workflowRuntime.status === EXECUTION_STATES.PAUSING) {
+      await this.cancelPause();
+      return;
+    }
+
     // IDLE with currentIndex > 0 = user stopped, then used "set start position" to reposition.
     // Treat as a continuation from the set position so existing outputs are preserved.
     if (
@@ -2627,8 +3033,21 @@ export class WorkflowInstance
     ) {
       if (this.workflowRuntime.status === EXECUTION_STATES.ERROR) {
         await this.promptQueue.rewindTerminalFailureForContinuation();
+      } else {
+        await this.promptQueue.rewindCancelledStepForContinuation();
       }
       await this.executeLoadedPromptFile(undefined, true);
+      return;
+    }
+
+    // A stop pressed while paused is ending the run (it may be waiting for
+    // the paused execution to unwind). The stop was pressed first.
+    if (this.pausedRunStop) {
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.INFO,
+        PAUSED_STOP_IGNORES_CONTINUE_MESSAGE
+      );
       return;
     }
 
@@ -2637,39 +3056,59 @@ export class WorkflowInstance
     }
     const stopRequestBaseline = this.workflowRuntime.stopRequestCount;
 
-    this.promptQueue.clearPendingRewind();
-    await this.promptQueue.commitRuntimeTransition();
+    // RUNNING from here, but nothing is in setup until this try ends: a stop
+    // in between (even one landing after beginPreDispatchStartup has marked
+    // the startup) is a stop of the paused run, which settles the paused
+    // reservation (`stopIdlePausedRun`), and this resume ends.
+    this.resumeEnteringSetup = true;
+    let startup: NonNullable<WorkflowInstance["preDispatchStartup"]>;
+    let resolvedHistoryFilePath: string;
+    let workingFilePath: string | undefined;
+    try {
+      this.promptQueue.clearPendingRewind();
+      await this.promptQueue.commitRuntimeTransition();
 
-    if (this.workflowExecutor.isAwaitingResponse()) {
-      Log.info(
-        "[WorkflowInstance] Resuming while Copilot is still responding - will continue when response completes"
-      );
-      return;
-    }
-
-    if (this.startPending) {
-      Log.info(
-        "[WorkflowInstance] Waiting for the paused execution cycle to settle"
-      );
-      await this.executionSettledPromise;
-      if (this.workflowRuntime.status !== EXECUTION_STATES.RUNNING) {
+      if (this.workflowExecutor.isAwaitingResponse()) {
+        Log.info(
+          "[WorkflowInstance] Resuming while Copilot is still responding - will continue when response completes"
+        );
         return;
       }
-    }
 
-    // A workflow paused mid-worktree-execution can reach this branch on a
-    // freshly constructed instance (e.g. after an extension/host restart)
-    // that never went through executeLoadedPromptFile for this run, so
-    // worktreeResolution/executionWorkspace are still the constructor's
-    // no-worktree defaults. Re-resolve and re-apply here — cheap and a
-    // no-op when this.activeWorktree/this.executionLease are already set
-    // from an in-process pause — or the resumed run silently executes
-    // against the main checkout instead of its configured worktree.
-    const resolvedHistoryFilePath =
-      historyFilePath ?? this.resolveHistoryFilePath();
-    const workingFilePath = this.promptQueue.getState().workingFilePath;
-    const startup = await this.beginPreDispatchStartup(stopRequestBaseline);
+      if (this.startPending) {
+        Log.info(
+          "[WorkflowInstance] Waiting for the paused execution cycle to settle"
+        );
+        await this.executionSettledPromise;
+      }
+      if (this.isResumeSuperseded(stopRequestBaseline)) {
+        return;
+      }
+
+      // A workflow paused mid-worktree-execution can reach this branch on a
+      // freshly constructed instance (e.g. after an extension/host restart)
+      // that never went through executeLoadedPromptFile for this run, so
+      // worktreeResolution/executionWorkspace are still the constructor's
+      // no-worktree defaults. Re-resolve and re-apply here — cheap and a
+      // no-op when this.activeWorktree/this.executionLease are already set
+      // from an in-process pause — or the resumed run silently executes
+      // against the main checkout instead of its configured worktree.
+      resolvedHistoryFilePath =
+        historyFilePath ?? this.resolveHistoryFilePath();
+      workingFilePath = this.promptQueue.getState().workingFilePath;
+      startup = await this.beginPreDispatchStartup(stopRequestBaseline);
+    } finally {
+      this.resumeEnteringSetup = false;
+    }
     try {
+      // Stopped while beginPreDispatchStartup was marking this startup:
+      // resumeEnteringSetup was still set, so that stop took the paused-run
+      // branch (`stopIdlePausedRun`) and settled the reservation itself.
+      if (this.isResumeSuperseded(stopRequestBaseline)) {
+        return;
+      }
+      // RUNNING inside the startup guard: a stop or pause now acts on this cycle.
+      this.executionCycleStartedEmitter.fire();
       await this.resumeAfterSetup(
         stopRequestBaseline,
         resolvedHistoryFilePath,
@@ -2679,6 +3118,15 @@ export class WorkflowInstance
     } finally {
       this.endPreDispatchStartup(startup);
     }
+  }
+
+  /** A stop (or another transition) has overtaken a resume before its setup. */
+  private isResumeSuperseded(stopRequestBaseline: number): boolean {
+    return (
+      this.pausedRunStop !== undefined ||
+      this.workflowRuntime.status !== EXECUTION_STATES.RUNNING ||
+      this.workflowRuntime.stopRequestCount !== stopRequestBaseline
+    );
   }
 
   private async resumeAfterSetup(
@@ -2772,18 +3220,87 @@ export class WorkflowInstance
 
     Log.info("[WorkflowInstance] Resuming workflow from paused position");
     this.runStartView = runStart;
-    await this.startWorkflowExecution(
-      undefined,
-      resolvedHistoryFilePath,
-      workingFilePath,
-      targetRunIndices
-    );
+    try {
+      await this.startWorkflowExecution(
+        undefined,
+        resolvedHistoryFilePath,
+        workingFilePath,
+        targetRunIndices
+      );
+    } catch (error) {
+      // A start that throws before or out of `execute()` (the runner lock,
+      // the lease, restoring a retained integration) has already settled
+      // as an ending run, but leaves the runtime RUNNING with nothing
+      // dispatched. Fail it as a failed resume setup does, unless a stop
+      // ended it.
+      if (
+        this.workflowRuntime.stopRequestCount !== stopRequestBaseline ||
+        this.workflowRuntime.status !== EXECUTION_STATES.RUNNING
+      ) {
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Resumed execution threw after the run left RUNNING (${this.workflowRuntime.status}):`,
+          error
+        );
+        return;
+      }
+      await new WorkflowStartupPipeline(
+        this.createWorkflowStartupPipelinePort()
+      ).failResumeSetup(error);
+    }
   }
 
   /**
    * Stop current execution.
    */
   async stop(): Promise<void> {
+    // A second stop of a paused run (a parent's forwarded stop beside a
+    // direct one, a double click) joins the one already ending it. Driven
+    // on its own it would find the run CANCELLING and take the cancellation
+    // path: the next pending step's attempt cancelled, the detector's 10 s
+    // fallback, and `startPending` cleared under the first stop's
+    // settlement hold.
+    if (this.pausedRunStop) {
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] stop() joined the stop already ending the paused run`
+      );
+      await this.pausedRunStop;
+      return;
+    }
+    if (!this.isPausedWithNothingInFlight()) {
+      await this.stopRun(false);
+      return;
+    }
+    const pausedRunStop = this.stopRun(true);
+    this.pausedRunStop = pausedRunStop;
+    try {
+      await pausedRunStop;
+    } finally {
+      if (this.pausedRunStop === pausedRunStop) {
+        this.pausedRunStop = undefined;
+      }
+    }
+  }
+
+  /**
+   * A PAUSED run, or one a Continue has made RUNNING but whose setup has not
+   * begun (`resumeEnteringSetup`): a pause is confirmed only at a step
+   * boundary, so no step is in flight. Its execution may still be unwinding
+   * from that boundary.
+   */
+  private isPausedWithNothingInFlight(): boolean {
+    const status = this.workflowRuntime.status;
+    return (
+      (status === EXECUTION_STATES.PAUSED ||
+        (this.resumeEnteringSetup && status === EXECUTION_STATES.RUNNING)) &&
+      this.activeTargetResources.size === 0
+    );
+  }
+
+  /**
+   * @param pausedAtEntry `isPausedWithNothingInFlight()` when the stop was
+   *   pressed; the caller holds `pausedRunStop` for it.
+   */
+  private async stopRun(pausedAtEntry: boolean): Promise<void> {
     const stopReason = "Workflow stopped by user";
 
     Log.info(`[WorkflowInstance] stop() - stopping active target resources`);
@@ -2791,6 +3308,82 @@ export class WorkflowInstance
     // Worktree setup is not a target resource, so the loop below would never
     // reach it. Kill its process tree first, whichever stop path follows.
     void this.activeWorktreeSetupRunner?.cancel();
+
+    // A lane settling its managed worktree may be queued behind a sibling's
+    // settlement or merge (D4d); end that wait. A run that has already
+    // ended has nothing else to stop, and must not be driven back through
+    // the cancellation path below.
+    const settlementAbort = this.activeWorktreeSettlementAbort;
+    if (settlementAbort) {
+      settlementAbort.abort();
+      if (!ACTIVE_EXECUTION_STATES.has(this.workflowRuntime.status)) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] stop() during managed worktree settlement - ended its wait`
+        );
+        return;
+      }
+    }
+
+    // A paused run has no step in flight, but its execution may still be
+    // unwinding from the pause's step boundary (a group run that just
+    // returned `paused`, the queue loop breaking): wait for it, bounded,
+    // rather than drive it through the cancellation path below, which only
+    // the detector's timer would end. The stop was pressed first, so a
+    // Continue pressed during the wait is ignored, and one pressed just
+    // before it ends without starting (`isResumeSuperseded`): resuming here
+    // would hand the still-live executor RUNNING, and it would carry on in
+    // place under this wait.
+    //
+    // Then, with nothing in flight: as in setup below, nothing is cancelled
+    // and nothing is skipped. The head (the next pending step, or a group a
+    // Continue re-enters at its unstarted members) stays as the pause left
+    // it. This comes before the setup branch: a Continue's resume marks its
+    // startup before it has done any setup, and the reservation its pause
+    // kept is settled here, not by that resume.
+    //
+    // The wait covers the pause's own settlement too, which runs after the
+    // executor has returned (so it is no longer live) and is what parks the
+    // integrations and keeps the reservation that the idle branch settles:
+    // run beside it, that branch would miss the integrations not yet
+    // parked, and the pause's settlement would clear `startPending` under it.
+    if (pausedAtEntry) {
+      const liveExecution = this.workflowExecutor.hasLiveExecution();
+      if (liveExecution || this.startPending) {
+        // A Continue pressed first has already made the run RUNNING, and the
+        // still-live executor carries on in place when it sees that (the
+        // Continue's resume waits for it rather than starting its own).
+        // Requesting the stop now holds it at the step boundary it paused
+        // at; nothing is in flight, so no attempt is cancelled.
+        //
+        // That execution then settles as an ended run, and its managed
+        // worktree settlement may queue behind a sibling's (D4d), which
+        // this wait would sit out: a settlement starting while it waits
+        // ends that wait at once, as one already running did above.
+        this.stopAwaitingExecutionSettlement = true;
+        try {
+          if (
+            liveExecution &&
+            this.workflowRuntime.status === EXECUTION_STATES.RUNNING &&
+            this.workflowRuntime.requestStop()
+          ) {
+            await this.promptQueue.commitRuntimeTransition({ persist: false });
+          }
+          await this.waitForPausedExecutionToSettle();
+        } finally {
+          this.stopAwaitingExecutionSettlement = false;
+        }
+      }
+      if (
+        this.activeTargetResources.size === 0 &&
+        !this.workflowExecutor.hasLiveExecution()
+      ) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] stop() while paused - no step in flight, leaving the current step pending`
+        );
+        await this.stopIdlePausedRun();
+        return;
+      }
+    }
 
     // Stopped while a start/resume is still in setup: no step has been
     // dispatched, so nothing is cancelled and nothing is skipped. The current
@@ -2837,7 +3430,13 @@ export class WorkflowInstance
       }
 
       confirmedStoppedCalled = true;
-      if (this.promptQueue.getCurrentParallelGroup()) {
+      // Only a live execution has a group coordinator to commit member
+      // cancellations. Once it has ended (a paused group returned and the
+      // queue loop broke while this stop waited), confirm here.
+      if (
+        this.promptQueue.getCurrentParallelGroup() &&
+        this.workflowExecutor.hasLiveExecution()
+      ) {
         Log.info(
           "[WorkflowInstance] Parallel group cancellation requested; coordinator will commit member cancellations before STOPPED"
         );
@@ -2862,11 +3461,22 @@ export class WorkflowInstance
     };
 
     const integrations = new Set<HarnessIntegration>();
+    let hasSubWorkflow = false;
+    const processRunners = new Set(this.targetScriptProcessRunners.values());
     for (const resource of this.activeTargetResources.values()) {
       if (resource.integration) {
         integrations.add(resource.integration);
       }
       void resource.processRunner?.cancel();
+      if (resource.processRunner) processRunners.add(resource.processRunner);
+      if (resource.subWorkflow) {
+        hasSubWorkflow = true;
+        await forwardSubWorkflowControl(
+          resource.subWorkflow,
+          "stop",
+          "WorkflowInstance"
+        );
+      }
       if (resource.ptySessionId) {
         getPtyProcessManager()?.killSession(
           resource.ptySessionId,
@@ -2874,8 +3484,45 @@ export class WorkflowInstance
         );
       }
     }
-    if (integrations.size === 0) {
+    if (integrations.size === 0 && !hasSubWorkflow && processRunners.size > 0) {
+      // Script steps have no harness integration to emit onResponseComplete.
+      // Their process runner is the cancellation boundary; waiting on the
+      // detector here would force every stopped script through the 10s timer.
+      // A prompt member beside them (parallel group) still needs the
+      // integration path below, which cancels it.
+      await Promise.allSettled(
+        [...processRunners].map(async (runner) => {
+          await runner.cancel();
+          await runner.waitForProcessShutdown();
+        })
+      );
+      await confirmStopped();
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
+    }
+    if (integrations.size === 0 && !hasSubWorkflow && this.disposed) {
+      // dispose() already ended every step resource, so no response is left
+      // to wait for; the detector belongs to the host, not to this run.
+      await confirmStopped();
+      // Its integrations' listeners went with them: wake a step still waiting
+      // on a response through the abort path, so it settles as stopped and
+      // the executor finishes. (confirmStopped() defers to a live group
+      // coordinator when the head is in a group; group members use the
+      // group's own signal, so this abort reaches only a sequential step.)
+      this.disposedExecutionAbort.abort();
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
+    }
+    if (integrations.size === 0 && !hasSubWorkflow) {
       integrations.add(this.getDetectorIntegration());
+    }
+
+    if (integrations.size === 0 && hasSubWorkflow) {
+      this.workflowExecutor.clearResponseWaitState();
+      this.startPending = false;
+      return;
     }
 
     const responseDisposables: Array<{ dispose(): void }> = [];
@@ -2930,6 +3577,84 @@ export class WorkflowInstance
   }
 
   /**
+   * Stop a run that has nothing in flight and no startup in setup: confirm
+   * STOPPED, then end the reservation its pause kept for Continue (D3). A
+   * pause settles execution while PAUSED, which keeps the worktree, its
+   * lease and the runner lock; a stop ends the run, so they are settled
+   * here as a stop of a running worktree run settles them. Until that is
+   * done the run reads as still settling (`startPending`,
+   * `whenExecutionSettled`), as a stopped running run does, so a launcher
+   * reads the child's worktree outcome only once it is recorded.
+   */
+  private async stopIdlePausedRun(): Promise<void> {
+    const settlesReservation = this.holdsRunEndReservation();
+    let resolveSettled: (() => void) | undefined;
+    if (settlesReservation) {
+      this.startPending = true;
+      this.executionSettledPromise = new Promise<void>((resolve) => {
+        resolveSettled = resolve;
+      });
+    }
+    try {
+      if (this.workflowRuntime.requestStop()) {
+        await this.promptQueue.commitRuntimeTransition({ persist: false });
+      }
+      if (this.workflowRuntime.confirmStopped()) {
+        await this.promptQueue.commitRuntimeTransition();
+      }
+      this.workflowExecutor.clearResponseWaitState();
+      if (settlesReservation) {
+        // The pause already settled this run's execution integrations, so
+        // none are passed; the ones it parked are settled strictly inside.
+        await this.settleRunEndReservations(
+          { workingFilePath: this.promptQueue.getState().workingFilePath },
+          this.resolveRunEndReservation(false)
+        );
+      }
+    } finally {
+      this.startPending = false;
+      resolveSettled?.();
+    }
+  }
+
+  /** Something a paused run keeps for Continue that a stop must release. */
+  private holdsRunEndReservation(): boolean {
+    return (
+      this.activeWorktree !== undefined ||
+      this.executionLease !== undefined ||
+      this.runnerLockCoordinator.ownsLock()
+    );
+  }
+
+  /**
+   * Wait for an execution that confirmed PAUSED at a step boundary to finish
+   * unwinding and settling, so `stop()` can treat it as an idle pause. The
+   * unwind is bounded (`PAUSED_UNWIND_TIMEOUT_MS`; an execution still live
+   * after it goes through the cancellation path). The settlement after it
+   * is not: it is finite work (artifact cleanup, history finalization) and
+   * the idle branch must not run beside it.
+   */
+  private async waitForPausedExecutionToSettle(): Promise<void> {
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] stop() while paused - waiting for the paused execution to unwind and settle`
+    );
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      this.executionSettledPromise,
+      new Promise<void>((resolve) => {
+        timeoutHandle = setTimeout(
+          resolve,
+          WorkflowInstance.PAUSED_UNWIND_TIMEOUT_MS
+        );
+      }),
+    ]);
+    clearTimeout(timeoutHandle);
+    if (this.startPending && !this.workflowExecutor.hasLiveExecution()) {
+      await this.executionSettledPromise;
+    }
+  }
+
+  /**
    * Clear only the stale working file path without wiping prompts or currentPromptFile.
    * Used when the working file is deleted externally (removed from history) so that
    * ensureEphemeralWorkingFile() will create a fresh one on the next property write or run.
@@ -2946,16 +3671,26 @@ export class WorkflowInstance
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Append prompts from a file to the current queue.
+   * Append a workflow file to the current queue. Without `subWorkflowStep`
+   * the file's steps are spliced in; with it, that one workflow step (the
+   * caller's `buildSubWorkflowReferenceStep` for `filePath`, built against
+   * the workspace root the run resolves it from at launch) runs the file as a
+   * child run. The file is parsed either way, so a broken file fails here
+   * rather than when its child launches.
    */
   async appendFromFile(
     filePath: string,
-    position: QueuePosition = QUEUE_POSITION.END
+    position: QueuePosition = QUEUE_POSITION.END,
+    subWorkflowStep?: SubWorkflowStep
   ): Promise<void> {
     try {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
+      const asSubWorkflow = subWorkflowStep !== undefined;
 
-      if (!parsed?.steps?.length) {
+      if (
+        !parsed ||
+        (asSubWorkflow ? !hasExecutableSteps(parsed) : !parsed.steps?.length)
+      ) {
         notifyUserFeedback(
           this.userFeedbackSink,
           "error",
@@ -2963,6 +3698,18 @@ export class WorkflowInstance
         );
         return;
       }
+
+      const workspaceRoot =
+        this.getStateRoot() ??
+        this.platform.getWorkspaceRoot() ??
+        path.dirname(filePath);
+      const tail: WorkflowStep[] = subWorkflowStep
+        ? [subWorkflowStep]
+        : (parsed.steps ?? []);
+      const tailGroups = asSubWorkflow ? [] : parsed.parallelGroups;
+      const queuedLabel = asSubWorkflow
+        ? `"${path.basename(filePath)}" as a sub-workflow`
+        : `${tail.length} prompt(s)`;
 
       const queueState = this.promptQueue.getState();
       const currentSize = queueState.steps.length;
@@ -2976,12 +3723,15 @@ export class WorkflowInstance
           : DEFAULT_WORKFLOW_NAME;
 
         await this.initializeNewWorkflow(
-          parsed.steps,
+          tail,
           path.basename(filePath),
-          filePath,
+          // The child file is not this workflow's definition: recording it
+          // as the source would make the parent's own lineage look like the
+          // child and trip cycle detection at launch.
+          asSubWorkflow ? undefined : filePath,
           true,
-          `Queued ${parsed.steps.length} prompt(s) to ${workflowType}`,
-          parsed.parallelGroups
+          `Queued ${queuedLabel} to ${workflowType}`,
+          tailGroups
         );
         return;
       }
@@ -2995,7 +3745,7 @@ export class WorkflowInstance
         return;
       }
 
-      const newSize = currentSize + parsed.steps.length;
+      const newSize = currentSize + tail.length;
       const workflowMaxSteps = resolveWorkflowMaxSteps(
         this.promptQueue.getWorkflowFile()
       );
@@ -3018,24 +3768,20 @@ export class WorkflowInstance
       }
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
-      const rebasedSteps = await rebaseWorkflowStepPaths(
-        parsed.steps,
-        filePath,
-        this.getStateRoot() ??
-          this.platform.getWorkspaceRoot() ??
-          path.dirname(filePath),
-        {
-          namedRoots: this.platform.getNamedWorkspaceRoots(),
-          trustedRoots: this.platform.getWorkspaceRoots(),
-          destinationDefinitionPath: this.sourceDefinitionPath,
-        }
-      );
+      // A sub-workflow reference is already workspace-relative or absolute.
+      const rebasedSteps = asSubWorkflow
+        ? tail
+        : await rebaseWorkflowStepPaths(tail, filePath, workspaceRoot, {
+            namedRoots: this.platform.getNamedWorkspaceRoots(),
+            trustedRoots: this.platform.getWorkspaceRoots(),
+            destinationDefinitionPath: this.sourceDefinitionPath,
+          });
       this.reopenRuntimeForContinuationIfNeeded(false);
       const shiftWarning = await this.promptQueue.appendSteps(
         rebasedSteps,
         source,
         position,
-        parsed.parallelGroups
+        tailGroups
       );
       this.syncCurrentPromptFileFromQueue();
 
@@ -3060,7 +3806,10 @@ export class WorkflowInstance
         Log.debug(
           "[WorkflowInstance] No prompt file loaded, updating context (append mode)"
         );
-        this.currentPromptFile = { filePath, promptFile: parsed };
+        // A queued sub-workflow's file is the child's definition, not this one.
+        if (!asSubWorkflow) {
+          this.currentPromptFile = { filePath, promptFile: parsed };
+        }
         const appendWorkingFilePath =
           this.promptQueue.getState().workingFilePath;
         if (appendWorkingFilePath) {
@@ -3075,7 +3824,7 @@ export class WorkflowInstance
       notifyUserFeedback(
         this.userFeedbackSink,
         "info",
-        `Queued ${parsed.steps.length} prompt(s) ${positionText}`
+        `Queued ${queuedLabel} ${positionText}`
       );
       this.notifyShiftedReferences(shiftWarning);
     } catch (error) {
@@ -3320,7 +4069,7 @@ export class WorkflowInstance
     }
 
     Log.debug(
-      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${isScriptStep(sanitizedStep) ? sanitizedStep.script.substring(0, 50) : sanitizedStep.prompt.substring(0, 50)}...`
+      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${getWorkflowStepText(sanitizedStep).substring(0, 50)}...`
     );
     return warning;
   }
@@ -3333,14 +4082,11 @@ export class WorkflowInstance
     clearProperties?: string[]
   ): Promise<void> {
     const props = properties as Record<string, unknown>;
-    const incomingStep: WorkflowStep =
-      props?.type === STEP_TYPES.SCRIPT
-        ? buildScriptStepFromProperties(text, props, promptName)
-        : {
-            prompt: text,
-            ...(promptName !== undefined && { name: promptName || undefined }),
-            ...buildPromptStepProperties(properties),
-          };
+    const incomingStep: WorkflowStep = buildWorkflowStepFromProperties(
+      text,
+      props,
+      promptName
+    );
     const existingStep = this.promptQueue.getState().steps[index];
     await this.promptQueue.replaceStep(
       index,
@@ -3979,7 +4725,7 @@ export class WorkflowInstance
     return {
       workflowName,
       step,
-      stepHarness: isScriptStep(step) ? undefined : step.harness,
+      stepHarness: isPromptStep(step) ? step.harness : undefined,
     };
   }
 
@@ -4244,6 +4990,13 @@ export class WorkflowInstance
     this.activeTargetResources.set(targetKey, resource);
   }
 
+  private clearTargetIntegration(target: WorkflowAttemptTarget): void {
+    const resource = this.activeTargetResources.get(
+      this.getExecutionTargetRunKey(target)
+    );
+    if (resource) resource.integration = undefined;
+  }
+
   private unregisterActiveTarget(target: WorkflowAttemptTarget): void {
     this.activeTargetResources.delete(this.getExecutionTargetRunKey(target));
   }
@@ -4268,12 +5021,29 @@ export class WorkflowInstance
 
   private registerActiveTarget(
     target: WorkflowAttemptTarget,
-    attemptIndex: number
+    attemptIndex: number,
+    subWorkflow?: SubWorkflowControl | null
   ): void {
     const targetKey = this.getExecutionTargetRunKey(target);
     const resource = this.activeTargetResources.get(targetKey) ?? { target };
     resource.attemptIndex = attemptIndex;
+    if (subWorkflow !== undefined)
+      resource.subWorkflow = subWorkflow ?? undefined;
     this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private async forwardSubWorkflowControlToActiveTargets(
+    action: "pause" | "cancelPause"
+  ): Promise<void> {
+    await Promise.all(
+      [...this.activeTargetResources.values()].map((resource) =>
+        forwardSubWorkflowControl(
+          resource.subWorkflow,
+          action,
+          "WorkflowInstance"
+        )
+      )
+    );
   }
 
   private registerTargetProcessRunner(
@@ -5004,6 +5774,9 @@ export class WorkflowInstance
   ): Promise<void> {
     const config = this.worktreeResolution.config;
     if (!config) {
+      if (this.inheritedParentExecution && this.loadedParentRun) {
+        return;
+      }
       await this.abandonActiveWorktree();
       await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
       return;
@@ -5016,7 +5789,13 @@ export class WorkflowInstance
     }
 
     const state = this.promptQueue.getState();
-    const sourceCheckoutRoot = this.getStateRoot();
+    const workspaceCheckoutRoot = this.getStateRoot();
+    // D4b: a sub-workflow child's worktree branches from, and merges into,
+    // its parent's execution checkout. History stays under the state root.
+    const parentCheckoutRoot = this.loadedParentRun
+      ? this.inheritedParentExecution?.executionCheckoutRoot
+      : undefined;
+    const sourceCheckoutRoot = parentCheckoutRoot ?? workspaceCheckoutRoot;
     if (!sourceCheckoutRoot || !state.workflowKey || !state.runRef) {
       throw new Error(
         "Named worktree execution requires a promoted workflow run and Git workspace."
@@ -5028,6 +5807,9 @@ export class WorkflowInstance
       : 0;
     const sharedOptions = {
       sourceCheckoutRoot,
+      ...(parentCheckoutRoot && workspaceCheckoutRoot
+        ? { workspaceCheckoutRoot }
+        : {}),
       base: config.base,
       stateRoot: this.executionWorkspace.stateRoot,
       workspaceRoots: this.platform.getWorkspaceRoots(),
@@ -5058,6 +5840,7 @@ export class WorkflowInstance
             workflowName:
               this.promptQueue.getState().workflowName || this.workflowName,
             targetBranch: undefined,
+            delegationChain: this.loadedDelegationChain,
           })
         : config.branch
           ? await this.worktreeManager.resolveNamedWorktree({
@@ -5074,10 +5857,7 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
     }
     this.activeWorktree = info;
-    this.activeWorktreeSettlement = {
-      merge: config.mode === WORKTREE_MODES.MANAGED && config.merge === true,
-      keep: config.mode === WORKTREE_MODES.MANAGED && config.keep === true,
-    };
+    this.activeWorktreeSettlement = managedWorktreeSettlement(config);
     this.executionLease = info.lease;
     await this.configureExecutionWorkspace(info.executionWorkspace);
   }
@@ -5115,11 +5895,11 @@ export class WorkflowInstance
 
     if (worktree.mode === WORKTREE_MODES.MANAGED) {
       try {
-        await this.worktreeManager.completeManagedRun(worktree, {
-          merge: settlement?.merge === true,
-          keep: settlement?.keep === true,
-          artifactsClean: true,
-        });
+        await this.settleManagedWorktree(
+          worktree,
+          { artifactsClean: true },
+          settlement
+        );
       } catch (error) {
         Log.error(
           `[inst:${this.id.slice(0, 8)}] Failed to settle abandoned managed worktree:`,
@@ -5210,51 +5990,144 @@ export class WorkflowInstance
     workingFilePath: string | undefined;
   }): Promise<void> {
     this.runStartView = undefined;
+    const status = this.workflowRuntime.status;
+    // A Continue pressed once the executor confirmed its pause has already
+    // made the run RUNNING, but the execution still ended on that pause,
+    // and the Continue (waiting for this settlement) carries on in its
+    // worktree: settle it as paused. A CANCELLING run is ending and settles
+    // here (a stop pressed after that Continue while the execution was
+    // live requested it; one that fell back to the cancellation path after
+    // the unwind cap settles nothing itself), as does an ended one.
     const paused =
-      this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
-      this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
+      status === EXECUTION_STATES.PAUSED ||
+      status === EXECUTION_STATES.PAUSING ||
+      (status === EXECUTION_STATES.RUNNING &&
+        this.workflowExecutor.endedOnPause());
+    // Settlement always finishes: `finishExecutionHistory` is what clears
+    // `startPending` and resolves `whenExecutionSettled`, which a stop of a
+    // paused run, every later stop joining it, and a Continue all wait on.
+    // A throw here is the cleanup's own failure, not the run's: it is
+    // logged and reported, and never replaces the execution's own error
+    // (this runs in the startup pipeline's `finally`), nor fails a run
+    // whose outcome is already recorded.
+    try {
+      const reservation = this.resolveRunEndReservation(paused);
+      const integrationCleanup = await this.settleExecutionIntegrations(
+        options,
+        reservation.preserveWorktreeReservation,
+        reservation.terminalWorktreeRun,
+        this.executionWorkspace.stateRoot
+      );
+      await this.settleRunEndReservations(
+        options,
+        reservation,
+        integrationCleanup
+      );
+    } catch (error) {
+      Log.error(
+        `[inst:${this.id.slice(0, 8)}] Settling the execution failed:`,
+        error
+      );
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.WARNING,
+        `ctrlyoke: Cleaning up after the run failed: ${getErrorMessage(error)}`,
+        undefined,
+        error
+      );
+    } finally {
+      await this.finishExecutionHistory(options.historyFilePath);
+    }
+  }
+
+  /**
+   * Run one settlement action whose throw must not stop the rest of the
+   * settlement (one integration's dispose must not leave the others, the
+   * worktree and the runner lock unsettled). Returns whether it succeeded.
+   */
+  private trySettlementAction(
+    description: string,
+    action: () => void
+  ): boolean {
+    try {
+      action();
+      return true;
+    } catch (error) {
+      Log.error(
+        `[inst:${this.id.slice(0, 8)}] ${description} failed during settlement:`,
+        error
+      );
+      return false;
+    }
+  }
+
+  /**
+   * What the end of an execution does with its worktree reservation. A
+   * paused run keeps it for Continue; a named worktree keeps it while a
+   * reusable terminal (parked by this execution, or retained across its
+   * pause) still runs in it; any other run with a worktree settles it.
+   */
+  private resolveRunEndReservation(paused: boolean): RunEndReservation {
     const pausedWorktreeReservation =
       paused && Boolean(this.executionWorkspace.worktree);
     const namedWorktreeReuseRetention =
       !paused &&
-      this.activeWorktree?.mode === "named" &&
+      this.activeWorktree?.mode === WORKTREE_MODES.NAMED &&
       ConfigurationUtils.isReuseRunningTerminalEnabled() &&
-      Array.from(this.executionIntegrations.values()).some((integration) =>
-        integration.canReuseRunningTerminal()
-      );
+      [
+        ...this.executionIntegrations.values(),
+        ...this.liveReusableIntegrations.values(),
+      ].some((integration) => integration.canReuseRunningTerminal());
     const preserveWorktreeReservation =
       pausedWorktreeReservation || namedWorktreeReuseRetention;
     const terminalWorktreeRun =
       !preserveWorktreeReservation && Boolean(this.activeWorktree);
-    const managedTerminalRun =
-      terminalWorktreeRun &&
-      this.activeWorktree?.mode === WORKTREE_MODES.MANAGED;
-    // Only a started run reaches settlement, and a run needs a state root.
-    const workspaceRoot = this.executionWorkspace.stateRoot;
-    const integrationCleanup = await this.settleExecutionIntegrations(
-      options,
+    return {
       preserveWorktreeReservation,
       terminalWorktreeRun,
-      workspaceRoot
-    );
+      managedTerminalRun:
+        terminalWorktreeRun &&
+        this.activeWorktree?.mode === WORKTREE_MODES.MANAGED,
+    };
+  }
+
+  /**
+   * The terminal half of a run's end, once its execution integrations are
+   * settled: retained terminals, the worktree (merged per its config through
+   * `settleManagedWorktree`), then the lease, heartbeat and runner lock.
+   * Execution settlement reaches it when the run ends; `stopIdlePausedRun`
+   * when a stop ends a run whose pause had kept them. `cleanup` is the
+   * strict artifact cleanup of the execution integrations settled just
+   * before (`settleExecutionIntegrations`); a stopped pause has none left,
+   * and the integrations its pause parked are cleaned strictly in
+   * `settleRetainedIntegrations`, whose result decides the landing.
+   */
+  private async settleRunEndReservations(
+    options: { workingFilePath: string | undefined },
+    reservation: RunEndReservation,
+    cleanup: StrictArtifactCleanup = {
+      strictArtifactCleanupSucceeded: true,
+      strictArtifactCleanupMessage: undefined,
+    }
+  ): Promise<void> {
+    // Only a started run reaches settlement, and a run needs a state root.
+    const workspaceRoot = this.executionWorkspace.stateRoot;
     const retainedCleanup = await this.settleRetainedIntegrations(
       options,
-      terminalWorktreeRun,
+      reservation.terminalWorktreeRun,
       workspaceRoot,
-      integrationCleanup.strictArtifactCleanupSucceeded,
-      integrationCleanup.strictArtifactCleanupMessage
+      cleanup
     );
     await this.settleActiveExecutionWorktree(
-      terminalWorktreeRun,
-      managedTerminalRun,
+      reservation.terminalWorktreeRun,
+      reservation.managedTerminalRun,
       retainedCleanup.strictArtifactCleanupSucceeded,
       retainedCleanup.strictArtifactCleanupMessage
     );
     await this.releaseExecutionReservations(
-      preserveWorktreeReservation,
-      managedTerminalRun
+      reservation.preserveWorktreeReservation,
+      reservation.managedTerminalRun
     );
-    await this.finishExecutionHistory(options.historyFilePath);
   }
 
   private async settleExecutionIntegrations(
@@ -5262,12 +6135,11 @@ export class WorkflowInstance
     preserveWorktreeReservation: boolean,
     terminalWorktreeRun: boolean,
     workspaceRoot: string
-  ): Promise<{
-    strictArtifactCleanupSucceeded: boolean;
-    strictArtifactCleanupMessage: string | undefined;
-  }> {
-    let strictArtifactCleanupSucceeded = true;
-    let strictArtifactCleanupMessage: string | undefined;
+  ): Promise<StrictArtifactCleanup> {
+    let cleanup: StrictArtifactCleanup = {
+      strictArtifactCleanupSucceeded: true,
+      strictArtifactCleanupMessage: undefined,
+    };
     this.lastRunIntegrations = [];
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
@@ -5281,144 +6153,277 @@ export class WorkflowInstance
       ),
     ];
     for (const [harnessKey, execIntegration] of executionIntegrationEntries) {
-      const isUnkeyedIntegration =
-        this.unkeyedExecutionIntegrations.has(execIntegration);
-      const retainIntegration =
-        !isUnkeyedIntegration &&
-        ((preserveWorktreeReservation &&
-          execIntegration.canReuseRunningTerminal()) ||
-          (!this.executionWorkspace.worktree &&
-            (execIntegration.canReuseRunningTerminal() ||
-              execIntegration.shouldPersistForSessionActivity())));
-      if (retainIntegration) {
-        // Either the PTY is still alive with running-terminal context set (CLI), or the
-        // integration wants to stay alive for its own post-completion session
-        // watcher (non-PTY harness). Keep it alive for the next run rather
-        // than destroying it. Store under the same map key so the restore code
-        // can insert it where createIntegrationForMode looks. Register a
-        // one-shot exit callback so we dispose it if the terminal is killed
-        // between runs (no-op for non-PTY harnesses).
-        this.liveReusableIntegrations.set(harnessKey, execIntegration);
-        if (
-          workspaceRoot &&
-          execIntegration.shouldRetainWorkflowArtifactsForReuse()
-        ) {
-          this.retainedIntegrationArtifactContexts.set(execIntegration, {
-            workingFilePath: options.workingFilePath,
-            workspaceRoot: execIntegration.getExecutionRoot() ?? workspaceRoot,
-          });
-        } else {
-          await this.cleanupRetainedIntegrationArtifacts(
-            execIntegration,
-            options.workingFilePath,
-            workspaceRoot
-          );
-        }
-        execIntegration.onPtySessionEnded(() => {
-          // Look the integration up by identity: a fresh-session prompt may
-          // have moved it to a superseded key since it was parked.
-          this.forgetLiveReusableIntegration(execIntegration);
-          void this.cleanupRetainedIntegrationArtifacts(
-            execIntegration
-          ).finally(() => {
-            execIntegration.dispose();
-            void this.releaseNamedWorktreeRetentionAfterPtyExit();
-          });
-        });
-      } else {
-        // A worktree-targeted terminal run cannot park a PTY or watcher:
-        // cleanup is the barrier that makes the lease safe to release.
-        // Dispose first so no background reader can recreate an artifact
-        // while provider cleanup is proving the directory clean.
-        if (terminalWorktreeRun) {
-          execIntegration.closeTerminalGracefully(
-            TERMINAL_END_REASONS.WORKTREE_RELEASED
-          );
-          execIntegration.dispose();
-        }
-        const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+      try {
+        cleanup = await this.settleExecutionIntegration(
+          harnessKey,
           execIntegration,
-          options.workingFilePath,
-          execIntegration.getExecutionRoot() ?? workspaceRoot,
-          terminalWorktreeRun
+          options,
+          preserveWorktreeReservation,
+          terminalWorktreeRun,
+          workspaceRoot,
+          cleanup
         );
-        if (!cleanup.cleaned) {
-          strictArtifactCleanupSucceeded = false;
-          strictArtifactCleanupMessage = [
-            strictArtifactCleanupMessage,
-            cleanup.message,
-          ]
-            .filter(Boolean)
-            .join("; ");
-        }
-        // Normal path: terminal closed or terminal reuse not active — dispose now
-        // and save so the next run can close any VS Code terminal tab left open.
-        if (!terminalWorktreeRun) {
-          this.lastRunIntegrations.push(execIntegration);
-          execIntegration.dispose();
-        }
+      } catch (error) {
+        // The rest still settle; a worktree whose integration could not be
+        // settled is not proven clean, so it does not land.
+        Log.error(
+          `[inst:${this.id.slice(0, 8)}] Settling execution integration ${harnessKey} failed:`,
+          error
+        );
+        cleanup = withStrictCleanupFailure(
+          cleanup,
+          `Settling a harness integration failed: ${getErrorMessage(error)}`
+        );
       }
     }
     this.executionIntegrations.clear();
     this.unkeyedExecutionIntegrations.clear();
 
     for (const targetIntegration of this.targetExecutionIntegrations.values()) {
-      targetIntegration.closeTerminalGracefully(
-        terminalWorktreeRun
-          ? TERMINAL_END_REASONS.WORKTREE_RELEASED
-          : TERMINAL_END_REASONS.STEP_COMPLETE
+      const released = this.trySettlementAction(
+        "Releasing a target integration",
+        () => {
+          targetIntegration.closeTerminalGracefully(
+            terminalWorktreeRun
+              ? TERMINAL_END_REASONS.WORKTREE_RELEASED
+              : TERMINAL_END_REASONS.STEP_COMPLETE
+          );
+          targetIntegration.dispose();
+        }
       );
-      targetIntegration.dispose();
+      if (!released && terminalWorktreeRun) {
+        cleanup = withStrictCleanupFailure(
+          cleanup,
+          "A harness integration could not be released."
+        );
+      }
     }
     this.targetExecutionIntegrations.clear();
     for (const runner of this.targetScriptProcessRunners.values()) {
-      runner.dispose();
+      this.trySettlementAction("Disposing a script process runner", () =>
+        runner.dispose()
+      );
     }
     this.targetScriptProcessRunners.clear();
     this.activeTargetResources.clear();
 
-    return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
+    return cleanup;
+  }
+
+  /** Settle one execution integration: park it for reuse, or clean it up. */
+  private async settleExecutionIntegration(
+    harnessKey: string,
+    execIntegration: HarnessIntegration,
+    options: { historyFilePath: string; workingFilePath: string | undefined },
+    preserveWorktreeReservation: boolean,
+    terminalWorktreeRun: boolean,
+    workspaceRoot: string,
+    cleanup: StrictArtifactCleanup
+  ): Promise<StrictArtifactCleanup> {
+    const isUnkeyedIntegration =
+      this.unkeyedExecutionIntegrations.has(execIntegration);
+    const retainIntegration =
+      !isUnkeyedIntegration &&
+      ((preserveWorktreeReservation &&
+        execIntegration.canReuseRunningTerminal()) ||
+        (!this.executionWorkspace.worktree &&
+          (execIntegration.canReuseRunningTerminal() ||
+            execIntegration.shouldPersistForSessionActivity())));
+    if (retainIntegration) {
+      // Either the PTY is still alive with running-terminal context set (CLI), or the
+      // integration wants to stay alive for its own post-completion session
+      // watcher (non-PTY harness). Keep it alive for the next run rather
+      // than destroying it. Store under the same map key so the restore code
+      // can insert it where createIntegrationForMode looks. Register a
+      // one-shot exit callback so we dispose it if the terminal is killed
+      // between runs (no-op for non-PTY harnesses).
+      this.liveReusableIntegrations.set(harnessKey, execIntegration);
+      if (
+        workspaceRoot &&
+        execIntegration.shouldRetainWorkflowArtifactsForReuse()
+      ) {
+        this.retainedIntegrationArtifactContexts.set(execIntegration, {
+          workingFilePath: options.workingFilePath,
+          workspaceRoot: execIntegration.getExecutionRoot() ?? workspaceRoot,
+        });
+      } else {
+        await this.cleanupRetainedIntegrationArtifacts(
+          execIntegration,
+          options.workingFilePath,
+          workspaceRoot
+        );
+      }
+      execIntegration.onPtySessionEnded(() => {
+        // Look the integration up by identity: a fresh-session prompt may
+        // have moved it to a superseded key since it was parked.
+        this.forgetLiveReusableIntegration(execIntegration);
+        void this.cleanupRetainedIntegrationArtifacts(execIntegration).finally(
+          () => {
+            execIntegration.dispose();
+            void this.releaseNamedWorktreeRetentionAfterPtyExit();
+          }
+        );
+      });
+    } else {
+      // A worktree-targeted terminal run cannot park a PTY or watcher:
+      // cleanup is the barrier that makes the lease safe to release.
+      // Dispose first so no background reader can recreate an artifact
+      // while provider cleanup is proving the directory clean.
+      if (terminalWorktreeRun) {
+        execIntegration.closeTerminalGracefully(
+          TERMINAL_END_REASONS.WORKTREE_RELEASED
+        );
+        execIntegration.dispose();
+      }
+      cleanup = await this.settleIntegrationArtifacts(
+        execIntegration,
+        options.workingFilePath,
+        workspaceRoot,
+        terminalWorktreeRun,
+        cleanup
+      );
+      // Normal path: terminal closed or terminal reuse not active — dispose now
+      // and save so the next run can close any VS Code terminal tab left open.
+      if (!terminalWorktreeRun) {
+        this.lastRunIntegrations.push(execIntegration);
+        execIntegration.dispose();
+      }
+    }
+    return cleanup;
   }
 
   private async settleRetainedIntegrations(
-    options: { historyFilePath: string; workingFilePath: string | undefined },
+    options: { workingFilePath: string | undefined },
     terminalWorktreeRun: boolean,
     workspaceRoot: string,
-    strictArtifactCleanupSucceeded: boolean,
-    strictArtifactCleanupMessage: string | undefined
-  ): Promise<{
-    strictArtifactCleanupSucceeded: boolean;
-    strictArtifactCleanupMessage: string | undefined;
-  }> {
+    cleanup: StrictArtifactCleanup
+  ): Promise<StrictArtifactCleanup> {
     // A retained entry can survive an unusual handoff path even when it was
     // not reinserted into executionIntegrations. It is still part of the
-    // worktree cleanup barrier and must never outlive the lease.
+    // worktree cleanup barrier and must never outlive the lease. So are the
+    // integrations a pause parked in `lastRunIntegrations`: the pause kept
+    // the worktree, so it settled them non-terminally (best-effort artifact
+    // cleanup, terminal tab left open), and a stop ending that paused run
+    // (`stopIdlePausedRun`) settles them here, as the terminal settlement it
+    // is: their terminals released with the worktree, and the strict
+    // cleanup's result deciding whether the worktree may land.
     if (terminalWorktreeRun) {
+      const parked = this.lastRunIntegrations;
+      this.lastRunIntegrations = [];
+      for (const integration of parked) {
+        // Already disposed by the pause; only its terminal is left.
+        this.trySettlementAction("Closing a parked terminal", () =>
+          integration.closeTerminal(TERMINAL_END_REASONS.WORKTREE_RELEASED)
+        );
+      }
       for (const retained of this.liveReusableIntegrations.values()) {
-        retained.closeTerminalGracefully(
-          TERMINAL_END_REASONS.WORKTREE_RELEASED
+        const released = this.trySettlementAction(
+          "Releasing a retained integration",
+          () => {
+            retained.closeTerminalGracefully(
+              TERMINAL_END_REASONS.WORKTREE_RELEASED
+            );
+            retained.dispose();
+          }
         );
-        retained.dispose();
-        const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
-          retained,
-          options.workingFilePath,
-          retained.getExecutionRoot() ?? workspaceRoot,
-          true
-        );
-        if (!cleanup.cleaned) {
-          strictArtifactCleanupSucceeded = false;
-          strictArtifactCleanupMessage = [
-            strictArtifactCleanupMessage,
-            cleanup.message,
-          ]
-            .filter(Boolean)
-            .join("; ");
+        if (!released) {
+          cleanup = withStrictCleanupFailure(
+            cleanup,
+            "A retained harness integration could not be released."
+          );
         }
+      }
+      for (const integration of [
+        ...parked,
+        ...this.liveReusableIntegrations.values(),
+      ]) {
+        cleanup = await this.settleIntegrationArtifacts(
+          integration,
+          options.workingFilePath,
+          workspaceRoot,
+          true,
+          cleanup
+        );
       }
       this.liveReusableIntegrations.clear();
     }
 
-    return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
+    return cleanup;
+  }
+
+  /**
+   * Clean up one settled integration's workflow artifacts in its own
+   * execution root (strictly when its worktree is being settled) and fold
+   * the result into `cleanup`: a strict failure blocks the landing, with
+   * its message joined to any earlier one.
+   */
+  private async settleIntegrationArtifacts(
+    integration: HarnessIntegration,
+    workingFilePath: string | undefined,
+    workspaceRoot: string,
+    strict: boolean,
+    cleanup: StrictArtifactCleanup
+  ): Promise<StrictArtifactCleanup> {
+    let result: { cleaned: boolean; message?: string };
+    try {
+      result = await this.cleanupIntegrationArtifactsForSettlement(
+        integration,
+        workingFilePath,
+        integration.getExecutionRoot() ?? workspaceRoot,
+        strict
+      );
+    } catch (error) {
+      Log.error(
+        `[inst:${this.id.slice(0, 8)}] Workflow artifact cleanup failed during settlement:`,
+        error
+      );
+      result = {
+        cleaned: false,
+        message: `Workflow artifact cleanup failed: ${getErrorMessage(error)}`,
+      };
+    }
+    return result.cleaned
+      ? cleanup
+      : withStrictCleanupFailure(cleanup, result.message);
+  }
+
+  /**
+   * The one way this instance settles a managed worktree. Merge and keep
+   * come from `settlement`, by default the current worktree config. While
+   * it runs, `stop()` aborts `activeWorktreeSettlementAbort`, which ends a
+   * wait for the repository-wide mutation lock or a sibling's merge lease
+   * (D4d).
+   */
+  private async settleManagedWorktree(
+    worktree: WorktreeInfo,
+    cleanup: ManagedWorktreeCleanup,
+    settlement: ManagedWorktreeSettlement = managedWorktreeSettlement(
+      this.worktreeResolution.config
+    )
+  ): Promise<WorktreeCompletionResult> {
+    const options: Omit<CompleteManagedRunOptions, "signal"> = {
+      merge: settlement?.merge === true,
+      keep: settlement?.keep === true,
+      ...cleanup,
+    };
+    const abort = new AbortController();
+    if (this.stopAwaitingExecutionSettlement) {
+      abort.abort();
+    }
+    this.activeWorktreeSettlementAbort = abort;
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] Settling managed worktree ${worktree.branchName} (merge=${options.merge === true})`
+    );
+    try {
+      return await this.worktreeManager.completeManagedRun(worktree, {
+        ...options,
+        signal: abort.signal,
+      });
+    } finally {
+      if (this.activeWorktreeSettlementAbort === abort) {
+        this.activeWorktreeSettlementAbort = undefined;
+      }
+    }
   }
 
   private async settleActiveExecutionWorktree(
@@ -5434,13 +6439,7 @@ export class WorkflowInstance
       this.worktreeManager.releaseRuntimeTrust(worktree);
       if (managedTerminalRun) {
         try {
-          await this.worktreeManager.completeManagedRun(worktree, {
-            merge:
-              this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
-              this.worktreeResolution.config.merge === true,
-            keep:
-              this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
-              this.worktreeResolution.config.keep === true,
+          await this.settleManagedWorktree(worktree, {
             artifactsClean: strictArtifactCleanupSucceeded,
             cleanupMessage: strictArtifactCleanupMessage,
           });
@@ -5498,32 +6497,37 @@ export class WorkflowInstance
   }
 
   private async finishExecutionHistory(historyFilePath: string): Promise<void> {
-    await this.pendingRuntimeTransitionHistoryWrite;
+    try {
+      await this.pendingRuntimeTransitionHistoryWrite;
 
-    if (historyFilePath) {
-      const runStepCount = this.promptQueue.getProgress().total;
-      await this.outputHistoryManager
-        .finalizeRun(
-          historyFilePath,
-          this.getAuthoritativeExecutionState() as Parameters<
-            OutputHistoryManager["finalizeRun"]
-          >[1],
-          runStepCount,
-          this.promptQueue.getState().totalExecutionTime
-        )
-        .catch((err) =>
-          Log.warn(
-            `[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`,
-            err
+      if (historyFilePath) {
+        const runStepCount = this.promptQueue.getProgress().total;
+        await this.outputHistoryManager
+          .finalizeRun(
+            historyFilePath,
+            this.getAuthoritativeExecutionState() as Parameters<
+              OutputHistoryManager["finalizeRun"]
+            >[1],
+            runStepCount,
+            this.promptQueue.getState().totalExecutionTime
           )
-        );
+          .catch((err) =>
+            Log.warn(
+              `[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`,
+              err
+            )
+          );
+      }
+    } finally {
+      // Whatever happened above, the execution has settled: a stop, a
+      // Continue and a launcher all wait on this.
+      this.releaseActiveRunRedactor?.();
+      this.releaseActiveRunRedactor = undefined;
+      this.activeRunRedactor = undefined;
+      this.startPending = false;
+      this.resolveExecutionSettled?.();
+      this.resolveExecutionSettled = undefined;
     }
-    this.releaseActiveRunRedactor?.();
-    this.releaseActiveRunRedactor = undefined;
-    this.activeRunRedactor = undefined;
-    this.startPending = false;
-    this.resolveExecutionSettled?.();
-    this.resolveExecutionSettled = undefined;
   }
   private async releaseNamedWorktreeRetentionAfterPtyExit(): Promise<void> {
     const executionStillOwnsReservation = this.executionOwnsReservation();
@@ -5787,7 +6791,7 @@ export class WorkflowInstance
         const hasEndCondition =
           workflowFile.endCondition != null ||
           state.steps.some(
-            (step) => !isScriptStep(step) && step.endCondition != null
+            (step) => isPromptStep(step) && step.endCondition != null
           );
         reportWorkflowStarted({
           harness: SettingsPropertyResolver.resolveHarnessValue(
@@ -5907,15 +6911,15 @@ export class WorkflowInstance
     switch (transition.command) {
       case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
         if (step) {
-          const command = isScriptStep(step) ? step.script : step.prompt;
-          const harness = isScriptStep(step)
-            ? undefined
-            : (step._runtime?.harness ??
+          const command = getWorkflowStepText(step);
+          const harness = isPromptStep(step)
+            ? (step._runtime?.harness ??
               SettingsPropertyResolver.resolve(
                 step,
                 this.promptQueue.getWorkflowFile(),
                 { hostCanProvidePty: this.hostCanProvidePty }
-              ).harness);
+              ).harness)
+            : undefined;
           Log.info(
             `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1}/${state.steps.length} started ` +
               `(attempt ${transition.current.attemptIndex + 1}, command="${command}"` +
@@ -6063,7 +7067,7 @@ export class WorkflowInstance
   ): Promise<string | undefined> {
     // Set instance-level name so getSummary() returns it immediately
     this.workflowName = displayName;
-    this.sourceDefinitionPath = originalFilePath;
+    this.setSourceDefinition(originalFilePath);
 
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] initializeNewWorkflow: displayName="${displayName}" ` +

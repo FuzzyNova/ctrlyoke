@@ -2,21 +2,31 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { execFileSync } from "child_process";
+import { execFileSync, spawnSync } from "child_process";
 import { suite, suiteSetup, suiteTeardown, teardown, test } from "mocha";
 import {
+  STOPPED_WAITING_FOR_MERGE_MESSAGE,
+  STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE,
   WorktreeManager,
   WorktreeSetupError,
+  buildManagedAutoCommitMessage,
+  dirtyParentWorktreeChildMessage,
+  prepareParentCheckoutForWorktreeChild,
   type WorktreeMergeOperations,
+  type WorktreeMergeResult,
   type WorktreeSetupRunner,
 } from "../../core/orchestration/WorktreeManager";
-import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
+import {
+  ExecutionRootLeaseManager,
+  type ExecutionLeaseHandle,
+} from "../../core/orchestration/ExecutionRootLeaseManager";
 import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionReporter";
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   gitCommonDir,
   listWorktrees,
+  mergeFastForward,
   switchBranch,
   setGitTimeoutOverridesForTests,
 } from "../../utils/GitUtils";
@@ -24,13 +34,18 @@ import {
   bareNameDirectoryRoot,
   previewWorktreePlacement,
   createWorktreeDirectoryName,
+  withWorktreeMutationLock,
 } from "../../utils/WorktreeUtils";
 import {
+  EXECUTION_LEASE_PURPOSES,
   WORKTREE_IDENTITY_KINDS,
+  WORKTREE_MERGE_LEASE_WAIT_MS,
   WORKTREE_ROOT_TIERS,
 } from "../../types/DashboardConstants";
 import { classifyWorktreeComparison } from "../../utils/WorktreeComparison";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
+import { Log } from "../../utils/Log";
+import { snapshotProperty } from "../helpers/propertySnapshot";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_LIFECYCLE_STATES,
@@ -149,6 +164,1562 @@ suite("WorktreeManager", function () {
       },
     });
   }
+
+  test("parent worktree child preflight handles clean, owned and user-owned checkouts", async () => {
+    let fileCount = 0;
+    const commits: Array<[string, string]> = [];
+    const operations = {
+      getFileCount: async () => fileCount,
+      commit: async (dir: string, message: string) => {
+        commits.push([dir, message]);
+        return true;
+      },
+    };
+    await prepareParentCheckoutForWorktreeChild({
+      checkoutRoot: "/repo",
+      managed: false,
+      operations,
+    });
+    assert.deepStrictEqual(commits, []);
+
+    fileCount = 2;
+    await assert.rejects(
+      prepareParentCheckoutForWorktreeChild({
+        checkoutRoot: "/repo",
+        managed: false,
+        operations,
+      }),
+      (error: Error) => error.message === dirtyParentWorktreeChildMessage(2)
+    );
+    await prepareParentCheckoutForWorktreeChild({
+      checkoutRoot: "/repo",
+      managed: true,
+      managedLabel: "parent run",
+      operations,
+    });
+    assert.deepStrictEqual(commits, [
+      ["/repo", buildManagedAutoCommitMessage("parent run")],
+    ]);
+  });
+
+  test("real git parent check rejects dirty main checkouts and checkpoints managed ones", async () => {
+    const { repository } = await makeRepository("d4c-parent");
+    await fs.writeFile(path.join(repository, "README.md"), "parent edits\n");
+    await assert.rejects(
+      prepareParentCheckoutForWorktreeChild({
+        checkoutRoot: repository,
+        managed: false,
+      }),
+      (error: Error) =>
+        error.message ===
+        "Commit or stash the parent's changes before starting worktree sub-workflows (dirty: 1 files)"
+    );
+    await prepareParentCheckoutForWorktreeChild({
+      checkoutRoot: repository,
+      managed: true,
+      managedLabel: "managed parent",
+    });
+    const message = execFileSync(
+      "git",
+      ["-C", repository, "log", "-1", "--pretty=%s"],
+      {
+        encoding: "utf8",
+      }
+    ).trim();
+    assert.strictEqual(
+      message,
+      buildManagedAutoCommitMessage("managed parent")
+    );
+  });
+
+  test("classifies an inherited D4a checkout from its managed ownership record", async () => {
+    const { parent, repository } = await makeRepository("d4a-inherited-d4c");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    try {
+      await fs.writeFile(
+        path.join(managed.worktreePath, "README.md"),
+        "child edits\n"
+      );
+      const owner = await worktrees.findManagedWorktreeRecordForCheckout(
+        managed.worktreePath,
+        managed.worktreePath
+      );
+      assert.ok(owner, "inherited checkout must resolve to its managed owner");
+      assert.strictEqual(owner.workflowKey, managed.workflowKey);
+      await prepareParentCheckoutForWorktreeChild({
+        checkoutRoot: managed.worktreePath,
+        managed: true,
+        managedLabel: "Managed Test Workflow",
+      });
+      assert.strictEqual(
+        execFileSync(
+          "git",
+          ["-C", managed.worktreePath, "log", "-1", "--pretty=%s"],
+          { encoding: "utf8" }
+        ).trim(),
+        buildManagedAutoCommitMessage("Managed Test Workflow")
+      );
+    } finally {
+      await managed.lease.release();
+    }
+  });
+
+  /** A manager that places worktrees beside the main checkout, as by default. */
+  function siblingRootManager(): WorktreeManager {
+    return new WorktreeManager({
+      worktreeRoot: "",
+      updateWorktreeRuntime: async () => undefined,
+    });
+  }
+
+  function gitOutput(directory: string, ...args: string[]): string {
+    return execFileSync("git", ["-C", directory, ...args], {
+      encoding: "utf8",
+    }).trim();
+  }
+
+  test("D4b: a child of a managed worktree branches from it, merges into it, and is placed beside it", async () => {
+    const { repository } = await makeRepository("d4b-child-of-managed");
+    const worktrees = siblingRootManager();
+    const siblingRoot = path.join(
+      await fs.realpath(path.dirname(repository)),
+      "repository.worktrees"
+    );
+    const parentRun = await ensureManaged(worktrees, repository);
+    const child = await (async () => {
+      try {
+        // A top-level run resolves the same root as before.
+        assert.strictEqual(path.dirname(parentRun.worktreePath), siblingRoot);
+        await fs.writeFile(
+          path.join(parentRun.worktreePath, "parent.txt"),
+          "parent\n"
+        );
+        execFileSync("git", [
+          "-C",
+          parentRun.worktreePath,
+          "add",
+          "parent.txt",
+        ]);
+        execFileSync(
+          "git",
+          ["-C", parentRun.worktreePath, "commit", "-m", "parent work"],
+          { stdio: "ignore" }
+        );
+        return await ensureManaged(worktrees, parentRun.worktreePath, {
+          runRef: "run-2" as RunRef,
+          stateRoot: repository,
+          workspaceCheckoutRoot: repository,
+          delegationChain: [parentRun.lease.ownerToken],
+        });
+      } catch (error) {
+        await parentRun.lease.release();
+        throw error;
+      }
+    })();
+    let childLeaseReleased = false;
+    try {
+      assert.strictEqual(
+        path.dirname(child.worktreePath),
+        siblingRoot,
+        "not nested under <parent-worktree>.worktrees"
+      );
+      assert.strictEqual(
+        child.baseCommit,
+        gitOutput(parentRun.worktreePath, "rev-parse", "HEAD")
+      );
+      assert.strictEqual(child.targetBranch, parentRun.branchName);
+      assert.strictEqual(
+        await fs.realpath(child.sourceCheckoutRoot),
+        await fs.realpath(parentRun.worktreePath)
+      );
+      // The window's workspace folder maps into the child's worktree.
+      assert.deepStrictEqual(
+        child.executionWorkspace.namedWorkspaceRoots.map((root) => root.fsPath),
+        [child.worktreePath]
+      );
+      assert.strictEqual(
+        child.executionWorkspace.executionRoot,
+        child.worktreePath
+      );
+
+      await fs.writeFile(path.join(child.worktreePath, "child.txt"), "child\n");
+      execFileSync("git", ["-C", child.worktreePath, "add", "child.txt"]);
+      execFileSync(
+        "git",
+        ["-C", child.worktreePath, "commit", "-m", "child work"],
+        { stdio: "ignore" }
+      );
+
+      // D4d: without the chain, the parent's exclusive lease refuses it.
+      const unchained = await worktrees.mergeManagedWorktree({
+        ...child,
+        delegationChain: undefined,
+      });
+      assert.strictEqual(unchained.mergeOutcome, "blocked");
+
+      // Rule 2 does not apply to merges: an inheriting sibling still editing
+      // the parent's checkout blocks it.
+      const sibling = await ExecutionRootLeaseManager.acquire({
+        mode: "shared-native",
+        stateRoot: repository,
+        executionRoot: parentRun.worktreePath,
+        workflowKey: "sibling" as WorkflowKey,
+        runRef: "sibling-run" as RunRef,
+        runner: "vscode",
+        instanceId: "sibling-instance",
+        delegationChain: [parentRun.lease.ownerToken],
+      });
+      try {
+        const besideSibling = await worktrees.mergeManagedWorktree(child);
+        assert.strictEqual(besideSibling.mergeOutcome, "blocked");
+        assert.match(besideSibling.message ?? "", /sibling/);
+      } finally {
+        await sibling.release();
+      }
+
+      const result = await worktrees.completeManagedRun(child, {
+        merge: true,
+      });
+      childLeaseReleased = true;
+      assert.strictEqual(result.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        gitOutput(parentRun.worktreePath, "log", "-1", "--format=%s"),
+        "child work"
+      );
+      assert.strictEqual(
+        gitOutput(repository, "log", "--format=%s"),
+        "base",
+        "the main checkout is untouched"
+      );
+    } finally {
+      if (!childLeaseReleased) await child.lease.release();
+      await parentRun.lease.release();
+    }
+  });
+
+  test("D4d: a child's merge into the main checkout its parent holds a shared lease on fast-forwards", async () => {
+    const { parent, repository } = await makeRepository("d4d-merge-main");
+    const worktrees = manager(parent);
+    const parentLease = await ExecutionRootLeaseManager.acquire({
+      mode: "shared-native",
+      stateRoot: repository,
+      executionRoot: repository,
+      workflowKey: "parent" as WorkflowKey,
+      runRef: "parent-run" as RunRef,
+      runner: "vscode",
+      instanceId: "parent-instance",
+    });
+    try {
+      const child = await ensureManaged(worktrees, repository, {
+        delegationChain: [parentLease.ownerToken],
+      });
+      await fs.writeFile(path.join(child.worktreePath, "lane.txt"), "lane\n");
+      const result = await worktrees.completeManagedRun(child, {
+        merge: true,
+      });
+      assert.strictEqual(result.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        (await fs.readFile(path.join(repository, "lane.txt"), "utf8")).replace(
+          /\r\n/g,
+          "\n"
+        ),
+        "lane\n"
+      );
+    } finally {
+      await parentLease.release();
+    }
+  });
+
+  /** A PID that no process holds: one that just exited. */
+  function deadPid(): number {
+    const exited = spawnSync(process.execPath, ["-e", ""]);
+    assert.ok(exited.pid, "spawned a process to take a dead PID from");
+    return exited.pid;
+  }
+
+  function commitFile(directory: string, name: string, message: string) {
+    execFileSync("git", ["-C", directory, "add", name]);
+    execFileSync("git", ["-C", directory, "commit", "-m", message], {
+      stdio: "ignore",
+    });
+  }
+
+  const CHILD_RUN = "run-2" as RunRef;
+  const CHILD_BRANCH = "ctrlyoke/managed-test-workflow/run-2";
+
+  /**
+   * A managed parent run with one commit of its own, and the options that
+   * start its managed child from the parent's worktree as a launcher does
+   * (D4b): the parent's checkout is the source, the window's is the state
+   * root.
+   */
+  async function managedParent(worktrees: WorktreeManager, repository: string) {
+    const parentRun = await ensureManaged(worktrees, repository);
+    try {
+      await fs.writeFile(
+        path.join(parentRun.worktreePath, "parent.txt"),
+        "parent\n"
+      );
+      commitFile(parentRun.worktreePath, "parent.txt", "parent work");
+    } catch (error) {
+      await parentRun.lease.release();
+      throw error;
+    }
+    const childOptions = (delegator: string) => ({
+      runRef: CHILD_RUN,
+      stateRoot: repository,
+      workspaceCheckoutRoot: repository,
+      delegationChain: [delegator],
+    });
+    return { parentRun, childOptions };
+  }
+
+  test("a child continued directly from the main checkout keeps its record's source checkout, base and target, and merges into the parent's branch", async () => {
+    const { parent, repository } = await makeRepository("direct-resume");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    let resumedReleased = false;
+    let resumed: Awaited<ReturnType<typeof ensureManaged>> | undefined;
+    try {
+      const child = await ensureManaged(
+        worktrees,
+        parentRun.worktreePath,
+        childOptions(parentRun.lease.ownerToken)
+      );
+      await fs.writeFile(path.join(child.worktreePath, "child.txt"), "child\n");
+      commitFile(child.worktreePath, "child.txt", "child work");
+      const recordBefore = await worktrees.readManagedWorktreeRecord(
+        repository,
+        child.branchName
+      );
+      // The child and its parent stop, so neither holds a lease.
+      await child.lease.release();
+      await parentRun.lease.release();
+
+      // Continued from its own row: no parent link, so the caller passes the
+      // window's checkout as the source.
+      resumed = await ensureManaged(worktrees, repository, {
+        runRef: CHILD_RUN,
+      });
+      assert.strictEqual(resumed.origin, "recovered");
+      assert.strictEqual(resumed.worktreePath, child.worktreePath);
+      assert.strictEqual(
+        await fs.realpath(resumed.sourceCheckoutRoot),
+        await fs.realpath(parentRun.worktreePath)
+      );
+      assert.strictEqual(resumed.baseCommit, child.baseCommit);
+      assert.strictEqual(resumed.targetBranch, parentRun.branchName);
+      const recordAfter = await worktrees.readManagedWorktreeRecord(
+        repository,
+        child.branchName
+      );
+      assert.strictEqual(
+        recordAfter?.sourceCheckoutRoot,
+        recordBefore?.sourceCheckoutRoot
+      );
+      assert.strictEqual(recordAfter?.baseCommit, recordBefore?.baseCommit);
+      assert.strictEqual(recordAfter?.targetBranch, parentRun.branchName);
+      // The window's workspace folder still maps into the child's worktree.
+      assert.strictEqual(
+        resumed.executionWorkspace.executionRoot,
+        child.worktreePath
+      );
+
+      const result = await worktrees.completeManagedRun(resumed, {
+        merge: true,
+      });
+      resumedReleased = true;
+      assert.strictEqual(
+        result.mergeOutcome,
+        "fast-forward",
+        String(result.message)
+      );
+      assert.strictEqual(
+        gitOutput(parentRun.worktreePath, "log", "-1", "--format=%s"),
+        "child work"
+      );
+      assert.strictEqual(
+        gitOutput(repository, "log", "--format=%s"),
+        "base",
+        "the main checkout gets no commit"
+      );
+    } finally {
+      if (resumed && !resumedReleased) await resumed.lease.release();
+      await parentRun.lease.release();
+    }
+  });
+
+  test("a top-level managed run resumes from its unchanged record", async () => {
+    const { parent, repository } = await makeRepository("top-level-resume");
+    const worktrees = manager(parent);
+    const first = await ensureManaged(worktrees, repository);
+    await first.lease.release();
+    const before = await worktrees.readManagedWorktreeRecord(
+      repository,
+      first.branchName
+    );
+    execFileSync(
+      "git",
+      ["-C", repository, "commit", "--allow-empty", "-m", "later"],
+      {
+        stdio: "ignore",
+      }
+    );
+
+    const resumed = await ensureManaged(worktrees, repository);
+    try {
+      assert.strictEqual(resumed.origin, "recovered");
+      assert.strictEqual(resumed.worktreePath, first.worktreePath);
+      assert.strictEqual(resumed.baseCommit, first.baseCommit);
+      assert.strictEqual(resumed.targetBranch, first.targetBranch);
+      const after = await worktrees.readManagedWorktreeRecord(
+        repository,
+        first.branchName
+      );
+      assert.strictEqual(after?.sourceCheckoutRoot, before?.sourceCheckoutRoot);
+      assert.strictEqual(after?.baseCommit, before?.baseCommit);
+      assert.strictEqual(after?.createdAt, before?.createdAt);
+    } finally {
+      await resumed.lease.release();
+    }
+  });
+
+  test("a resumed child whose parent's worktree was removed fails to start and names it", async () => {
+    const { parent, repository } = await makeRepository("removed-parent");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    const child = await ensureManaged(
+      worktrees,
+      parentRun.worktreePath,
+      childOptions(parentRun.lease.ownerToken)
+    ).finally(() => parentRun.lease.release());
+    await child.lease.release();
+    const parentWorktree = await fs.realpath(parentRun.worktreePath);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "worktree",
+      "remove",
+      "--force",
+      parentWorktree,
+    ]);
+
+    await assert.rejects(
+      ensureManaged(worktrees, repository, { runRef: CHILD_RUN }),
+      (error: Error) =>
+        error.message.includes(child.branchName) &&
+        error.message.includes(parentWorktree) &&
+        /no longer a checkout of this repository/.test(error.message)
+    );
+    const record = await worktrees.readManagedWorktreeRecord(
+      repository,
+      child.branchName
+    );
+    assert.strictEqual(
+      record?.sourceCheckoutRoot,
+      child.sourceCheckoutRoot,
+      "the record is not retargeted"
+    );
+  });
+
+  /**
+   * A child of a managed parent whose setup fails leaves a blocked record
+   * naming the parent's worktree as its source checkout.
+   */
+  async function failedSetupChild(name: string, removeParent: boolean) {
+    const { parent, repository } = await makeRepository(name);
+    const worktrees = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: new RecordingWorktreeSetupRunner({
+        success: false,
+        result: "setup failed",
+        error: "setup failed",
+        stdout: "",
+        stderr: "setup failed",
+        exitCode: 1,
+      }),
+    });
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    try {
+      await assert.rejects(
+        ensureManaged(worktrees, parentRun.worktreePath, {
+          ...childOptions(parentRun.lease.ownerToken),
+          setup: "npm ci",
+        }),
+        (error: unknown) => error instanceof WorktreeSetupError
+      );
+    } finally {
+      await parentRun.lease.release();
+    }
+    const record = await worktrees.readManagedWorktreeRecord(
+      repository,
+      CHILD_BRANCH
+    );
+    assert.strictEqual(record?.lifecycleState, "blocked");
+    assert.strictEqual(record?.setupOutcome, WORKTREE_SETUP_OUTCOMES.FAILED);
+    if (removeParent) {
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "remove",
+        "--force",
+        await fs.realpath(parentRun.worktreePath),
+      ]);
+    }
+    return { worktrees, repository, childPath: record!.worktreePath };
+  }
+
+  for (const removeParent of [false, true]) {
+    test(`a failed-setup child record is reclaimed from the main checkout ${removeParent ? "once its parent's worktree is gone" : "while its parent's worktree remains"}`, async () => {
+      const { worktrees, repository, childPath } = await failedSetupChild(
+        removeParent ? "reclaim-orphaned-child" : "reclaim-child",
+        removeParent
+      );
+
+      // Any managed start in the repository reconciles failed setups.
+      const next = await ensureManaged(worktrees, repository, {
+        runRef: "run-3" as RunRef,
+      });
+      await next.lease.release();
+
+      assert.ok(
+        !(await listWorktrees(repository)).some(
+          (entry) => entry.branchName === CHILD_BRANCH
+        ),
+        "the failed child checkout is removed"
+      );
+      await assert.rejects(fs.access(childPath));
+      // The branch starts at the parent's commit, which main does not have,
+      // so the safe delete keeps it and the record stays as its tombstone.
+      const record = await worktrees.readManagedWorktreeRecord(
+        repository,
+        CHILD_BRANCH
+      );
+      assert.strictEqual(record?.lifecycleState, "settled");
+      assert.strictEqual(record?.directoryState, "removed");
+      assert.strictEqual(record?.branchState, "present");
+      assert.notStrictEqual(
+        gitOutput(repository, "branch", "--list", CHILD_BRANCH),
+        ""
+      );
+    });
+  }
+
+  test("a failed-setup record of a run started in a user's linked worktree is left to that checkout", async () => {
+    const { parent, repository } = await makeRepository("reclaim-user-linked");
+    const linked = path.join(parent, "linked");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "user/linked", linked],
+      { stdio: "ignore" }
+    );
+    const worktrees = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: new RecordingWorktreeSetupRunner({
+        success: false,
+        result: "setup failed",
+        error: "setup failed",
+        stdout: "",
+        stderr: "setup failed",
+        exitCode: 1,
+      }),
+    });
+    await assert.rejects(
+      ensureManaged(worktrees, linked, {
+        stateRoot: linked,
+        namedWorkspaceRoots: [{ name: "linked", fsPath: linked }],
+        runRef: CHILD_RUN,
+        setup: "npm ci",
+      }),
+      (error: unknown) => error instanceof WorktreeSetupError
+    );
+
+    const next = await ensureManaged(worktrees, repository, {
+      runRef: "run-3" as RunRef,
+    });
+    await next.lease.release();
+
+    assert.strictEqual(
+      (await worktrees.readManagedWorktreeRecord(repository, CHILD_BRANCH))
+        ?.lifecycleState,
+      "blocked"
+    );
+  });
+
+  test("activation discovery from the main checkout lists a stopped child of a managed parent as recoverable", async () => {
+    const { parent, repository } = await makeRepository("discover-child");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    const child = await ensureManaged(
+      worktrees,
+      parentRun.worktreePath,
+      childOptions(parentRun.lease.ownerToken)
+    ).finally(() => parentRun.lease.release());
+    await child.lease.release();
+
+    const report = await worktrees.discoverActivationState({
+      sourceCheckoutRoot: repository,
+    });
+    const recoverable = report.recoverableManagedWorktrees.map(
+      (info) => info.branchName
+    );
+    assert.ok(recoverable.includes(child.branchName), recoverable.join(", "));
+    assert.ok(recoverable.includes(parentRun.branchName));
+    const recovered = report.recoverableManagedWorktrees.find(
+      (info) => info.branchName === child.branchName
+    );
+    assert.strictEqual(
+      await fs.realpath(recovered!.sourceCheckoutRoot),
+      await fs.realpath(parentRun.worktreePath)
+    );
+    assert.strictEqual(
+      recovered!.executionWorkspace.executionRoot,
+      child.worktreePath
+    );
+  });
+
+  test("a managed-parent merge lane resumed after a crash reclaims the dead leases and merges into the parent's branch", async () => {
+    const { parent, repository } = await makeRepository("crash-merge-lane");
+    const worktrees = manager(parent);
+    const { parentRun, childOptions } = await managedParent(
+      worktrees,
+      repository
+    );
+    const child = await ensureManaged(
+      worktrees,
+      parentRun.worktreePath,
+      childOptions(parentRun.lease.ownerToken)
+    ).finally(() => parentRun.lease.release());
+    try {
+      await fs.writeFile(path.join(child.worktreePath, "lane.txt"), "lane\n");
+      commitFile(child.worktreePath, "lane.txt", "lane work");
+    } finally {
+      await child.lease.release();
+    }
+    // The crashed process's leases stay on disk with a dead owner.
+    const crashedPid = deadPid();
+    for (const [executionRoot, runRef] of [
+      [parentRun.worktreePath, identity().runRef],
+      [child.worktreePath, CHILD_RUN],
+    ] as const) {
+      await ExecutionRootLeaseManager.acquire({
+        mode: "exclusive-worktree",
+        stateRoot: repository,
+        executionRoot,
+        workflowKey: identity().workflowKey,
+        runRef,
+        runner: "vscode",
+        instanceId: "crashed-instance",
+        pid: crashedPid,
+      });
+      const inspections =
+        await ExecutionRootLeaseManager.inspectLeases(executionRoot);
+      assert.deepStrictEqual(
+        inspections.map((inspection) => inspection.stale),
+        [true]
+      );
+    }
+
+    // The restarted host continues the parent, which reattaches its child (D6).
+    const resumedParent = await ensureManaged(worktrees, repository);
+    let childReleased = false;
+    let resumedChild: Awaited<ReturnType<typeof ensureManaged>> | undefined;
+    try {
+      assert.strictEqual(resumedParent.origin, "recovered");
+      resumedChild = await ensureManaged(
+        worktrees,
+        resumedParent.worktreePath,
+        childOptions(resumedParent.lease.ownerToken)
+      );
+      assert.strictEqual(resumedChild.origin, "recovered");
+      assert.strictEqual(resumedChild.worktreePath, child.worktreePath);
+      assert.strictEqual(resumedChild.baseCommit, child.baseCommit);
+      assert.strictEqual(resumedChild.targetBranch, parentRun.branchName);
+
+      const result = await worktrees.completeManagedRun(resumedChild, {
+        merge: true,
+      });
+      childReleased = true;
+      assert.strictEqual(
+        result.mergeOutcome,
+        "fast-forward",
+        String(result.message)
+      );
+      assert.strictEqual(
+        gitOutput(parentRun.worktreePath, "log", "-1", "--format=%s"),
+        "lane work"
+      );
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      if (resumedChild && !childReleased) await resumedChild.lease.release();
+      await resumedParent.lease.release();
+    }
+  });
+
+  test("a top-level run in a linked user worktree places its managed worktree under the main checkout's worktrees folder", async () => {
+    const { parent, repository } = await makeRepository("linked-top-level");
+    const linked = path.join(parent, "linked");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "user/linked", linked],
+      { stdio: "ignore" }
+    );
+    const run = await ensureManaged(siblingRootManager(), linked, {
+      stateRoot: linked,
+      namedWorkspaceRoots: [{ name: "linked", fsPath: linked }],
+    });
+    try {
+      assert.strictEqual(
+        path.dirname(run.worktreePath),
+        path.join(await fs.realpath(parent), "repository.worktrees")
+      );
+      await assert.rejects(fs.access(`${linked}.worktrees`));
+      assert.strictEqual(
+        await fs.realpath(run.sourceCheckoutRoot),
+        await fs.realpath(linked)
+      );
+      assert.strictEqual(run.targetBranch, "user/linked");
+    } finally {
+      await run.lease.release();
+    }
+  });
+
+  test("a child whose window state root is a repository subfolder runs in that subfolder of its worktree", async () => {
+    const { parent, repository } = await makeRepository("subfolder-state");
+    const subfolder = path.join(repository, "packages", "app");
+    await fs.mkdir(subfolder, { recursive: true });
+    await fs.writeFile(path.join(subfolder, "index.js"), "\n");
+    commitFile(repository, "packages", "add app");
+    const worktrees = manager(parent);
+    const parentRun = await ensureManaged(worktrees, repository, {
+      stateRoot: subfolder,
+      namedWorkspaceRoots: [{ name: "app", fsPath: subfolder }],
+    });
+    try {
+      assert.strictEqual(
+        parentRun.executionWorkspace.executionRoot,
+        path.join(parentRun.worktreePath, "packages", "app")
+      );
+      // As WorkflowInstance passes it: the window's state root, a subfolder.
+      const child = await ensureManaged(worktrees, parentRun.worktreePath, {
+        runRef: CHILD_RUN,
+        stateRoot: subfolder,
+        workspaceCheckoutRoot: subfolder,
+        namedWorkspaceRoots: [{ name: "app", fsPath: subfolder }],
+        delegationChain: [parentRun.lease.ownerToken],
+      });
+      try {
+        const childApp = path.join(child.worktreePath, "packages", "app");
+        assert.strictEqual(child.executionWorkspace.executionRoot, childApp);
+        assert.deepStrictEqual(
+          child.executionWorkspace.namedWorkspaceRoots.map(
+            (root) => root.fsPath
+          ),
+          [childApp]
+        );
+        assert.strictEqual(
+          child.executionWorkspace.stateRoot,
+          path.resolve(subfolder),
+          "history stays under the window's state root"
+        );
+      } finally {
+        await child.lease.release();
+      }
+    } finally {
+      await parentRun.lease.release();
+    }
+  });
+
+  /** D4d: a parent's shared lease on its main checkout and its two lanes. */
+  async function parentWithTwoLanes(name: string): Promise<{
+    parent: string;
+    repository: string;
+    parentLease: Awaited<ReturnType<typeof ExecutionRootLeaseManager.acquire>>;
+    laneA: Awaited<ReturnType<typeof ensureManaged>>;
+    laneB: Awaited<ReturnType<typeof ensureManaged>>;
+    release: () => Promise<void>;
+  }> {
+    const { parent, repository } = await makeRepository(name);
+    const parentLease = await ExecutionRootLeaseManager.acquire({
+      mode: "shared-native",
+      stateRoot: repository,
+      executionRoot: repository,
+      workflowKey: "parent" as WorkflowKey,
+      runRef: "parent-run" as RunRef,
+      runner: "vscode",
+      instanceId: "parent-instance",
+    });
+    const handles: Array<{ release(): Promise<void> }> = [parentLease];
+    const release = async () => {
+      for (const handle of handles.splice(0).reverse()) {
+        await handle.release().catch(() => undefined);
+      }
+    };
+    try {
+      const lanes = manager(parent);
+      const laneA = await ensureManaged(lanes, repository, {
+        runRef: "run-lane-a" as RunRef,
+        workflowName: "Lane A",
+        delegationChain: [parentLease.ownerToken],
+      });
+      handles.push(laneA.lease);
+      const laneB = await ensureManaged(lanes, repository, {
+        runRef: "run-lane-b" as RunRef,
+        workflowName: "Lane B",
+        delegationChain: [parentLease.ownerToken],
+      });
+      handles.push(laneB.lease);
+      return { parent, repository, parentLease, laneA, laneB, release };
+    } catch (error) {
+      await release();
+      throw error;
+    }
+  }
+
+  /** A sibling merge lease on `executionRoot`, as another lane's merge holds. */
+  function siblingMergeLease(
+    executionRoot: string,
+    delegationChain: string[] | undefined
+  ) {
+    return ExecutionRootLeaseManager.acquire({
+      mode: "exclusive-worktree",
+      purpose: EXECUTION_LEASE_PURPOSES.MERGE,
+      stateRoot: executionRoot,
+      executionRoot,
+      workflowKey: "sibling" as WorkflowKey,
+      runRef: "sibling-run" as RunRef,
+      runner: "vscode",
+      instanceId: "sibling-instance",
+      ...(delegationChain ? { delegationChain } : {}),
+    });
+  }
+
+  /**
+   * Merge lane A, then lane B while A still holds its merge lease: A's
+   * fast-forward waits on a gate that B's first backoff sleep opens, so B's
+   * wait is certain rather than a race.
+   */
+  async function mergeLanesOverlapping(
+    parent: string,
+    laneA: Awaited<ReturnType<typeof ensureManaged>>,
+    laneB: Awaited<ReturnType<typeof ensureManaged>>
+  ) {
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => (openGate = resolve));
+    let signalHolding!: () => void;
+    const holding = new Promise<void>((resolve) => (signalHolding = resolve));
+    const first = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async () => undefined,
+      mergeOperations: {
+        fastForward: async (dir, ref) => {
+          signalHolding();
+          await gate;
+          await mergeFastForward(dir, ref);
+        },
+      },
+    });
+    const sleeps: number[] = [];
+    let firstMerge: Promise<WorktreeMergeResult> | undefined;
+    const second = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async () => undefined,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        openGate();
+        await firstMerge;
+      },
+    });
+    firstMerge = first.mergeManagedWorktree(laneA);
+    await holding;
+    const secondResult = await second.mergeManagedWorktree(laneB);
+    return { firstResult: await firstMerge, secondResult, sleeps };
+  }
+
+  test("D4d: two lanes merging into their parent's checkout at once both land, the later on top of the earlier", async () => {
+    const { parent, repository, laneA, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-merge");
+    try {
+      await fs.writeFile(path.join(laneA.worktreePath, "a.txt"), "a\n");
+      commitFile(laneA.worktreePath, "a.txt", "lane a");
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+
+      const { firstResult, secondResult, sleeps } = await mergeLanesOverlapping(
+        parent,
+        laneA,
+        laneB
+      );
+
+      assert.strictEqual(firstResult.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        secondResult.mergeOutcome,
+        "merge-commit",
+        String(secondResult.message)
+      );
+      assert.deepStrictEqual(sleeps, [250], "the later lane waited once");
+      const laneACommit = gitOutput(laneA.worktreePath, "rev-parse", "HEAD");
+      execFileSync("git", [
+        "-C",
+        repository,
+        "merge-base",
+        "--is-ancestor",
+        laneACommit,
+        "HEAD",
+      ]);
+      assert.ok(
+        gitOutput(repository, "ls-files").split("\n").includes("a.txt")
+      );
+      assert.ok(
+        gitOutput(repository, "ls-files").split("\n").includes("b.txt")
+      );
+      assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
+    } finally {
+      await release();
+    }
+  });
+
+  test("D4d: a real conflict between two waiting lanes ends conflict for the later one", async () => {
+    const { parent, repository, laneA, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-conflict");
+    try {
+      await fs.writeFile(path.join(laneA.worktreePath, "shared.txt"), "a\n");
+      commitFile(laneA.worktreePath, "shared.txt", "lane a");
+      await fs.writeFile(path.join(laneB.worktreePath, "shared.txt"), "b\n");
+      commitFile(laneB.worktreePath, "shared.txt", "lane b");
+
+      const { firstResult, secondResult, sleeps } = await mergeLanesOverlapping(
+        parent,
+        laneA,
+        laneB
+      );
+
+      assert.strictEqual(firstResult.mergeOutcome, "fast-forward");
+      assert.strictEqual(
+        secondResult.mergeOutcome,
+        "conflict",
+        String(secondResult.message)
+      );
+      assert.deepStrictEqual(secondResult.conflictFiles, ["shared.txt"]);
+      assert.strictEqual(sleeps.length, 1);
+      assert.strictEqual(
+        (
+          await fs.readFile(path.join(repository, "shared.txt"), "utf8")
+        ).replace(/\r\n/g, "\n"),
+        "a\n"
+      );
+      assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
+    } finally {
+      await release();
+    }
+  });
+
+  test("D4d: a waiter whose sibling holds the merge lease past the budget ends blocked", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-budget");
+    const sibling = await siblingMergeLease(repository, [
+      parentLease.ownerToken,
+    ]);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      // A fake clock: each backoff sleep advances it, so the full default
+      // budget is spent without waiting for it.
+      let clock = Date.now();
+      const sleeps: number[] = [];
+      const waiter = new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        now: () => clock,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+          clock += ms;
+        },
+      });
+      const result = await waiter.mergeManagedWorktree(laneB);
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.match(result.message ?? "", /sibling lane's merge/);
+      assert.match(result.message ?? "", /sibling-run/);
+      assert.deepStrictEqual(sleeps.slice(0, 5), [250, 500, 1000, 2000, 2000]);
+      assert.ok(sleeps.every((ms) => ms > 0 && ms <= 2000));
+      assert.strictEqual(
+        sleeps.reduce((total, ms) => total + ms, 0),
+        WORKTREE_MERGE_LEASE_WAIT_MS
+      );
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await sibling.release();
+      await release();
+    }
+  });
+
+  test("D4d: an editing lease, another delegator's merge or a non-conflict error ends blocked at once", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-no-wait");
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const sleeps: number[] = [];
+      const options = {
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        sleep: async (ms: number) => {
+          sleeps.push(ms);
+        },
+      };
+      const waiter = new WorktreeManager(options);
+
+      // A sibling inheriting the parent's checkout is editing it (rule 2
+      // does not apply to merges, and its lease is not a merge lease).
+      const editing = await ExecutionRootLeaseManager.acquire({
+        mode: "shared-native",
+        stateRoot: repository,
+        executionRoot: repository,
+        workflowKey: "editing" as WorkflowKey,
+        runRef: "editing-run" as RunRef,
+        runner: "vscode",
+        instanceId: "editing-instance",
+        delegationChain: [parentLease.ownerToken],
+      });
+      try {
+        const result = await waiter.mergeManagedWorktree(laneB);
+        assert.strictEqual(result.mergeOutcome, "blocked");
+        assert.match(result.message ?? "", /editing-run/);
+      } finally {
+        await editing.release();
+      }
+
+      // A lane of a different parent (here a sibling lane's own child), so
+      // its immediate delegator is not lane B's.
+      const otherDelegator = await siblingMergeLease(repository, [
+        parentLease.ownerToken,
+        "another-parent",
+      ]);
+      try {
+        const result = await waiter.mergeManagedWorktree(laneB);
+        assert.strictEqual(result.mergeOutcome, "blocked");
+        assert.match(result.message ?? "", /sibling-run/);
+      } finally {
+        await otherDelegator.release();
+      }
+
+      class UnavailableLeaseManager extends ExecutionRootLeaseManager {
+        override async acquire(): Promise<ExecutionLeaseHandle> {
+          throw new Error("lease storage is unavailable");
+        }
+      }
+      const failing = new WorktreeManager({
+        ...options,
+        leaseManager: new UnavailableLeaseManager(),
+      });
+      const result = await failing.mergeManagedWorktree(laneB);
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.match(result.message ?? "", /lease storage is unavailable/);
+
+      assert.deepStrictEqual(sleeps, [], "none of them waited");
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await release();
+    }
+  });
+
+  test("D4d: a top-level managed run's merge keeps fail-fast against a merge lease", async () => {
+    const { parent, repository } = await makeRepository("d4d-chainless");
+    const worktrees = manager(parent);
+    const run = await ensureManaged(worktrees, repository);
+    const sibling = await siblingMergeLease(repository, undefined);
+    try {
+      await fs.writeFile(path.join(run.worktreePath, "run.txt"), "run\n");
+      commitFile(run.worktreePath, "run.txt", "run");
+      const sleeps: number[] = [];
+      const result = await new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      }).mergeManagedWorktree(run);
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.deepStrictEqual(sleeps, []);
+    } finally {
+      await sibling.release();
+      await run.lease.release();
+    }
+  });
+
+  test("D4d: two lanes settling with merge: true at the same moment both land", async () => {
+    const { parent, repository, laneA, laneB, release } =
+      await parentWithTwoLanes("d4d-sibling-settle");
+    try {
+      await fs.writeFile(path.join(laneA.worktreePath, "a.txt"), "a\n");
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      const settle = manager(parent);
+      const results = await Promise.all([
+        settle.completeManagedRun(laneA, { merge: true }),
+        settle.completeManagedRun(laneB, { merge: true }),
+      ]);
+      for (const result of results) {
+        assert.ok(
+          result.mergeOutcome === "fast-forward" ||
+            result.mergeOutcome === "merge-commit",
+          `${result.mergeOutcome}: ${result.message}`
+        );
+      }
+      assert.deepStrictEqual(
+        results.map((result) => result.mergeOutcome).sort(),
+        ["fast-forward", "merge-commit"]
+      );
+      const files = gitOutput(repository, "ls-files").split("\n");
+      assert.ok(files.includes("a.txt") && files.includes("b.txt"));
+      assert.strictEqual(gitOutput(repository, "status", "--porcelain"), "");
+    } finally {
+      await release();
+    }
+  });
+
+  /**
+   * Hold the repository-wide worktree mutation lock, as a sibling lane's
+   * settlement does, until `release()`.
+   */
+  async function holdMutationLock(repository: string): Promise<{
+    release: () => Promise<void>;
+  }> {
+    const commonDirectory = await gitCommonDir(repository);
+    assert.ok(commonDirectory, "the repository has a Git common directory");
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => (openGate = resolve));
+    let signalHeld!: () => void;
+    const held = new Promise<void>((resolve) => (signalHeld = resolve));
+    const holder = withWorktreeMutationLock(commonDirectory, async () => {
+      signalHeld();
+      await gate;
+    });
+    await held;
+    return {
+      release: async () => {
+        openGate();
+        await holder;
+      },
+    };
+  }
+
+  /**
+   * A manager whose short mutation-lock timeout is 200 ms, so "longer than
+   * the short timeout" costs a second, not the 5 s default. `mergeLeaseWaitMs`
+   * is far past the suite timeout, so a wait that should have been short, or
+   * should have been stopped, fails the case instead of passing late.
+   */
+  function shortLockManager(
+    parent: string,
+    mutationLockOpen?: (lockPath: string, flags: "wx") => Promise<fs.FileHandle>
+  ): WorktreeManager {
+    return new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async () => undefined,
+      mutationLockTimeoutMs: SHORT_LOCK_TIMEOUT_MS,
+      mergeLeaseWaitMs: 600_000,
+      ...(mutationLockOpen ? { mutationLockOpen } : {}),
+    });
+  }
+  const SHORT_LOCK_TIMEOUT_MS = 200;
+
+  /**
+   * A mutation-lock open that resolves `contended` the first time it finds
+   * the lock held, so a wait is timed from when the waiter actually queued.
+   */
+  function observeLockContention(): {
+    open: (lockPath: string, flags: "wx") => Promise<fs.FileHandle>;
+    contended: Promise<void>;
+  } {
+    let signalContended!: () => void;
+    const contended = new Promise<void>(
+      (resolve) => (signalContended = resolve)
+    );
+    return {
+      contended,
+      open: async (lockPath, flags) => {
+        try {
+          return await fs.open(lockPath, flags);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+            signalContended();
+          }
+          throw error;
+        }
+      },
+    };
+  }
+
+  test("D4d: a merging lane queued behind a sibling holding the mutation lock past the short timeout still lands", async () => {
+    const { parent, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-lock-wait");
+    const lock = await holdMutationLock(repository);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      let settled = false;
+      const lockOpen = observeLockContention();
+      const settlement = shortLockManager(parent, lockOpen.open)
+        .completeManagedRun(laneB, { merge: true })
+        .finally(() => (settled = true));
+      // Timed from the waiter's first look at the held lock, not from the
+      // call: Git work before the lock can take seconds under load. Five
+      // times the short timeout: with it, the settlement would already have
+      // ended blocked ("Timed out waiting for lock").
+      await lockOpen.contended;
+      await new Promise((resolve) =>
+        setTimeout(resolve, SHORT_LOCK_TIMEOUT_MS * 5)
+      );
+      assert.strictEqual(settled, false, "still queued on the sibling's lock");
+      await lock.release();
+      const result = await settlement;
+      assert.strictEqual(
+        result.landingOutcome,
+        "landed",
+        String(result.message)
+      );
+      assert.strictEqual(
+        result.mergeOutcome,
+        "fast-forward",
+        String(result.message)
+      );
+      assert.ok(
+        gitOutput(repository, "ls-files").split("\n").includes("b.txt")
+      );
+    } finally {
+      await lock.release();
+      await release();
+    }
+  });
+
+  test("D4d: a chained settlement without merge keeps the short mutation-lock timeout", async () => {
+    const { parent, repository, laneA, release } =
+      await parentWithTwoLanes("d4d-lock-no-merge");
+    const lock = await holdMutationLock(repository);
+    try {
+      const result = await shortLockManager(parent).completeManagedRun(laneA, {
+        merge: false,
+      });
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(result.mergeOutcome, undefined);
+      assert.match(result.message ?? "", /Timed out waiting for lock/);
+    } finally {
+      await lock.release();
+      await release();
+    }
+  });
+
+  test("D4d: a top-level settlement with merge keeps the short mutation-lock timeout", async () => {
+    const { parent, repository } = await makeRepository("d4d-lock-chainless");
+    const run = await ensureManaged(manager(parent), repository);
+    const lock = await holdMutationLock(repository);
+    try {
+      const result = await shortLockManager(parent).completeManagedRun(run, {
+        merge: true,
+      });
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(
+        result.mergeOutcome,
+        "blocked",
+        "a merge that never got its turn is recorded as blocked"
+      );
+      assert.match(result.message ?? "", /Timed out waiting for lock/);
+    } finally {
+      await lock.release();
+      await run.lease.release().catch(() => undefined);
+    }
+  });
+
+  test("D4d: stopping a lane queued on the mutation lock ends its wait with the merge blocked", async () => {
+    const { parent, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-lock-abort");
+    const lock = await holdMutationLock(repository);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const updates: string[] = [];
+      const stop = new AbortController();
+      const settlement = new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async (patch) => {
+          updates.push(`${patch.lifecycleState}:${patch.mergeOutcome}`);
+        },
+        mergeLeaseWaitMs: 600_000,
+      }).completeManagedRun(laneB, { merge: true, signal: stop.signal });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      stop.abort();
+      // Awaited while the lock is still held: only the abort can end it.
+      const result = await settlement;
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.strictEqual(result.directoryOutcome, "kept");
+      assert.strictEqual(
+        result.message,
+        STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE
+      );
+      assert.ok(updates.includes("blocked:blocked"), updates.join(", "));
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+      assert.strictEqual(
+        gitOutput(laneB.worktreePath, "log", "-1", "--format=%s"),
+        "lane b",
+        "the lane's work stays on its branch"
+      );
+    } finally {
+      await lock.release();
+      await release();
+    }
+  });
+
+  test("D4d: stopping a merge waiting on a sibling's merge lease ends the backoff", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-lease-abort");
+    const sibling = await siblingMergeLease(repository, [
+      parentLease.ownerToken,
+    ]);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const stop = new AbortController();
+      // The real backoff sleep: it must wake on the abort, not finish its
+      // delay, and the budget is far past the suite timeout.
+      const merge = new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async () => undefined,
+        mergeLeaseWaitMs: 600_000,
+      }).mergeManagedWorktree(laneB, { signal: stop.signal });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      stop.abort();
+      const result = await merge;
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.strictEqual(result.message, STOPPED_WAITING_FOR_MERGE_MESSAGE);
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await sibling.release();
+      await release();
+    }
+  });
+
+  // On this path the lane has already landed, so settlement goes on to
+  // remove the worktree as for any blocked merge; the message must not
+  // claim the worktree is kept.
+  test("D4d: a settlement stopped in the merge-lease wait reports its work on the branch, not a kept worktree", async () => {
+    const { parent, parentLease, repository, laneB, release } =
+      await parentWithTwoLanes("d4d-settle-lease-abort");
+    const sibling = await siblingMergeLease(repository, [
+      parentLease.ownerToken,
+    ]);
+    try {
+      await fs.writeFile(path.join(laneB.worktreePath, "b.txt"), "b\n");
+      commitFile(laneB.worktreePath, "b.txt", "lane b");
+      const laneCommit = gitOutput(laneB.worktreePath, "rev-parse", "HEAD");
+      const stop = new AbortController();
+      const messages: string[] = [];
+      const result = await new WorktreeManager({
+        worktreeRoot: path.join(parent, "worktrees"),
+        updateWorktreeRuntime: async (patch) => {
+          // Stop once the lane has landed: the merge that follows meets the
+          // sibling's lease and must end its backoff rather than wait.
+          if (patch.landingOutcome === "landed") stop.abort();
+          if (patch.message) messages.push(patch.message);
+        },
+        mergeLeaseWaitMs: 600_000,
+      }).completeManagedRun(laneB, { merge: true, signal: stop.signal });
+      assert.strictEqual(result.landingOutcome, "landed");
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.strictEqual(result.directoryOutcome, "removed");
+      assert.strictEqual(result.message, STOPPED_WAITING_FOR_MERGE_MESSAGE);
+      assert.ok(
+        messages.includes(STOPPED_WAITING_FOR_MERGE_MESSAGE),
+        messages.join(" | ")
+      );
+      await assert.rejects(fs.stat(laneB.worktreePath), /ENOENT/);
+      assert.strictEqual(
+        gitOutput(repository, "rev-parse", laneB.branchName),
+        laneCommit,
+        "the lane's work stays on its branch"
+      );
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await sibling.release();
+      await release();
+    }
+  });
+
+  test("D4d: a merging settlement that cannot create the mutation lock file records the merge blocked", async () => {
+    const { parent, repository } = await makeRepository("d4d-lock-unavailable");
+    const run = await ensureManaged(manager(parent), repository);
+    try {
+      // The Windows delete-pending shape: the name cannot be created though
+      // nobody holds the lock.
+      const result = await shortLockManager(parent, async () => {
+        throw Object.assign(new Error("EPERM: operation not permitted"), {
+          code: "EPERM",
+        });
+      }).completeManagedRun(run, { merge: true });
+      assert.strictEqual(result.landingOutcome, "blocked");
+      assert.strictEqual(
+        result.mergeOutcome,
+        "blocked",
+        "a merge that never got its turn is recorded as blocked"
+      );
+      assert.strictEqual(result.directoryOutcome, "kept");
+      assert.match(result.message ?? "", /Cannot create lock file/);
+      assert.strictEqual(gitOutput(repository, "log", "--format=%s"), "base");
+    } finally {
+      await run.lease.release().catch(() => undefined);
+    }
+  });
+
+  test("D4c classification: a stale record whose path now holds a user worktree on another branch is not managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-stale-record");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    await managed.lease.release();
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "remove", "--force", managed.worktreePath],
+      { stdio: "ignore" }
+    );
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "user/reused-path",
+        managed.worktreePath,
+      ],
+      { stdio: "ignore" }
+    );
+    assert.ok(
+      await worktrees.readManagedWorktreeRecord(repository, managed.branchName),
+      "the stale ownership record must still exist for this case to mean anything"
+    );
+    assert.strictEqual(
+      await worktrees.findManagedWorktreeRecordForCheckout(
+        repository,
+        managed.worktreePath
+      ),
+      undefined
+    );
+  });
+
+  test("D4c classification: a prunable managed entry is not managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-prunable");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    await managed.lease.release();
+    // The directory stays (so realpath succeeds and the path still matches),
+    // but Git now lists the entry as prunable.
+    await fs.rm(path.join(managed.worktreePath, ".git"), { force: true });
+    const entry = (await listWorktrees(repository)).find(
+      (candidate) => candidate.branchName === managed.branchName
+    );
+    assert.strictEqual(entry?.prunable, true, "fixture must be prunable");
+    assert.strictEqual(
+      await worktrees.findManagedWorktreeRecordForCheckout(
+        repository,
+        managed.worktreePath
+      ),
+      undefined
+    );
+  });
+
+  test("D4c classification: the main checkout and a user-created named worktree are not managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-user-owned");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    try {
+      const named = path.join(parent, "named");
+      execFileSync(
+        "git",
+        ["-C", repository, "worktree", "add", "-b", "user/named", named],
+        { stdio: "ignore" }
+      );
+      assert.strictEqual(
+        await worktrees.findManagedWorktreeRecordForCheckout(
+          repository,
+          repository
+        ),
+        undefined
+      );
+      assert.strictEqual(
+        await worktrees.findManagedWorktreeRecordForCheckout(named, named),
+        undefined
+      );
+    } finally {
+      await managed.lease.release();
+    }
+  });
+
+  test("D4c classification: a managed worktree reached through a non-canonical path is managed", async () => {
+    const { parent, repository } = await makeRepository("d4c-realpath");
+    const worktrees = manager(parent);
+    const managed = await ensureManaged(worktrees, repository);
+    try {
+      const alias = path.join(parent, "alias-to-managed");
+      await fs.symlink(
+        managed.worktreePath,
+        alias,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+      assert.notStrictEqual(
+        alias,
+        await fs.realpath(alias),
+        "fixture must exercise a non-canonical path"
+      );
+      const owner = await worktrees.findManagedWorktreeRecordForCheckout(
+        alias,
+        alias
+      );
+      assert.strictEqual(owner?.branchName, managed.branchName);
+      // Unlink before the recursive teardown: Electron's recursive rm follows
+      // a Windows junction into its target.
+      await fs.unlink(alias);
+    } finally {
+      await managed.lease.release();
+    }
+  });
+
+  test("D4c classification: an unresolvable repository is not managed, does not throw, and warns once", async () => {
+    const { parent } = await makeRepository("d4c-no-repository");
+    const outside = path.join(parent, "not-a-repository");
+    await fs.mkdir(outside);
+    const warnings: string[] = [];
+    const restoreWarn = snapshotProperty(Log, "warn");
+    Log.warn = (message: string) => {
+      warnings.push(message);
+    };
+    try {
+      assert.strictEqual(
+        await manager(parent).findManagedWorktreeRecordForCheckout(
+          outside,
+          outside
+        ),
+        undefined
+      );
+    } finally {
+      restoreWarn();
+    }
+    assert.strictEqual(warnings.length, 1, JSON.stringify(warnings));
+    assert.ok(warnings[0].includes(outside), warnings[0]);
+  });
 
   function localBranchExists(repository: string, branchName: string): boolean {
     try {
@@ -1445,6 +3016,36 @@ suite("WorktreeManager", function () {
     assert.strictEqual(setupCalls, 2);
     assert.strictEqual(retry.setupOutcome, "succeeded");
     await retry.lease.release();
+  });
+
+  // A user who sets spec-driven-loop's `lane` preset to `setup: ""` (a blank
+  // laneSetup falls back to its default) means "no setup", not a failure.
+  test("treats a blank managed setup command as no setup", async () => {
+    const { parent, repository } = await makeRepository("managed-blank-setup");
+    const runner = new RecordingWorktreeSetupRunner({
+      success: true,
+      result: "",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    const info = await ensureManaged(instance, repository, { setup: "" });
+    try {
+      assert.deepStrictEqual(runner.calls, []);
+      assert.strictEqual(info.setupOutcome, undefined);
+      assert.strictEqual(
+        (await instance.readManagedWorktreeRecord(repository, info.branchName))
+          ?.lifecycleState,
+        "ready"
+      );
+    } finally {
+      await info.lease.release();
+    }
   });
 
   test("releases the managed lease when final runtime persistence fails", async () => {

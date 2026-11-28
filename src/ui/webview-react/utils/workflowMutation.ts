@@ -1,9 +1,13 @@
 import { useUiStore } from "../store/uiStore";
 import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
 import {
+  APPEND_MODES,
+  QUEUE_POSITION,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type QueuePosition,
 } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES } from "@/types/messages";
 import { notifyUser } from "@utils/notifyUser";
 
 interface MessageTarget {
@@ -46,12 +50,28 @@ export function clearedWorkflowPropertyKeys(
     .map(([key]) => key);
 }
 
-/** Attach the shared mutation context for controls that post directly to VS Code. */
+/**
+ * Attach the shared mutation context for controls that post directly to VS
+ * Code, read from the displayed view at the moment of posting.
+ */
 export function postWorkflowDefinitionMutation(
   target: MessageTarget,
   message: Record<string, unknown>
 ): void {
-  const mutation = getWorkflowDefinitionMutation();
+  postWithMutation(target, message, getWorkflowDefinitionMutation());
+}
+
+/**
+ * Post `message` with exactly `mutation`, never re-reading the displayed view:
+ * an explicit `undefined` (captured while nothing was displayed) posts none.
+ * A default parameter would not do: JavaScript applies it to an explicit
+ * `undefined` too.
+ */
+function postWithMutation(
+  target: MessageTarget,
+  message: Record<string, unknown>,
+  mutation: WorkflowDefinitionMutation | undefined
+): void {
   target.postMessage({ ...message, ...(mutation ? { mutation } : {}) });
 }
 
@@ -102,4 +122,68 @@ export function postRunLifecycleMutation(
     expectedDescriptorRevision: state.displayedDescriptorRevision,
   });
   return true;
+}
+
+export interface AppendFileOptions {
+  filePath?: string;
+  /**
+   * The mutation context captured when the user chose the action; omit to use
+   * the displayed view's at post time. An explicit `undefined` (nothing was
+   * displayed then) posts none rather than reading the view again.
+   */
+  mutation?: WorkflowDefinitionMutation;
+}
+
+export interface SubWorkflowAppendOptions extends AppendFileOptions {
+  position?: QueuePosition;
+}
+
+/** The mutation `options` captured, else the displayed view's now. */
+function appendMutation(
+  options: AppendFileOptions
+): WorkflowDefinitionMutation | undefined {
+  return "mutation" in options
+    ? options.mutation
+    : getWorkflowDefinitionMutation();
+}
+
+/**
+ * Queue a workflow file's steps onto the displayed workflow (`APPEND_FILE`).
+ * Without a `filePath` the extension opens its native file picker; hosted
+ * callers pick through `WorkflowFilePickerModal` first and pass the path.
+ */
+export function postAppendFile(
+  target: MessageTarget,
+  options: AppendFileOptions = {}
+): void {
+  postWithMutation(
+    target,
+    {
+      type: MESSAGE_TYPES.APPEND_FILE,
+      ...(options.filePath ? { filePath: options.filePath } : {}),
+    },
+    appendMutation(options)
+  );
+}
+
+/**
+ * Queue a workflow file as one sub-workflow step on the displayed workflow
+ * (`APPEND_FILE` with `appendMode: subWorkflow`). Without a `filePath` the
+ * extension opens its native file picker; hosted callers pick through
+ * `WorkflowFilePickerModal` first and pass the path.
+ */
+export function postSubWorkflowAppend(
+  target: MessageTarget,
+  options: SubWorkflowAppendOptions = {}
+): void {
+  postWithMutation(
+    target,
+    {
+      type: MESSAGE_TYPES.APPEND_FILE,
+      ...(options.filePath ? { filePath: options.filePath } : {}),
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: options.position ?? QUEUE_POSITION.END,
+    },
+    appendMutation(options)
+  );
 }

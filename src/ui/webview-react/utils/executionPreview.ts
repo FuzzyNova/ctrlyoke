@@ -10,9 +10,45 @@ import {
   PREVIEW_SCOPES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import type { PromptStep, ScriptStep } from "@root/types/CtrlYokeTypes";
+import type {
+  PromptStep,
+  ScriptStep,
+  SubWorkflowStep,
+} from "@root/types/CtrlYokeTypes";
+import {
+  assertNever,
+  isPromptStep,
+  isScriptStep,
+  isSubWorkflowStep,
+} from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
-import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
+import { getScriptStepUpdateFromEditor } from "@utils/scriptStepProperties";
+import {
+  getSubWorkflowEditorWorkflow,
+  getSubWorkflowStepUpdateFromEditor,
+} from "@utils/subWorkflowStepProperties";
+
+/**
+ * Overlay a script or sub-workflow step's property update on its saved step,
+ * the way the save merges it: set properties win, cleared ones are removed.
+ */
+function overlayStepUpdate<T extends ScriptStep | SubWorkflowStep>(
+  base: T,
+  update: { properties: Record<string, unknown>; clearProperties: string[] },
+  content: Partial<T>,
+  promptName: string
+): T {
+  const step: T = {
+    ...base,
+    ...update.properties,
+    ...content,
+    ...(promptName.trim() ? { name: promptName.trim() } : {}),
+  };
+  for (const property of update.clearProperties) {
+    delete step[property as keyof T];
+  }
+  return step;
+}
 
 /**
  * Open a whole-workflow Dry Run. The extension previews this client's
@@ -55,46 +91,49 @@ export function getExecutionPreviewEditorSnapshot():
       ? workflow.steps[stepIndex]
       : undefined;
 
-  if (editor.stepType === STEP_TYPES.SCRIPT) {
-    const base: ScriptStep =
-      existingStep?.type === STEP_TYPES.SCRIPT
-        ? existingStep
-        : { type: STEP_TYPES.SCRIPT, script: "" };
-    const { properties, clearProperties } = getScriptStepPropertyUpdate({
-      env: editor.scriptEnv,
-      secrets: editor.properties.secrets,
-      errorBehavior: editor.properties.errorBehavior,
-      timeoutSec: editor.scriptTimeoutSec,
-      onPass: editor.scriptOnPass,
-      onFail: editor.scriptOnFail,
-      compareSource: editor.scriptCompareSource,
-      operator: editor.scriptOperator,
-      expected: editor.scriptExpected,
-      ignoreCase: editor.scriptIgnoreCase,
-      executionMode: editor.scriptExecutionMode,
-      shell: editor.scriptShell,
-      color: editor.properties.color,
-      enabled: editor.stepEnabled,
-      promptName: editor.promptName,
-    });
-    const step: ScriptStep = {
-      ...base,
-      ...properties,
-      script: editor.scriptCommand,
-      ...(editor.promptName.trim() ? { name: editor.promptName.trim() } : {}),
-    };
-    for (const property of clearProperties) {
-      delete step[property as keyof ScriptStep];
+  switch (editor.stepType) {
+    case STEP_TYPES.SCRIPT: {
+      const base: ScriptStep =
+        existingStep && isScriptStep(existingStep)
+          ? existingStep
+          : { type: STEP_TYPES.SCRIPT, script: "" };
+      const step = overlayStepUpdate(
+        base,
+        getScriptStepUpdateFromEditor(editor),
+        { script: editor.scriptCommand },
+        editor.promptName
+      );
+      return {
+        step,
+        ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
+      };
     }
-    return {
-      step,
-      ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
-    };
+    case STEP_TYPES.PROMPT:
+      break;
+    case STEP_TYPES.WORKFLOW: {
+      // A file reference or an inline definition, built as a save builds it.
+      const base: SubWorkflowStep =
+        existingStep && isSubWorkflowStep(existingStep)
+          ? existingStep
+          : { type: STEP_TYPES.WORKFLOW, workflow: "" };
+      const step = overlayStepUpdate(
+        base,
+        getSubWorkflowStepUpdateFromEditor(editor),
+        { workflow: getSubWorkflowEditorWorkflow(editor) },
+        editor.promptName
+      );
+      return {
+        step,
+        ...(isFinalStep ? { isFinalStep: true } : { stepIndex }),
+      };
+    }
+    default:
+      assertNever(editor.stepType);
   }
 
   const base: PromptStep =
-    existingStep?.type !== STEP_TYPES.SCRIPT
-      ? ((existingStep as PromptStep | undefined) ?? { prompt: "" })
+    existingStep && isPromptStep(existingStep)
+      ? (existingStep as PromptStep)
       : { prompt: "" };
   const step: PromptStep = {
     ...base,

@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionStepText } from "../helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -880,9 +881,7 @@ suite("Parallel mutation integration", () => {
         [0, 1]
       );
       assert.deepStrictEqual(
-        queue
-          .getState()
-          .steps.map((step) => ("prompt" in step ? step.prompt : step.script)),
+        queue.getState().steps.map((step) => executionStepText(step)),
         [
           "prompt member",
           "echo script member",

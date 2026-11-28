@@ -1048,6 +1048,18 @@ export function parseInlinePriorContextRefs(
   return scanInlinePriorContextRefs(maskCodeRanges(text));
 }
 
+/** Prompt-bearing text fields whose inline references are expanded at runtime. */
+export function getPromptReferenceTexts(step: {
+  prompt?: unknown;
+  endCondition?: { retryPrompt?: unknown; passRetryPrompt?: unknown } | null;
+}): string[] {
+  return [
+    step.prompt,
+    step.endCondition?.retryPrompt,
+    step.endCondition?.passRetryPrompt,
+  ].filter((text): text is string => typeof text === "string");
+}
+
 /**
  * Parse condition-output references from prompt text.
  *

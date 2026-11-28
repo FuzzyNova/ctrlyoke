@@ -20,7 +20,11 @@ import {
   parseStreamingChunkKey,
   isPromptExecutionPhase,
 } from "../types/messages";
-import { isScriptStep, type ScriptStep } from "@root/types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type ScriptStep,
+  type SubWorkflowStep,
+} from "@root/types/CtrlYokeTypes";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 import type {
   WorktreeRunProjection,
@@ -47,7 +51,9 @@ interface StepRuntimeStatus {
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
  * to avoid _runtime type incompatibility with CtrlYokeTypes.PromptStep.
  */
-export type WorkflowStep = (PromptStep | ScriptStep) & StepRuntimeStatus;
+export type WorkflowStep =
+  | ((PromptStep | ScriptStep) & StepRuntimeStatus)
+  | (SubWorkflowStep & StepRuntimeStatus);
 
 /**
  * Deep, key-order-independent equality for JSON-shaped values. A key present

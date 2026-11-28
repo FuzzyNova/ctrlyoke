@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionRuntime } from "../helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
@@ -103,6 +104,35 @@ suite("RunBundleImporter", () => {
     assert.ok(
       (await search.search("bundlefixture", workspace)).results.length > 0
     );
+  });
+
+  test("imports parentRun metadata even when its parent is absent", async () => {
+    const sourceParent = {
+      workflowKey: "missing-parent" as never,
+      runRef: "missing-run" as never,
+      phase: "finalStep" as const,
+      loopIndex: 2,
+    };
+    const bundleManifestPath = path.join(bundle, "manifest.json");
+    const bundleManifest = JSON.parse(
+      await fs.readFile(bundleManifestPath, "utf8")
+    );
+    bundleManifest.parentRun = sourceParent;
+    await fs.writeFile(bundleManifestPath, JSON.stringify(bundleManifest));
+    const result = await importer.importRun({
+      workspaceRoot: workspace,
+      bundleDir: bundle,
+    });
+    assert.strictEqual(result.status, "imported");
+    if (result.status !== "imported") return;
+    const importedManifest = await new TimelineRecorder().readManifest(
+      WorkflowPaths.manifestPath(
+        workspace,
+        result.workflowKey as never,
+        result.runRef as never
+      )
+    );
+    assert.deepStrictEqual(importedManifest.parentRun, sourceParent);
   });
 
   test("rebuilds history-only step runtime from the latest attempts", async () => {
@@ -676,7 +706,7 @@ suite("RunBundleImporter", () => {
     );
     assert.strictEqual(queue.getState().currentIndex, 0);
     assert.strictEqual(
-      queue.getState().steps[0]?._runtime?.rewoundFailure,
+      executionRuntime(queue.getState().steps[0])?.rewoundFailure,
       true
     );
   });

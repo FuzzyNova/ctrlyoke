@@ -1,6 +1,9 @@
 import {
   PromptStep,
   ScriptRuntimeOutput,
+  SubWorkflowOutput,
+  type WorkflowStepType,
+  assertNever,
   type FailureKind,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
@@ -84,6 +87,12 @@ export type PriorContextItem = {
   importedRun?: boolean;
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
+  stepKind: WorkflowStepType;
+  /** Address of the run that contains this item; present only for nested items. */
+  containingRun?: { workflowKey: string; runRef: string };
+  /** Child run output, when its history directory is still available. */
+  subWorkflow?: { output: SubWorkflowOutput; children?: PriorContextItem[] };
+  workflowPath?: string;
   /** The script step's pass/fail verdict, rendered as a `<verdict/>` element. */
   scriptVerdict?: ScriptVerdict;
   summaryPrompt?: PriorContextText;
@@ -91,6 +100,8 @@ export type PriorContextItem = {
   summaryCommand?: PriorContextText;
   summaryScriptOutput?: PriorContextText;
 };
+
+const budgetOmittedXml = new WeakMap<PriorContextItem, string>();
 
 export type { PriorContextDetail } from "../types/DashboardConstants";
 import type { PriorContextDetail } from "../types/DashboardConstants";
@@ -110,6 +121,21 @@ export interface PriorContextFileChange {
 function summarizePriorContextItem(item: PriorContextItem): PriorContextItem {
   if (item.detail !== PRIOR_CONTEXT_DETAILS.SUMMARY) return item;
   const summary: PriorContextItem = { ...item };
+  const stepKind = item.stepKind;
+  switch (stepKind) {
+    case STEP_TYPES.WORKFLOW:
+      if (item.subWorkflow?.children)
+        summary.subWorkflow = {
+          ...item.subWorkflow,
+          children: item.subWorkflow.children.map(summarizePriorContextItem),
+        };
+      return summary;
+    case STEP_TYPES.SCRIPT:
+    case STEP_TYPES.PROMPT:
+      break;
+    default:
+      return assertNever(stepKind, "summarizePriorContextItem");
+  }
   delete summary.earlierAttempts;
   if (item.prompt !== undefined) {
     summary.summaryPrompt = boundPriorContextText(
@@ -287,11 +313,21 @@ export function buildPriorContextXmlFromItems(
 
 /** The `<step>` element's attributes, shared by a rendered and an omitted step. */
 function priorContextStepAttributes(item: PriorContextItem): string {
+  const stepKind = item.stepKind;
+  let stepTypeAttr = "";
+  switch (stepKind) {
+    case STEP_TYPES.PROMPT:
+      break;
+    case STEP_TYPES.SCRIPT:
+    case STEP_TYPES.WORKFLOW:
+      stepTypeAttr = ` type="${escapeXmlAttribute(stepKind)}"`;
+      break;
+    default:
+      assertNever(stepKind, "priorContextStepAttributes");
+  }
   const typeAttr = item.type
     ? ` type="${escapeXmlAttribute(item.type)}"`
-    : item.scriptOutput
-      ? ` type="${STEP_TYPES.SCRIPT}"`
-      : "";
+    : stepTypeAttr;
   const nameAttr = item.name ? ` name="${escapeXmlAttribute(item.name)}"` : "";
   const detailAttr =
     item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
@@ -315,35 +351,88 @@ function applySummaryBudget(
   steps: { item: PriorContextItem; xml: string }[]
 ): string[] {
   const rendered = steps.map(({ xml }) => xml);
-  const summaryPositions = steps
-    .flatMap(({ item }, position) =>
-      item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY ? [position] : []
-    )
+  const positions: {
+    item: PriorContextItem;
+    owner: PriorContextItem;
+    replace(xml: string): void;
+    xml: string;
+  }[] = [];
+  const collect = (
+    item: PriorContextItem,
+    owner: PriorContextItem,
+    topPosition: number
+  ) => {
+    if (item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY && !item.subWorkflow) {
+      positions.push({
+        item,
+        owner,
+        xml: renderPriorContextStep(item),
+        replace: (xml) => {
+          budgetOmittedXml.set(item, xml);
+          if (steps[topPosition].item === item) rendered[topPosition] = xml;
+        },
+      });
+    }
+    for (const child of item.subWorkflow?.children ?? [])
+      collect(child, owner, topPosition);
+  };
+  steps.forEach(({ item }, position) => collect(item, item, position));
+  const summaryPositions = positions
+    .map((_, index) => index)
     .sort((left, right) => {
-      const a = steps[left].item;
-      const b = steps[right].item;
+      const a = positions[left].owner;
+      const b = positions[right].owner;
       return (
         Number(a.importedRun !== true) - Number(b.importedRun !== true) ||
         Number(a.type === PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP) -
           Number(b.type === PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP) ||
-        a.index - b.index
+        a.index - b.index ||
+        left - right
       );
     });
   let total = summaryPositions.reduce(
-    (sum, position) => sum + utf8Bytes(rendered[position]),
+    (sum, position) => sum + utf8Bytes(positions[position].xml),
     0
   );
   for (const position of summaryPositions.slice(0, -1)) {
     if (total <= PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES) break;
-    const bytes = utf8Bytes(rendered[position]);
-    const stub = `<step ${priorContextStepAttributes(steps[position].item)} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
-    rendered[position] = stub;
+    const bytes = utf8Bytes(positions[position].xml);
+    const item = positions[position].item;
+    const runHint = readOutputAttribute(item);
+    const stub = `<step ${priorContextStepAttributes(item)}${runHint} omitted="${PRIOR_CONTEXT_TRUNCATION.OMITTED_ALL}" omittedBytes="${bytes}"/>`;
+    positions[position].replace(stub);
     total -= bytes - utf8Bytes(stub);
   }
-  return rendered;
+  return steps.map(({ item }, position) =>
+    item.subWorkflow ? renderPriorContextStep(item) : rendered[position]
+  );
+}
+
+/**
+ * The `read_output` call that reads a child-run step back in full (D12c), or
+ * undefined for a step of the parent's own run, whose markers stay bare.
+ * `tail` asks for only the last N bytes, which is where a field cut from its
+ * end (`omitted="end"`) lives.
+ */
+function readOutputCall(
+  item: PriorContextItem,
+  tail?: number
+): string | undefined {
+  if (!item.containingRun) return undefined;
+  const { workflowKey, runRef } = item.containingRun;
+  const tailArgument = tail === undefined ? "" : `, tail: ${tail}`;
+  return `read_output { run: { workflowKey: ${workflowKey}, runRef: ${runRef} }, indices: [${item.index}]${tailArgument} }`;
+}
+
+/** ` readOutput="…"` for a marker inside a child-run step, else nothing. */
+function readOutputAttribute(item: PriorContextItem, tail?: number): string {
+  const call = readOutputCall(item, tail);
+  return call ? ` readOutput="${escapeXmlAttribute(call)}"` : "";
 }
 
 function renderPriorContextStep(item: PriorContextItem): string {
+  const omittedXml = budgetOmittedXml.get(item);
+  if (omittedXml) return omittedXml;
   const attributes = priorContextStepAttributes(item);
   // A script finalStep has a verdict but no scriptOutput, so this is
   // rendered in both arms below.
@@ -353,29 +442,90 @@ function renderPriorContextStep(item: PriorContextItem): string {
   const earlierAttempts = item.earlierAttempts
     ? `<earlierAttempts count="${item.earlierAttempts.count}">\n${renderFilesChanged(item.earlierAttempts.filesChanged)}\n</earlierAttempts>\n`
     : "";
-  if (item.scriptOutput) {
-    const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
-    const stdoutSection = item.scriptOutput.stdout.trim()
-      ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
-      : "";
-    const stderrSection = item.scriptOutput.stderr.trim()
-      ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
-      : "";
-    const exitCodeSection =
-      item.scriptOutput.exitCode !== undefined
-        ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+  switch (item.stepKind) {
+    case STEP_TYPES.WORKFLOW: {
+      if (!item.subWorkflow) return `<step ${attributes}/>`;
+      const output = item.subWorkflow.output;
+      const attrs = [
+        ["workflow", item.workflowPath],
+        ["workflowKey", output.childWorkflowKey],
+        ["runRef", output.childRunRef],
+        ["outcome", output.outcome.status],
+      ]
+        .filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string"
+        )
+        .map(([name, value]) => ` ${name}="${escapeXmlAttribute(value)}"`)
+        .join("");
+      const worktree = output.worktree
+        ? `<worktree${[
+            ["mode", output.worktree.mode],
+            ["branch", output.worktree.branchName],
+            ["base", output.worktree.baseCommit],
+            ["tip", output.worktree.finalBranchTip],
+            [
+              "filesChanged",
+              output.worktree.changedFileCount === undefined
+                ? undefined
+                : String(output.worktree.changedFileCount),
+            ],
+          ]
+            .filter(
+              (entry): entry is [string, string] => entry[1] !== undefined
+            )
+            .map(([key, value]) => ` ${key}="${escapeXmlAttribute(value)}"`)
+            .join("")}/>\n`
         : "";
-    const filesChanged =
-      item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
-        ? `${renderFilesChanged(item.filesChanged)}\n`
+      const merge = output.worktree?.mergeOutcome
+        ? `<merge result="${escapeXmlAttribute(output.worktree.mergeOutcome)}">${(output.worktree.conflictFiles ?? []).map(escapeXmlAttribute).join("\n")}</merge>\n`
         : "";
-    return `<step ${attributes}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
+      // A step that failed before any child run existed (D12a) has no
+      // children to render and none to read: its failure message is its output.
+      const children =
+        output.childWorkflowKey === undefined ||
+        output.childRunRef === undefined
+          ? `<failure>${escapeXmlAttribute(output.outcome.failureMessage ?? "Sub-workflow failed before a child run existed")}</failure>`
+          : (item.subWorkflow.children
+              ?.map(renderPriorContextStep)
+              .join("\n") ??
+            // The child's history is gone or unreadable, so no read_output hint:
+            // that call would fail against the same missing run.
+            "<childRunUnavailable/>");
+      return `<step ${attributes}${attrs}>\n${worktree}${merge}${children}\n</step>`;
+    }
+    case STEP_TYPES.SCRIPT: {
+      if (item.scriptOutput) {
+        const commandSection = `<command${item.summaryCommand ? omittedAttributes(item.summaryCommand, item) : ""}>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+        const stdoutSection = item.scriptOutput.stdout.trim()
+          ? `<stdout${item.summaryScriptOutput ? omittedAttributes(item.summaryScriptOutput, item) : ""}>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+          : "";
+        const stderrSection = item.scriptOutput.stderr.trim()
+          ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
+          : "";
+        const exitCodeSection =
+          item.scriptOutput.exitCode !== undefined
+            ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+            : "";
+        const filesChanged =
+          item.detail === PRIOR_CONTEXT_DETAILS.SUMMARY
+            ? `${renderFilesChanged(item.filesChanged)}\n`
+            : "";
+        return `<step ${attributes}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}${verdictSection}${filesChanged}${earlierAttempts}</step>`;
+      }
+      break;
+    }
+    case STEP_TYPES.PROMPT:
+      break;
+    default:
+      assertNever(item.stepKind, "renderPriorContextStep");
   }
   const promptSection = item.prompt
-    ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
+    ? `<prompt${item.summaryPrompt ? omittedAttributes(item.summaryPrompt, item) : ""}>\n${item.prompt.trim()}\n</prompt>\n`
     : "";
   const transcript = item.transcript
-    ? item.transcript.map(renderPriorContextEntry).join("\n")
+    ? item.transcript
+        .map((entry) => renderPriorContextEntry(entry, item))
+        .join("\n")
     : item.text !== undefined
       ? item.text.trim()
       : "";
@@ -384,7 +534,7 @@ function renderPriorContextStep(item: PriorContextItem): string {
       ? renderFilesChanged(item.filesChanged)
       : ""
     : "";
-  const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse) : ""}>\n${transcript}\n</response>\n`;
+  const responseSection = `<response${item.summaryResponse ? omittedAttributes(item.summaryResponse, item) : ""}>\n${transcript}\n</response>\n`;
   return `<step ${attributes}>\n${promptSection}${responseSection}${filesChanged}${verdictSection}${earlierAttempts}</step>`;
 }
 
@@ -402,17 +552,36 @@ function renderFilesChanged(
   return `<filesChanged>\n${lines.join("\n")}\n</filesChanged>`;
 }
 
-function omittedAttributes(value: PriorContextText): string {
-  return value.omitted
-    ? ` omitted="${value.omitted}" omittedBytes="${value.omittedBytes ?? 0}"`
+/**
+ * A field's truncation marker. Inside a child-run step it also names the
+ * `read_output` call for the rest (D12c); a field cut from its end names the
+ * omitted tail's size.
+ */
+function omittedAttributes(
+  value: PriorContextText,
+  owner?: PriorContextItem
+): string {
+  if (!value.omitted) return "";
+  const omittedBytes = value.omittedBytes ?? 0;
+  const hint = owner
+    ? readOutputAttribute(
+        owner,
+        value.omitted === PRIOR_CONTEXT_TRUNCATION.OMITTED_END
+          ? omittedBytes
+          : undefined
+      )
     : "";
+  return ` omitted="${value.omitted}" omittedBytes="${omittedBytes}"${hint}`;
 }
 
 function failedAttribute(entry: { failed?: true }): string {
   return entry.failed ? ' failed="true"' : "";
 }
 
-function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
+function renderPriorContextEntry(
+  entry: PriorContextTranscriptEntry,
+  owner?: PriorContextItem
+): string {
   const failed = failedAttribute(entry);
   switch (entry.kind) {
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TEXT:
@@ -421,21 +590,21 @@ function renderPriorContextEntry(entry: PriorContextTranscriptEntry): string {
       return `<thinking${failed}>\n${entry.text}\n</thinking>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.EDIT: {
       const diff = entry.diff ? `\n\`\`\`diff\n${entry.diff.text}\n\`\`\`` : "";
-      const omitted = entry.diff ? omittedAttributes(entry.diff) : "";
+      const omitted = entry.diff ? omittedAttributes(entry.diff, owner) : "";
       return `<edit path="${escapeXmlAttribute(entry.path)}" added="${entry.added}" removed="${entry.removed}"${failed}${omitted}>${diff}\n</edit>`;
     }
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.CREATE:
-      return `<create path="${escapeXmlAttribute(entry.path)}" added="${entry.added}"${failed}${omittedAttributes(entry.diff)}>\n\`\`\`diff\n${entry.diff.text}\n\`\`\`\n</create>`;
+      return `<create path="${escapeXmlAttribute(entry.path)}" added="${entry.added}"${failed}${omittedAttributes(entry.diff, owner)}>\n\`\`\`diff\n${entry.diff.text}\n\`\`\`\n</create>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.DELETE:
       return `<delete path="${escapeXmlAttribute(entry.path)}"${failed}/>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.COMMAND:
-      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}>\n${entry.command}\n<output${omittedAttributes(entry.output)}>\n${entry.output.text}\n</output>\n</command>`;
+      return `<command${entry.exitCode === undefined ? "" : ` exitCode="${entry.exitCode}"`}${failed}>\n${entry.command}\n<output${omittedAttributes(entry.output, owner)}>\n${entry.output.text}\n</output>\n</command>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.READ:
       return `<read path="${escapeXmlAttribute(entry.path)}"${entry.lineStart === undefined ? "" : ` lines="${entry.lineStart}-${entry.lineEnd ?? entry.lineStart}"`}${failed}/>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.TOOL:
-      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}>\n<arguments${omittedAttributes(entry.arguments)}>\n${entry.arguments.text}\n</arguments>\n<output${omittedAttributes(entry.result)}>\n${entry.result.text}\n</output>\n</tool>`;
+      return `<tool name="${escapeXmlAttribute(entry.name)}"${failed}>\n<arguments${omittedAttributes(entry.arguments, owner)}>\n${entry.arguments.text}\n</arguments>\n<output${omittedAttributes(entry.result, owner)}>\n${entry.result.text}\n</output>\n</tool>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.SEARCH:
-      return `<search query="${escapeXmlAttribute(entry.query)}"${entry.url ? ` url="${escapeXmlAttribute(entry.url)}"` : ""}${failed}>\n${entry.output ? `<output${omittedAttributes(entry.output)}>\n${entry.output.text}\n</output>\n` : ""}${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
+      return `<search query="${escapeXmlAttribute(entry.query)}"${entry.url ? ` url="${escapeXmlAttribute(entry.url)}"` : ""}${failed}>\n${entry.output ? `<output${omittedAttributes(entry.output, owner)}>\n${entry.output.text}\n</output>\n` : ""}${entry.results.map((result) => `${result.title ?? ""} ${result.url ?? ""}`.trim()).join("\n")}\n</search>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.QUESTION:
       return `<question${failed}>\n${JSON.stringify({ questions: entry.questions, declined: entry.declined })}\n</question>`;
     case PRIOR_CONTEXT_TRANSCRIPT_ENTRY_KINDS.USER_STEER:

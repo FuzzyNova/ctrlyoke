@@ -72,7 +72,8 @@ import {
   type SandboxRequest,
   type HeadlessSteerDelivery,
 } from "./DashboardConstants";
-import type { ScriptRuntimeOutput } from "./CtrlYokeTypes";
+import type { ScriptRuntimeOutput, SubWorkflowOutput } from "./CtrlYokeTypes";
+import type { OutputExecutionTarget } from "./OutputHistoryTypes";
 import type { HarnessVersionAssessment } from "../utils/HarnessVersion";
 import type { GitWorkingTreeCounts } from "../utils/GitUtils";
 import type { LanguageServerDefinition } from "./CtrlYokeSettings";
@@ -111,7 +112,11 @@ import type {
   PromptResult,
   FinalStepRuntimeState,
 } from "./CtrlYokeTypes";
-import type { WorkflowDocumentIssueSeverity } from "./DashboardConstants";
+import type {
+  AppendMode,
+  QueuePosition,
+  WorkflowDocumentIssueSeverity,
+} from "./DashboardConstants";
 import type {
   CtrlYokeGlobalSettings,
   HarnessColorSettings,
@@ -128,7 +133,6 @@ import type {
 import type {
   WorkspaceSnapshot,
   UndoExecutionTarget,
-  OutputExecutionTarget,
   PromptChangeType,
   UndoRecord,
 } from "./OutputHistoryTypes";
@@ -861,6 +865,18 @@ export interface CliOutputMessage {
   output: CliOutput;
   /** The attempt's prompt; sent when known and kept by updates that omit it. */
   prompt?: string;
+}
+
+/** Settled child metadata for one parent workflow step. */
+export interface SubWorkflowSettledMessage {
+  type: typeof MESSAGE_TYPES.SUB_WORKFLOW_SETTLED;
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  timestampMs: number;
+  sequence: number;
+  output: SubWorkflowOutput;
+  workflowId?: string;
 }
 
 /**
@@ -2718,6 +2734,52 @@ export interface AppendFileMessage {
   type: typeof MESSAGE_TYPES.APPEND_FILE;
   filePath?: string;
   mutation?: WorkflowDefinitionMutation;
+  /** `subWorkflow` queues the file as one workflow step; default `inline`. */
+  appendMode?: AppendMode;
+  /**
+   * Where the tail goes; default `end`. `parallelWithCurrent` (sub-workflow
+   * mode only) runs the file beside the step that is running now.
+   */
+  position?: QueuePosition;
+}
+
+/**
+ * Webview → Extension: open the native picker for the step editor's Workflow
+ * mode (VS Code panel only). Answered by `SubWorkflowStepFileSelectedMessage`,
+ * or by `WorkflowActionFailedMessage` when the launch would refuse the file.
+ */
+export interface SelectSubWorkflowStepFileMessage {
+  type: typeof MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE;
+  /**
+   * The editor target the pick was asked for (`editorTargetKey`), echoed on
+   * the reply so a pick that returns after the editor moved on is dropped.
+   */
+  targetKey?: string;
+}
+
+/**
+ * Webview → Extension: a file the hosted `WorkflowFilePickerModal` picked for
+ * the step editor's Workflow mode (absolute, or workspace-relative from its
+ * manual field), built into a `workflow` reference and checked exactly as the
+ * native pick is. Answered the same way.
+ */
+export interface NormalizeSubWorkflowStepFileMessage {
+  type: typeof MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE;
+  filePath: string;
+  /** Echoed on the reply, as `SelectSubWorkflowStepFileMessage.targetKey`. */
+  targetKey?: string;
+}
+
+/**
+ * Extension → Webview: the picked file as the `workflow` reference a step
+ * stores: relative to the workspace root (folder-name prefixed outside the
+ * primary folder of a multi-root workspace), else absolute.
+ */
+export interface SubWorkflowStepFileSelectedMessage {
+  type: typeof MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED;
+  path: string;
+  /** The request's `targetKey`, when it named one. */
+  targetKey?: string;
 }
 
 /** Context-menu origin carried back only when a queued-step steer fails. */
@@ -3836,6 +3898,7 @@ export type IncomingMessage =
   | StepStatusChangedMessage
   | RetryAttemptChangedMessage
   | CliOutputMessage
+  | SubWorkflowSettledMessage
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
   | HeadlessControlTargetMessage

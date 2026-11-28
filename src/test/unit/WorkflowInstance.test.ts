@@ -14,6 +14,7 @@ import {
 } from "../../core/HarnessIntegration";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { ScriptProcessRunner } from "../../core/orchestration/ScriptProcessRunner";
 import { WorkflowStartupPipeline } from "../../core/orchestration/WorkflowStartupPipeline";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
@@ -363,6 +364,111 @@ async function markQueueCompleted(instance: WorkflowInstance): Promise<void> {
 }
 
 suite("WorkflowInstance target resources", () => {
+  test("forwards stop and pause controls to a registered sub-workflow", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const calls: string[] = [];
+    const handle = {
+      workflowKey: "child",
+      runRef: "run-child",
+      done: new Promise(() => {}),
+      async stop() {
+        calls.push("stop");
+      },
+      async pause() {
+        calls.push("pause");
+      },
+      async cancelPause() {
+        calls.push("cancelPause");
+      },
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    try {
+      (instance as any).registerActiveTarget(target, 0, handle);
+      const runtime = instance.promptQueue.getRuntimeStateMachine();
+      runtime.startExecution();
+      await instance.pause();
+      assert.strictEqual(runtime.status, EXECUTION_STATES.PAUSING);
+      await instance.resume();
+      assert.strictEqual(runtime.status, EXECUTION_STATES.RUNNING);
+      await instance.pause();
+      await instance.cancelPause();
+      assert.ok(calls.includes("pause"));
+      assert.ok(calls.includes("cancelPause"));
+      (instance as any).registerActiveTarget(target, 0, null);
+      const forwardedBeforeClearCheck = calls.length;
+      await instance.pause();
+      await instance.cancelPause();
+      assert.strictEqual(calls.length, forwardedBeforeClearCheck);
+      (instance as any).registerActiveTarget(target, 0, handle);
+      const stopStartedAt = Date.now();
+      await instance.stop();
+      assert.ok(Date.now() - stopStartedAt < 8000);
+      assert.ok(calls.includes("stop"));
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  // A parallel group can hold a script member (process runner only) beside a
+  // prompt member (harness integration). The script-only fast path in stop()
+  // must not skip cancelling the prompt member's integration.
+  test("stop cancels a harness integration running beside a script", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    let integrationCancelled = false;
+    const integration = new (class extends MockHarnessIntegration {
+      protected override async cancelImplementation(): Promise<void> {
+        integrationCancelled = true;
+        this.responseCompleteEmitter.fire(undefined);
+      }
+    })(undefined, false);
+    let runnerCancelled = false;
+    const runner = new (class extends ScriptProcessRunner {
+      override async cancel(): Promise<void> {
+        runnerCancelled = true;
+      }
+      override async waitForProcessShutdown(): Promise<void> {}
+    })(process.cwd());
+    try {
+      instance.promptQueue.getRuntimeStateMachine().startExecution();
+      (instance as any).activeTargetResources.set("prompt", {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        integration,
+      });
+      (instance as any).activeTargetResources.set("script", {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        processRunner: runner,
+      });
+      await instance.stop();
+      assert.strictEqual(runnerCancelled, true, "script runner cancelled");
+      assert.strictEqual(
+        integrationCancelled,
+        true,
+        "prompt member's harness integration cancelled"
+      );
+    } finally {
+      runner.dispose();
+      instance.dispose();
+    }
+  });
+
   test("gives same-harness target-keyed executions isolated integrations", () => {
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(

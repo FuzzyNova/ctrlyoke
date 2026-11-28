@@ -6,6 +6,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   PromptFile,
   EXECUTION_STATES,
+  isPromptStep,
   type WorkflowValidationWarning,
 } from "../../types/CtrlYokeTypes";
 import type { ParsedPromptFile } from "../../types/CtrlYokeTypes";
@@ -18,7 +19,6 @@ import {
   WORKFLOW_PROPERTY_KEYS,
   STATUS_MESSAGE_SEVERITY,
   PROMPT_FILE_RELOAD_MODES,
-  STEP_TYPES,
   type PromptFileReloadMode,
 } from "../../types/DashboardConstants";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
@@ -133,12 +133,10 @@ export class PromptFileLoader {
     workspaceFolderPath?: string
   ): Promise<string | undefined> {
     try {
-      return await this.loadParsedPromptFile(
+      return await this.loadFromMemoryOrThrow(
         promptFile,
         displayName,
-        workspaceFolderPath,
-        undefined, // no source file — Save As is the only export path
-        []
+        workspaceFolderPath
       );
     } catch (error) {
       notifyUserFeedback(
@@ -150,6 +148,31 @@ export class PromptFileLoader {
       );
       return undefined;
     }
+  }
+
+  /**
+   * Throwing in-memory load for callers that route start failures themselves.
+   * @param lineageName The exact name for the new lineage. Without it the
+   *   name is derived from `displayName` like a file name, which keeps only
+   *   the text after its last slash.
+   */
+  async loadFromMemoryOrThrow(
+    promptFile: PromptFile,
+    displayName: string,
+    workspaceFolderPath?: string,
+    lineageName?: string,
+    sourceDefinitionPath?: string
+  ): Promise<string | undefined> {
+    return this.loadParsedPromptFile(
+      promptFile,
+      displayName,
+      workspaceFolderPath,
+      undefined,
+      [],
+      lineageName,
+      true,
+      sourceDefinitionPath
+    );
   }
 
   /**
@@ -167,10 +190,13 @@ export class PromptFileLoader {
     workspaceFolderPath: string | undefined,
     originalFilePath: string | undefined,
     schemaWarnings: WorkflowValidationWarning[],
-    authoredName?: string
+    authoredName?: string,
+    throwOnFailure = false,
+    assetSourceDefinitionPath?: string
   ): Promise<string | undefined> {
     this.lastSchemaWarnings = [...schemaWarnings];
     if (!promptFile.steps) {
+      if (throwOnFailure) throw new Error("Failed to parse prompt file");
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -192,6 +218,7 @@ export class PromptFileLoader {
     );
     if (!validation.valid) {
       const errors = validation.errors.join("\n");
+      if (throwOnFailure) throw new Error(`Validation failed:\n${errors}`);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -289,7 +316,7 @@ export class PromptFileLoader {
     await this.warnAboutMissingWorkflowAssets(
       promptFile,
       workspaceFolderPath,
-      originalFilePath
+      originalFilePath ?? assetSourceDefinitionPath
     );
 
     Log.debug(
@@ -475,9 +502,8 @@ export class PromptFileLoader {
     promptTexts.push(
       ...(workflow.steps ?? [])
         .filter(
-          (
-            step
-          ): step is Exclude<typeof step, { type: typeof STEP_TYPES.SCRIPT }> =>
+          (step): step is Extract<typeof step, { type?: "prompt" }> =>
+            isPromptStep(step) &&
             typeof step === "object" &&
             step !== null &&
             "prompt" in step &&
@@ -546,7 +572,12 @@ export class PromptFileLoader {
       }
     }
 
-    for (const key of ["vars", "conditions", "finalStep"] as const) {
+    for (const key of [
+      "vars",
+      "conditions",
+      "worktreePresets",
+      "finalStep",
+    ] as const) {
       const value = promptFile[key];
       if (value !== undefined) {
         updates[key] = value;

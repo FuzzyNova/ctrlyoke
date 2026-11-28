@@ -169,6 +169,74 @@ suite("OutputHistoryTimelineAdapter", () => {
     });
   });
 
+  test("projects settled sub-workflow metadata as an ordered history item", () => {
+    const payload = {
+      resolvedWorkflowPath: "/work/child.yaml",
+      childWorkflowKey: "child-key" as never,
+      childRunRef: "child-run" as never,
+      outcome: { status: "completed" as const },
+    };
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        workflowId: "workflow",
+        runId: 1,
+        sequence: 1,
+        timestampMs: 1,
+        target: TARGET,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload,
+      },
+    ]);
+    assert.deepStrictEqual(history.orderedEntries[0], {
+      kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+      target: TARGET,
+      subWorkflowOutput: payload,
+      timestampMs: 1,
+      sequence: 1,
+    });
+  });
+
+  test("drops an unknown harness id from a persisted settlement's ranWith", () => {
+    const settled = (ranWith: unknown) => ({
+      eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 1,
+      timestampMs: 1,
+      target: TARGET,
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: {
+        childWorkflowKey: "child-key" as never,
+        childRunRef: "child-run" as never,
+        outcome: { status: "completed" as const },
+        ranWith: ranWith as never,
+      },
+    });
+    const outputs = [
+      { harness: "claude-cli", model: "opus" },
+      { harness: "rogue-cli", model: "opus" },
+      { harness: "rogue-cli" },
+    ].map((ranWith) => {
+      const entry = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+        settled(ranWith),
+      ]).orderedEntries[0];
+      assert.ok(entry.kind === OUTPUT_HISTORY_KINDS.SUB_WORKFLOW);
+      return entry.subWorkflowOutput;
+    });
+
+    assert.deepStrictEqual(outputs[0].ranWith, {
+      harness: "claude-cli",
+      model: "opus",
+    });
+    assert.deepStrictEqual(outputs[1].ranWith, { model: "opus" });
+    assert.ok(!("ranWith" in outputs[2]));
+  });
+
   test("deduplicates CLI entries by execution phase while preserving prompt keys", () => {
     const adapter = new OutputHistoryTimelineAdapter();
     const history = adapter.project(MANIFEST, [

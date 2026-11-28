@@ -123,6 +123,7 @@ function directSchemaPropertyNames(node: SchemaNode): string[] {
 function schemaBackedFieldNames(): {
   workflow: string[];
   step: string[];
+  subWorkflowStep: string[];
 } {
   const schemaPath = path.resolve(
     __dirname,
@@ -136,6 +137,9 @@ function schemaBackedFieldNames(): {
   );
   const promptFields = directSchemaPropertyNames(schema.$defs.promptStep);
   const scriptFields = directSchemaPropertyNames(schema.$defs.scriptStep);
+  const subWorkflowFields = directSchemaPropertyNames(
+    schema.$defs.subWorkflowStep
+  );
   const multiStepWorkflowFields = directSchemaPropertyNames(
     schema.oneOf[1].allOf?.find((node) => node.properties?.steps) ?? {}
   );
@@ -169,6 +173,8 @@ function schemaBackedFieldNames(): {
         // errors by name; it was renamed to `expected` and must never persist.
         field !== "returns"
     ),
+    // Its own list: the step fields above would put prompt keys on it.
+    subWorkflowStep: subWorkflowFields.filter((field) => field !== "_runtime"),
   };
 }
 
@@ -179,7 +185,7 @@ function schemaSentinel(context: string, field: string): string {
 function buildSchemaBackedStep(
   fields: string[],
   context: string,
-  type: "prompt" | "script"
+  type: "prompt" | "script" | "workflow"
 ): Record<string, unknown> {
   const step: Record<string, unknown> = Object.fromEntries(
     fields
@@ -1269,13 +1275,18 @@ suite("WorkflowLibraryHandlers", () => {
         "script-step",
         "script"
       );
+      const subWorkflowStep = buildSchemaBackedStep(
+        schemaFields.subWorkflowStep,
+        "workflow-step",
+        "workflow"
+      );
       const workingFile: Record<string, unknown> = Object.fromEntries(
         schemaFields.workflow.map((field) => [
           field,
           schemaSentinel("workflow", field),
         ])
       );
-      workingFile.steps = [promptStep, scriptStep];
+      workingFile.steps = [promptStep, scriptStep, subWorkflowStep];
       workingFile.finalStep = promptStep;
       workingFile.vars = { workflowVariable: "value" };
       workingFile.originalFile = "source.ctrlyoke.yaml";
@@ -1350,8 +1361,13 @@ suite("WorkflowLibraryHandlers", () => {
             field
           );
         }
-        for (const [index, sourceStep] of [promptStep, scriptStep].entries()) {
-          for (const field of schemaFields.step) {
+        for (const [index, sourceStep, fields] of [
+          [0, promptStep, schemaFields.step],
+          [1, scriptStep, schemaFields.step],
+          [2, subWorkflowStep, schemaFields.subWorkflowStep],
+        ] as const) {
+          assert.ok(fields.length > 0, `step ${index} has schema fields`);
+          for (const field of fields) {
             assert.deepStrictEqual(
               saved.steps[index][field],
               sourceStep[field],
@@ -1371,6 +1387,7 @@ suite("WorkflowLibraryHandlers", () => {
         assert.strictEqual(saved._runtime, undefined);
         assert.strictEqual(saved.steps[0]._runtime, undefined);
         assert.strictEqual(saved.steps[1]._runtime, undefined);
+        assert.strictEqual(saved.steps[2]._runtime, undefined);
         assert.strictEqual(saved.finalStep._runtime, undefined);
         assert.strictEqual((templateWorkflow as any)?._runtime, undefined);
       } finally {
@@ -1487,6 +1504,9 @@ suite("WorkflowLibraryHandlers", () => {
                 operator: "isEmpty",
               },
             },
+            worktreePresets: {
+              lane: { mode: "managed", merge: true, setup: "npm ci" },
+            },
             steps: [
               { prompt: "before" },
               { prompt: "first member" },
@@ -1522,6 +1542,7 @@ suite("WorkflowLibraryHandlers", () => {
         const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as {
           schemaVersion: number;
           conditions: Record<string, unknown>;
+          worktreePresets: Record<string, unknown>;
           steps: Array<Record<string, unknown>>;
           parallelGroups?: unknown;
         };
@@ -1532,6 +1553,9 @@ suite("WorkflowLibraryHandlers", () => {
             compareSource: "stdout",
             operator: "isEmpty",
           },
+        });
+        assert.deepStrictEqual(saved.worktreePresets, {
+          lane: { mode: "managed", merge: true, setup: "npm ci" },
         });
         assert.strictEqual(saved.parallelGroups, undefined);
         assert.deepStrictEqual(saved.steps[1], {

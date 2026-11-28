@@ -264,6 +264,12 @@ steps:
 
 See [Script steps and condition scripts](/workflows/script-steps).
 
+## Sub-workflow steps {#sub-workflow-steps}
+
+Use `type: workflow` to run another workflow file to completion as a child run.
+See [Sub-workflow steps](/workflows/sub-workflow-steps) for its fields, outcomes,
+execution directory, and child output references.
+
 ## Parallel steps {#parallel-steps}
 
 A `parallel` queue item runs a flat group of prompt or script steps concurrently

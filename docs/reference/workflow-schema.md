@@ -45,7 +45,8 @@ say what it does.
 | [Execution properties](#execution-properties) | Shared execution configuration properties used across workflow-level defaults, prompt-level overrides, and runtime metadata |
 | [Prompt step](#prompt-step) | A step that sends a prompt to a harness. |
 | [Script step](#script-step) | A workflow step that runs a shell script/command with no AI interaction. |
-| [Parallel group](#parallel-group) | An authored group of prompt or script steps. |
+| [Sub-workflow step](#sub-workflow-step) | A step that runs a referenced workflow file or an inline single step as a child run. |
+| [Parallel group](#parallel-group) | An authored group of prompt, script or workflow steps. |
 | [Pre-condition](#pre-condition) | Script gate that runs before the prompt. |
 | [End condition](#end-condition) | Validation that runs after the prompt completes. |
 | [Condition presets](#condition-presets) | Author-defined named conditions available to MCP steps. |
@@ -74,14 +75,14 @@ Optional workflow display name shown in the dashboard heading, recent workflows 
 
 ### `steps` {#workflow-file-steps}
 
-- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Parallel group](#parallel-group))
+- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Sub-workflow step](#sub-workflow-step) or [Parallel group](#parallel-group))
 - **Required:** yes
 
 The ordered step queue. Each item is a prompt step, a script step, or a parallel group.
 
 ### `finalStep` {#workflow-file-finalstep}
 
-- **Type:** [Prompt step](#prompt-step) or [Script step](#script-step)
+- **Type:** [Prompt step](#prompt-step) or [Script step](#script-step) or [Sub-workflow step](#sub-workflow-step)
 
 A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes "ctrlyoke" and the finalStep appends prompts, those prompts run before finalStep executes again. Working files store resolved harness/model/session metadata on finalStep.\_runtime; workflow phase/status remains in the root \_runtime.finalStep block.
 
@@ -114,6 +115,44 @@ Default values for <code v-pre>{{varName}}</code> substitutions. Not substituted
 - **Type:** map of [Condition presets](#condition-presets)
 
 Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `"$BUG_FILE"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`. Not substituted: Preset definitions and parameter names are author-only contracts.
+
+### `worktreePresets` {#workflow-file-worktreepresets}
+
+- **Type:** map of `{ mode: "managed", merge?, keep?, … }`
+
+Named worktree presets that MCP agents may attach to an appended step by name (`worktree: { use: "<name>" }`), queuing it as a lane: a single-step sub-workflow that runs in its own managed worktree. Only the managed object form is accepted, so every use creates a fresh branch. Agents can choose a preset but can never supply or override its fields, including `setup`. The preset is copied into the lane when it is queued, so later edits do not change lanes already queued. Without this property, agents cannot queue steps in their own worktree. Not substituted: Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree.
+
+### `worktreePresets.*.mode` {#workflow-file-worktreepresets-items-mode}
+
+- **Type:** `"managed"`
+- **Required:** yes
+
+Always `managed`: a fresh worktree and branch for each run.
+
+### `worktreePresets.*.merge` {#workflow-file-worktreepresets-items-merge}
+
+- **Type:** `boolean`
+
+Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.
+
+### `worktreePresets.*.keep` {#workflow-file-worktreepresets-items-keep}
+
+- **Type:** `boolean`
+
+Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node\_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.
+
+### `worktreePresets.*.base` {#workflow-file-worktreepresets-items-base}
+
+- **Type:** `string`
+- **Constraints:** at least 1 character(s)
+
+Optional Git ref resolved to a commit when the worktree is created.
+
+### `worktreePresets.*.setup` {#workflow-file-worktreepresets-items-setup}
+
+- **Type:** `string`
+
+Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.
 
 ### `trustedExternalRoots` {#workflow-file-trustedexternalroots}
 
@@ -370,12 +409,25 @@ Also includes every field from [Execution properties](#execution-properties).
 
 Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.
 
+### `prompt` {#prompt-step-prompt}
+
+- **Type:** `string`
+- **Required:** yes
+
+The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.&lt;kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.&lt;kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.
+
+### `_runtime` {#prompt-step-runtime}
+
+- **Type:** [Step runtime](/reference/run-files#step-runtime)
+
+Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.
+
 ### `name` {#prompt-step-name}
 
 - **Type:** `string`
 - **Constraints:** at most 100 characters
 
-Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
 
 ### `enabled` {#prompt-step-enabled}
 
@@ -395,19 +447,6 @@ Accepted forms:
 
 Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
-### `prompt` {#prompt-step-prompt}
-
-- **Type:** `string`
-- **Required:** yes
-
-The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.&lt;kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.&lt;kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.
-
-### `_runtime` {#prompt-step-runtime}
-
-- **Type:** [Step runtime](/reference/run-files#step-runtime)
-
-Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.
-
 ## Script step {#script-step}
 
 A workflow step that runs a shell script/command with no AI interaction.
@@ -418,31 +457,6 @@ A workflow step that runs a shell script/command with no AI interaction.
 - **Required:** yes
 
 Step type discriminator. Required, and must be "script", for script steps. Not substituted: This structural field or identity value stays as authored.
-
-### `name` {#script-step-name}
-
-- **Type:** `string`
-- **Constraints:** at most 100 characters
-
-Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
-
-### `enabled` {#script-step-enabled}
-
-- **Type:** `boolean` or `string`
-
-Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
-
-Accepted forms:
-
-- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
-- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
-
-### `color` {#script-step-color}
-
-- **Type:** `string`
-- **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
-
-Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
 
 ### `executionMode` {#script-step-executionmode}
 
@@ -570,9 +584,94 @@ Accepted forms:
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
+### `name` {#script-step-name}
+
+- **Type:** `string`
+- **Constraints:** at most 100 characters
+
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
+
+### `enabled` {#script-step-enabled}
+
+- **Type:** `boolean` or `string`
+
+Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
+
+Accepted forms:
+
+- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+
+### `color` {#script-step-color}
+
+- **Type:** `string`
+- **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
+
+Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
+
+## Sub-workflow step {#sub-workflow-step}
+
+Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage and run history. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends. A stopped child always stops the parent; onFail controls failed children.
+
+### `type` {#sub-workflow-step-type}
+
+- **Type:** `"workflow"`
+- **Required:** yes
+
+Marks this step as a sub-workflow step.
+
+### `workflow` {#sub-workflow-step-workflow}
+
+- **Type:** `string` or [Sub-workflow step](#sub-workflow-step)
+- **Required:** yes
+
+A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.
+
+### `onFail` {#sub-workflow-step-onfail}
+
+- **Type:** `"continue" | "stopWorkflow"` or `string`
+
+What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent.
+
+Accepted forms:
+
+- `"continue" | "stopWorkflow"` — What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default).
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+
+### `_runtime` {#sub-workflow-step-runtime}
+
+- **Type:** [Step runtime](/reference/run-files#step-runtime)
+
+Per-step runtime linkage to the child run (added automatically during execution). Not substituted: This structural field or identity value stays as authored.
+
+### `name` {#sub-workflow-step-name}
+
+- **Type:** `string`
+- **Constraints:** at most 100 characters
+
+Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts <code v-pre>{{name}}</code> and resolves at dispatch; unresolved placeholders fail before execution.
+
+### `enabled` {#sub-workflow-step-enabled}
+
+- **Type:** `boolean` or `string`
+
+Whether this step executes. A whole-value <code v-pre>{{name}}</code> placeholder is coerced to boolean and validated at run start.
+
+Accepted forms:
+
+- `boolean` — Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution.
+- `string` matching `^\{\{\w+\}\}$` — A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted.
+
+### `color` {#sub-workflow-step-color}
+
+- **Type:** `string`
+- **Constraints:** pattern `^#[0-9a-fA-F]{6}$`
+
+Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.
+
 ## Parallel group {#parallel-group}
 
-An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
+An authored group of prompt, script or workflow steps. Groups are flattened into steps plus parallelGroups when loaded. Prompt and script members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate them or merge their work, so give each member independent work. A workflow member is its own child run, so a child with its own `worktree` works in its own checkout. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
 
 ```yaml
 steps:
@@ -589,11 +688,11 @@ member can do through the `ctrlyoke` MCP server.
 
 ### `parallel` {#parallel-group-parallel}
 
-- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step))
+- **Type:** array of ([Prompt step](#prompt-step) or [Script step](#script-step) or [Sub-workflow step](#sub-workflow-step))
 - **Required:** yes
 - **Constraints:** at least 2 item(s)
 
-The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.
+The prompt, script or workflow steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.
 
 ### `failFast` {#parallel-group-failfast}
 

@@ -7,18 +7,21 @@ import { selectionTargetKey, useEditorStore } from "@store/editorStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   isScriptStep,
+  isPromptStep,
+  isSubWorkflowStep,
   type ParallelGroupDefinition,
+  type WorkflowStepType,
 } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
   EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
   STEER_ORIGIN_KINDS,
-  STEP_TYPES,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
-import { executionOwnsCurrentStep } from "./status";
+import { getEditorOnlyDraftKind } from "@utils/stepDraftContent";
+import { executionOwnsCurrentStep, getStepKindLabel } from "./status";
 import { getStepAssistantTextForCopy } from "./outputUtils";
 import {
   getTargetKey,
@@ -87,7 +90,7 @@ export function buildStepCopyMenuItems({
     ? getStepAssistantTextForCopy(latestOutput)
     : undefined;
   const isScript = isScriptStep(step);
-  const copyContentLabel = isScript ? "Copy Script" : "Copy Prompt";
+  const copyContentLabel = `Copy ${getStepKindLabel(step.type)}`;
   const copyLabels = getStepCopyLabels(isScript);
 
   return [
@@ -179,19 +182,22 @@ export function buildReplyToStepMenuItem({
   sourceLabel,
 }: ReplyToStepMenuItemInput): ContextMenuItem {
   const isScript = isScriptStep(step);
+  const isWorkflow = isSubWorkflowStep(step);
   const hasSession = typeof sessionId === "string" && sessionId.length > 0;
 
   return {
     label: "Reply to Step",
     icon: "codicon-reply",
-    disabled: isScript || !hasSession,
+    disabled: isScript || isWorkflow || !hasSession,
     disabledTitle: isScript
       ? "Script steps have no AI session to reply to"
-      : !hasSession
-        ? "This step has no session to resume yet"
-        : undefined,
+      : isWorkflow
+        ? "Only prompt steps have an AI session to reply to"
+        : !hasSession
+          ? "This step has no session to resume yet"
+          : undefined,
     onClick: () => {
-      if (isScriptStep(step) || !sessionId) return;
+      if (!isPromptStep(step) || !sessionId) return;
       startReplyFromStep(
         step,
         sessionId,
@@ -273,6 +279,11 @@ export function buildLiveStepControlMenuItems({
   return items;
 }
 
+/** Why Move to Editor waits for an unsaved draft of `kind` to be dealt with. */
+function formatDraftBlocksMoveReason(kind: WorkflowStepType): string {
+  return `Save or clear the ${getStepKindLabel(kind).toLowerCase()} draft before moving a step into the editor`;
+}
+
 export interface QueuedStepHandoffMenuItemsInput {
   step: WorkflowStep;
   /** Absolute queue index of the step. */
@@ -311,13 +322,15 @@ export function buildQueuedStepHandoffMenuItems({
     editorState.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
       ? editorState
       : editorState.savedNewPromptState;
-  const scriptDraftWouldBeReplaced =
-    replacedDraft?.stepType === STEP_TYPES.SCRIPT &&
-    replacedDraft.scriptCommand.trim().length > 0;
+  // Recent Prompts keeps a replaced prompt draft; a script or workflow
+  // draft it cannot hold would be lost, so it blocks the move instead.
+  const replacedDraftKind = replacedDraft
+    ? getEditorOnlyDraftKind(replacedDraft)
+    : undefined;
   const moveDisabledReason =
     removeDisabledReason ??
-    (scriptDraftWouldBeReplaced
-      ? "Save or clear the script draft before moving a step into the editor"
+    (replacedDraftKind !== undefined
+      ? formatDraftBlocksMoveReason(replacedDraftKind)
       : undefined);
   const moveToEditor: ContextMenuItem = {
     label: "Move to Editor",
@@ -343,12 +356,12 @@ export function buildQueuedStepHandoffMenuItems({
   const queuedPrompt = isSelectedStep
     ? editorState.promptText
     : (queuedEdit?.promptText ?? savedPrompt);
-  const steerText = isScriptStep(step) ? "" : queuedPrompt.trim();
+  const steerText = isPromptStep(step) ? queuedPrompt.trim() : "";
   // A step's own session never steers it: it has not started yet.
   const destinations = steerTargets.filter(
     (target) => target.stepIndex !== stepIndex
   );
-  const steerDisabledReason = isScriptStep(step)
+  const steerDisabledReason = !isPromptStep(step)
     ? STEER_PROMPT_ONLY
     : (removeDisabledReason ??
       (steerText.length === 0
@@ -357,11 +370,12 @@ export function buildQueuedStepHandoffMenuItems({
           ? NO_LIVE_HARNESS
           : undefined));
   const steerTo = (target: SteerTarget) => () => {
-    if (steerDisabledReason !== undefined || !workflowId) return;
+    if (steerDisabledReason !== undefined || !workflowId || !isPromptStep(step))
+      return;
     sendSteerText(workflowId, target.sessionId, steerText, {
       kind: STEER_ORIGIN_KINDS.QUEUED_STEP,
       stepIndex,
-      step: isScriptStep(step) ? step : { ...step, prompt: steerText },
+      step: { ...step, prompt: steerText },
     });
     removeStep();
   };

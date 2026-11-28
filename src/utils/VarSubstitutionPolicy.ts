@@ -196,7 +196,7 @@ export const VAR_SUBSTITUTION_POLICY = {
     RUN_START,
     VIEW.STEP,
     ["enabled"],
-    "/$defs/promptStep/allOf/1/properties/enabled/oneOf/0"
+    "/$defs/stepDisplayProperties/properties/enabled/oneOf/0"
   ),
   maxSteps: valueField(
     RUN_START,
@@ -274,7 +274,7 @@ export const VAR_SUBSTITUTION_POLICY = {
     DISPATCH,
     VIEW.STEP,
     ["onFail"],
-    "/$defs/scriptStep/properties/onFail/oneOf/0"
+    "/$defs/stepOnFail/oneOf/0"
   ),
   "steps[].errorBehavior.onError": valueField(
     DISPATCH,
@@ -483,5 +483,22 @@ export const VAR_SUBSTITUTION_EXCLUDED_FIELDS = [
     path: "conditions",
     reason: "Preset definitions and parameter names are author-only contracts.",
   },
+  {
+    path: "worktreePresets",
+    reason:
+      "Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree.",
+  },
   { path: "vars", reason: "Variables are not recursively expanded." },
+  {
+    path: "steps[].workflow",
+    reason: "substituted by the child run after materialization",
+  },
+  {
+    path: "finalStep.workflow",
+    reason: "substituted by the child run after materialization",
+  },
+  {
+    path: "workflow",
+    reason: "substituted by the child run after materialization",
+  },
 ] as const;

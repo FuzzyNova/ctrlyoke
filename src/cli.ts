@@ -15,6 +15,13 @@ import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/NodePlatformAdapter";
 import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
+import { SubWorkflowLauncher } from "./core/orchestration/SubWorkflowLauncher";
+import type { SubWorkflowInstance } from "./types/SubWorkflowTypes";
+import {
+  createCliSubWorkflowInstance,
+  createCliWorkflowInstance,
+} from "./cli/CliWorkflowInstanceFactory";
+import { mergeCliVarsIntoWorkflow } from "./cli/CliVarOverrides";
 import { rebaseWorkflowStepPaths } from "./core/WorkflowStepPathRebaser";
 import {
   EXECUTION_STATES,
@@ -22,6 +29,7 @@ import {
   FINAL_STEP_PHASES,
   RUNNER_IDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
+  STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
@@ -44,15 +52,14 @@ import {
   projectWorktreeRuntime,
 } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
-import { resolveStepHarnessAndModel } from "./types/ExecutionPropertyResolver";
 import {
-  isScriptStep,
+  isPromptStep,
+  isExecutionStep,
   type PromptFile,
   type RunRef,
   type WorkflowKey,
   type WorkflowStep,
   type WorkingFile,
-  type ParallelGroupDefinition,
   type WorkflowValidationWarning,
 } from "./types/CtrlYokeTypes";
 import { configService } from "./config/CtrlYokeConfigService";
@@ -63,7 +70,6 @@ import {
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
-import { outputTargetKey } from "./utils/OutputTargetKeys";
 import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
 import {
   defaultShutdownTimers,
@@ -75,12 +81,8 @@ import {
   PROCESS_SIGNALS,
   TRUST_DECISIONS,
 } from "./types/DashboardConstants";
-import { CliAttemptTally } from "./cli/CliAttemptTally";
-import { settleCliParallelGroupMember } from "./cli/CliParallelGroupTally";
-import {
-  CliTerminalFormatter,
-  type CliOutputTarget,
-} from "./cli/CliTerminalFormatter";
+import { CliRunProgressReporter } from "./cli/CliRunProgressReporter";
+import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { formatCliRunHeaderLabel } from "./cli/CliRunHeader";
 import {
   CLI_INTERRUPTED_EXIT_CODE,
@@ -96,7 +98,6 @@ import {
   type CliValidationJsonHarness,
 } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
-import { getVariableKeyErrors } from "./utils/KeyValueKeyKinds";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import {
   ensureCtrlyokeShimsExecutable,
@@ -256,6 +257,10 @@ import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
 import { SettingsPropertyResolver } from "./utils/SettingsPropertyResolver";
 import { PromptFileResolver } from "./core/PromptFileResolver";
+import {
+  resolveSubWorkflowReference,
+  type SubWorkflowFileStep,
+} from "./core/SubWorkflowReferenceStep";
 import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
 import { repoToplevel } from "./utils/GitUtils";
 import {
@@ -276,7 +281,6 @@ import {
   selectCliValidationHarnesses,
   type CliValidationTarget,
 } from "./cli/CliValidation";
-import { formatFinalPassLabel } from "./utils/FinalStepLabels";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
 import { getErrorMessage } from "./utils/ErrorUtils";
 
@@ -803,14 +807,6 @@ void program.parseAsync().catch((error: unknown) => {
 
 type RunOptions = RunCommandOptions;
 
-interface CliParallelGroupState {
-  group: ParallelGroupDefinition;
-  memberCount: number;
-  started: Set<number>;
-  completed: Set<number>;
-  failed: Set<number>;
-}
-
 /**
  * The workflow-level harness and model a run reports in its header and
  * `--json` result, using the precedence execution applies: an explicit
@@ -867,56 +863,6 @@ function getCliReportingWorkflow(
   };
 }
 
-function getCliPromptExecutionDetails(
-  instance: WorkflowInstance,
-  stepIndex: number,
-  defaults: { harness: HarnessId; model?: string }
-): { harness?: HarnessId; model?: string } {
-  const workflow = instance.promptQueue.getWorkflowFile();
-  const step = instance.promptQueue.getState().steps[stepIndex];
-  const promptStep = step && !isScriptStep(step) ? step : undefined;
-  return resolveStepHarnessAndModel(promptStep ?? {}, workflow, {
-    ...defaults,
-    modelForHarness: (harness) =>
-      ConfigurationUtils.getModelForHarness(harness) || undefined,
-  });
-}
-
-function getCliOutputStepName(
-  instance: WorkflowInstance,
-  target: OutputExecutionTarget
-): string {
-  const workflow = instance.promptQueue.getWorkflowFile();
-  const step =
-    target.kind === FINAL_STEP_PHASES.QUEUE
-      ? instance.promptQueue.getState().steps[target.stepIndex]
-      : workflow.finalStep;
-  if (step?.name?.trim()) return step.name.trim();
-  if (step && isScriptStep(step))
-    return step.script.split(/\s+/)[0] ?? "script";
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? `Step ${target.stepIndex + 1}`
-    : formatFinalPassLabel(target.loopIndex + 1);
-}
-
-/** The terminal output target for an execution target's attempt. */
-function toCliOutputTarget(
-  target: OutputExecutionTarget,
-  stepName: string
-): CliOutputTarget & { key: string } {
-  return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? {
-        stepIndex: target.stepIndex,
-        stepName,
-        key: outputTargetKey(target),
-      }
-    : {
-        stepIndex: target.loopIndex,
-        stepName,
-        key: outputTargetKey(target),
-      };
-}
-
 interface ValidateCommandOptions {
   harness?: string;
   allInstalledHarnesses?: boolean;
@@ -963,8 +909,9 @@ function warnAboutClampedInteractiveSteps(
     .map((step, index) => ({ step, index }))
     .filter(
       ({ step }) =>
+        isExecutionStep(step) &&
         (step.executionMode ?? workflow.executionMode ?? settingsMode) ===
-        EXECUTION_MODES.INTERACTIVE
+          EXECUTION_MODES.INTERACTIVE
     )
     .map(({ step, index }) => step.name?.trim() || `step ${index + 1}`);
 
@@ -1289,25 +1236,47 @@ async function runCommand(
   // Create a cached detector integration (pre-marked as ready, used for pre-flight checks)
   const detectorIntegration = factory.createForExecution(harness);
 
-  const instance = new WorkflowInstance(
+  const instanceDependencies = {
     platform,
-    undefined, // no dashboard sink in CLI
-    factory,
-    (_harnessOverride?: HarnessId) => detectorIntegration,
-    (_name: string | undefined) => {}, // no tab management
-    () => {}, // no status bar update
-    workingDir,
+    integrationFactory: factory,
+    detectorIntegration,
+    workspaceFolderPath: workingDir,
     hostCanProvidePty,
     supportsConcurrentInteractiveSessions,
-    undefined,
     userFeedbackSink,
-    undefined,
-    undefined,
-    undefined,
-    cliRunnerHostIdentity,
-    undefined,
-    options.sessionId !== undefined
+    runnerHostIdentity: cliRunnerHostIdentity,
+    workflowSessionIdFromOverride: options.sessionId !== undefined,
+    cliVarOverrides: config.vars,
+  };
+  let subWorkflowLauncher: SubWorkflowLauncher;
+  let registerChildProgressReporter = (
+    _child: WorkflowInstance
+  ): { dispose(): void } | undefined => undefined;
+  // A child's progress subscriptions end when the launcher releases it (its
+  // `done` settled), not when the root run ends.
+  const childProgressReports = new Map<
+    SubWorkflowInstance,
+    { dispose(): void }
+  >();
+  subWorkflowLauncher = new SubWorkflowLauncher(
+    (options) => {
+      const child = createCliSubWorkflowInstance(
+        instanceDependencies,
+        options,
+        subWorkflowLauncher
+      );
+      const report = registerChildProgressReporter(child);
+      if (report) childProgressReports.set(child, report);
+      return child;
+    },
+    (child) => {
+      childProgressReports.get(child)?.dispose();
+      childProgressReports.delete(child);
+    }
   );
+  const instance = createCliWorkflowInstance(instanceDependencies, {
+    subWorkflowHost: subWorkflowLauncher,
+  });
 
   // Stream output to the terminal as events arrive. Subscriptions go on the
   // instance (not detectorIntegration) because WorkflowInstance creates a fresh
@@ -1324,210 +1293,13 @@ async function runCommand(
       (deferredCount) =>
         CliTerminalFormatter.renderTerminalReturned(deferredCount)
     );
-    const parallelGroups = new Map<string, CliParallelGroupState>();
-    const attempts = new CliAttemptTally();
-    const renderedFinalStepLabels = new Set<number>();
-    let parallelGroupStateSubscription: { dispose(): void } | undefined;
-    let released = false;
-
-    const renderFinalStepLabel = (target: OutputExecutionTarget): void => {
-      if (
-        target.kind !== FINAL_STEP_PHASES.FINAL_STEP ||
-        renderedFinalStepLabels.has(target.loopIndex)
-      ) {
-        return;
-      }
-      renderedFinalStepLabels.add(target.loopIndex);
-      CliTerminalFormatter.renderFinalStepLabel(target.loopIndex);
-    };
-
-    const renderPromptHeader = (
-      data: Parameters<typeof CliTerminalFormatter.renderPromptHeader>[0]
-    ): void => {
-      CliTerminalFormatter.renderPromptHeader({
-        ...data,
-        ...getCliPromptExecutionDetails(instance, data.stepIndex, {
-          harness,
-          model: config.model,
-        }),
-      });
-    };
-
-    const getParallelGroup = (
-      parallelGroupId: string | undefined
-    ): CliParallelGroupState | undefined => {
-      if (!parallelGroupId) {
-        return undefined;
-      }
-      const group = instance.promptQueue
-        .getState()
-        .parallelGroups.find((candidate) => candidate.id === parallelGroupId);
-      if (!group) {
-        return undefined;
-      }
-      let state = parallelGroups.get(group.id);
-      if (!state) {
-        state = {
-          group,
-          memberCount: group.endIndex - group.startIndex + 1,
-          started: new Set<number>(),
-          completed: new Set<number>(),
-          failed: new Set<number>(),
-        };
-        parallelGroups.set(group.id, state);
-      }
-      return state;
-    };
-
-    const renderParallelGroupProgress = (
-      state: CliParallelGroupState
-    ): void => {
-      const running = Math.max(
-        0,
-        state.started.size - state.completed.size - state.failed.size
-      );
-      CliTerminalFormatter.renderParallelGroupProgress(
-        state.group.id,
-        running,
-        state.completed.size,
-        state.failed.size
-      );
-    };
-
-    releaseLiveOutputState = (): void => {
-      if (released) {
-        return;
-      }
-      released = true;
-      parallelGroupStateSubscription?.dispose();
-      outputGate.write(() => {
-        for (const attempt of attempts.retriedGroups()) {
-          CliTerminalFormatter.renderAttemptGroupSummary(
-            attempt.stepName,
-            attempt.attemptCount,
-            attempt.totalElapsed,
-            attempt.tokenStats
-          );
-        }
-        attempts.clear();
-        parallelGroups.clear();
-        renderedFinalStepLabels.clear();
-        CliTerminalFormatter.disposeEventStreams();
-      });
-    };
-
-    // Every attempt, queue step or finalStep pass, streams into a fresh
-    // stream; the stream outlives completion so follow-up activity pairs.
-    // Retry tallies cover every target, keyed like its output stream.
-    instance.onTargetAttemptStart(({ target, attemptIndex }) =>
-      outputGate.write(() => {
-        const outputTarget = toCliOutputTarget(
-          target,
-          getCliOutputStepName(instance, target)
-        );
-        CliTerminalFormatter.replaceEventStream(outputTarget);
-        attempts.start(outputTarget.key, outputTarget.stepName, attemptIndex);
-      })
-    );
-    instance.onTargetAttemptComplete(({ target, stats }) =>
-      outputGate.write(() => {
-        const outputTarget = toCliOutputTarget(
-          target,
-          getCliOutputStepName(instance, target)
-        );
-        attempts.complete(outputTarget.key, stats);
-        CliTerminalFormatter.finishEventStream(outputTarget);
-        CliTerminalFormatter.renderStats(stats);
-      })
-    );
-    instance.onPromptStart((data) =>
-      outputGate.write(() => {
-        if (data.cliCommand !== undefined) {
-          CliTerminalFormatter.renderPromptHeader(data);
-          return;
-        }
-
-        const state = getParallelGroup(data.parallelGroupId);
-        if (!state) {
-          renderPromptHeader(data);
-          return;
-        }
-        if (!state.started.has(data.stepIndex)) {
-          state.started.add(data.stepIndex);
-          CliTerminalFormatter.renderParallelGroupHeader(
-            state.group,
-            state.memberCount
-          );
-        }
-        // A retry re-opens a branch that was tentatively settled by its prior
-        // attempt. The tally therefore remains truthful while branches stream
-        // concurrently into one linear terminal.
-        state.completed.delete(data.stepIndex);
-        state.failed.delete(data.stepIndex);
-        renderParallelGroupProgress(state);
-        renderPromptHeader(data);
-      })
-    );
-    parallelGroupStateSubscription = instance.promptQueue.onDidChangeState(
-      (queueState) =>
-        outputGate.write(() => {
-          for (const state of parallelGroups.values()) {
-            for (const stepIndex of state.started) {
-              if (
-                settleCliParallelGroupMember(
-                  state,
-                  stepIndex,
-                  queueState.results[stepIndex]?.status
-                )
-              ) {
-                renderParallelGroupProgress(state);
-              }
-            }
-          }
-        })
-    );
-    instance.onTargetScriptOutput((data) =>
-      outputGate.write(() => {
-        renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderScriptOutput(
-          data.output,
-          toCliOutputTarget(
-            data.target,
-            getCliOutputStepName(instance, data.target)
-          ),
-          data.output.scriptOutput
-        );
-      })
-    );
-    instance.onTargetStreamingEvents((data) => {
-      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) {
-        return;
-      }
-      outputGate.write(() => {
-        renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderEvents(
-          data.events,
-          toCliOutputTarget(data.target, data.stepName)
-        );
-      });
-    });
-    instance.onTargetStreamingChunk((data) => {
-      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) {
-        return;
-      }
-      outputGate.write(() => {
-        renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderStreamingChunk(
-          data.chunk,
-          toCliOutputTarget(data.target, data.stepName)
-        );
-      });
-    });
-    instance.onWorkflowStatusMessage((data) =>
-      outputGate.write(() => {
-        CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
-      })
-    );
+    const reporter = new CliRunProgressReporter(outputGate);
+    // `--model` applies to the root workflow only; harness defaults are the
+    // same settings default for every run (D11).
+    reporter.subscribeRoot(instance, { harness, model: config.model });
+    registerChildProgressReporter = (child) =>
+      reporter.subscribeChild(child, { harness });
+    releaseLiveOutputState = () => reporter.release();
   }
 
   // Runner-lock acquire/heartbeat/release is owned entirely by
@@ -1907,6 +1679,34 @@ function handleSecretCommand(
     });
 }
 
+/** A `type: workflow` step that names its child by file path (D13). */
+function isFileSubWorkflowStep(value: unknown): value is SubWorkflowFileStep {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === STEP_TYPES.WORKFLOW &&
+    "workflow" in value &&
+    typeof value.workflow === "string"
+  );
+}
+
+/** Every string in a parsed workflow, for finding `{{name}}` placeholders. */
+function collectStringValues(value: unknown, texts: string[]): void {
+  if (typeof value === "string") texts.push(value);
+  else if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, texts);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStringValues(item, texts);
+  }
+}
+
+/**
+ * Warn about each `--var` no workflow field references. `--var` also reaches
+ * every file child (D11), so the text of each `type: workflow` file child
+ * reachable from the root counts. Best effort: a child that cannot be
+ * resolved, read or parsed is skipped, because the run reports it.
+ */
 async function warnUnusedCliVariables(
   workflow: PromptFile,
   vars: Record<string, string>,
@@ -1915,14 +1715,8 @@ async function warnUnusedCliVariables(
 ): Promise<void> {
   if (Object.keys(vars).length === 0) return;
   const texts: string[] = [];
-  const collectTexts = (value: unknown): void => {
-    if (typeof value === "string") texts.push(value);
-    else if (Array.isArray(value)) value.forEach(collectTexts);
-    else if (value && typeof value === "object") {
-      Object.values(value).forEach(collectTexts);
-    }
-  };
-  collectTexts(workflow);
+  const parser = new PromptFileParser(platform);
+  collectStringValues(workflow, texts);
   if (sourceDefinitionPath) {
     const resolver = new PromptFileResolver({
       workspaceRoot: platform.getWorkspaceRoot(),
@@ -1932,29 +1726,85 @@ async function warnUnusedCliVariables(
         platform.getWorkspaceRoot()
       ),
     });
-    const resolvePromptReferences = async (value: unknown): Promise<void> => {
+    const resolvePromptReferences = async (
+      value: unknown,
+      definitionPath: string
+    ): Promise<void> => {
       if (typeof value === "string") {
         if (!resolver.looksLikePromptFilePath(value)) return;
-        const resolved = await resolver.resolve(value, sourceDefinitionPath);
+        const resolved = await resolver.resolve(value, definitionPath);
         if (resolved.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
           texts.push(resolved.content);
         }
       } else if (Array.isArray(value)) {
-        await Promise.all(value.map(resolvePromptReferences));
+        await Promise.all(
+          value.map((item) => resolvePromptReferences(item, definitionPath))
+        );
       } else if (value && typeof value === "object") {
-        await Promise.all(Object.values(value).map(resolvePromptReferences));
+        await Promise.all(
+          Object.values(value).map((item) =>
+            resolvePromptReferences(item, definitionPath)
+          )
+        );
       }
     };
-    await resolvePromptReferences(workflow);
+    await resolvePromptReferences(workflow, sourceDefinitionPath);
+
+    // A file may be reached twice (and may name an ancestor): visit it once.
+    const visited = new Set<string>([path.resolve(sourceDefinitionPath)]);
+    const visitFileChildren = async (
+      value: unknown,
+      definitionPath: string
+    ): Promise<void> => {
+      if (Array.isArray(value)) {
+        for (const item of value) await visitFileChildren(item, definitionPath);
+        return;
+      }
+      if (!value || typeof value !== "object") return;
+      if (isFileSubWorkflowStep(value)) {
+        await visitChildFile(value.workflow, definitionPath);
+        return;
+      }
+      for (const item of Object.values(value)) {
+        await visitFileChildren(item, definitionPath);
+      }
+    };
+    const visitChildFile = async (
+      workflowPath: string,
+      definitionPath: string
+    ): Promise<void> => {
+      try {
+        const resolution = await resolveSubWorkflowReference(
+          workflowPath,
+          resolver,
+          definitionPath
+        );
+        if (!resolution.ok) return;
+        const childPath = path.resolve(resolution.path);
+        if (visited.has(childPath)) return;
+        visited.add(childPath);
+        const child = await parser.parsePromptFile(childPath);
+        if (!child) return;
+        collectStringValues(child, texts);
+        await resolvePromptReferences(child, childPath);
+        await visitFileChildren(child, childPath);
+      } catch {
+        // Best effort: the run reports an unusable child itself.
+      }
+    };
+    await visitFileChildren(workflow, sourceDefinitionPath);
   }
   // Workflow loading resolves referenced prompt files into their text before
   // this check. Include the same effective settings defaults used by execution.
-  collectTexts(SettingsPropertyResolver.createContext().defaults);
-  collectTexts({
-    endCondition: ConfigurationUtils.getDefaultEndCondition(),
-    preCondition: ConfigurationUtils.getDefaultPreCondition(),
-    worktree: ConfigurationUtils.getDefaultWorktree(),
-  });
+  collectStringValues(SettingsPropertyResolver.createContext().defaults, texts);
+  collectStringValues(
+    {
+      endCondition: ConfigurationUtils.getDefaultEndCondition(),
+      preCondition: ConfigurationUtils.getDefaultPreCondition(),
+      worktree: ConfigurationUtils.getDefaultWorktree(),
+    },
+    texts
+  );
   const referenced = new Set(
     texts.flatMap((text) =>
       findVariablePlaceholders(text).map(({ name }) => name)
@@ -1967,23 +1817,6 @@ async function warnUnusedCliVariables(
       );
     }
   }
-}
-
-function mergeCliVarsIntoWorkflow(
-  workflow: PromptFile,
-  vars: Record<string, string>
-): void {
-  if (Object.keys(vars).length === 0) {
-    return;
-  }
-  const mergedVars = { ...(workflow.vars ?? {}), ...vars };
-  const variableKeyErrors = getVariableKeyErrors(Object.keys(mergedVars));
-  if (variableKeyErrors.length > 0) {
-    throw new Error(
-      `Invalid workflow variables: ${variableKeyErrors.join(", ")}`
-    );
-  }
-  workflow.vars = mergedVars;
 }
 
 /**
@@ -2271,10 +2104,8 @@ function collectWorkflowHarnesses(
   const values = [
     defaultHarness,
     workflow.harness,
-    ...(workflow.steps ?? [])
-      .filter((step) => !isScriptStep(step))
-      .map((step) => step.harness),
-    ...(workflow.finalStep && !isScriptStep(workflow.finalStep)
+    ...(workflow.steps ?? []).filter(isPromptStep).map((step) => step.harness),
+    ...(workflow.finalStep && isPromptStep(workflow.finalStep)
       ? [workflow.finalStep.harness]
       : []),
   ].filter((value): value is HarnessId => value !== undefined);

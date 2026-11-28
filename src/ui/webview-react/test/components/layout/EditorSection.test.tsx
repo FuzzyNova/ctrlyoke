@@ -241,6 +241,81 @@ describe("EditorSection", () => {
     expect(scriptButton).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("offers Workflow as a third step type, derived from the stored kind", () => {
+    promptFileAction.value = {
+      icon: "file-symlink-file",
+      tooltip: "Convert to prompt file",
+      disabled: false,
+      onClick: vi.fn(),
+    };
+    render(<EditorSection />);
+
+    const workflowButton = screen.getByRole("button", {
+      name: "Workflow step",
+    });
+    expect(workflowButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(workflowButton);
+
+    expect(useEditorStore.getState().stepType).toBe(STEP_TYPES.WORKFLOW);
+    expect(workflowButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Prompt step" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByTestId("editor-mode")).toHaveTextContent(
+      "New Workflow Step"
+    );
+    // Prompt-only header chrome stays out of Workflow mode.
+    expect(
+      screen.queryByRole("button", { name: "Convert to prompt file" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the execution-mode picker for an inline prompt and hides it for a file child", () => {
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    });
+    const { unmount } = render(<EditorSection />);
+    expect(
+      screen.queryByRole("button", { name: "Execution mode" })
+    ).not.toBeInTheDocument();
+    unmount();
+
+    // The wrapped prompt keeps its own `executionMode`, which the picker edits.
+    useEditorStore.getState().resetEditor();
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Implement the lane" },
+    });
+    render(<EditorSection />);
+    expect(
+      screen.getByRole("button", { name: "Execution mode" })
+    ).toBeInTheDocument();
+  });
+
+  it("labels an existing workflow step and its final-step form", () => {
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    });
+    const { unmount } = render(<EditorSection />);
+    expect(screen.getByTestId("editor-mode")).toHaveTextContent(
+      "Editing: Workflow Step"
+    );
+    unmount();
+
+    useEditorStore.getState().selectFinalStep({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    });
+    render(<EditorSection />);
+    expect(screen.getByTestId("editor-mode")).toHaveTextContent(
+      "Editing: Final Workflow Step"
+    );
+  });
+
   it("loads the disabled state when editing an existing disabled step", () => {
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",

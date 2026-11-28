@@ -368,33 +368,7 @@
           "description": "Named-worktree branch shorthand. The value must be a valid local Git branch name."
         },
         {
-          "type": "object",
-          "description": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
-          "properties": {
-            "mode": {
-              "type": "string",
-              "const": "managed"
-            },
-            "merge": {
-              "type": "boolean",
-              "description": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored."
-            },
-            "keep": {
-              "type": "boolean",
-              "description": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored."
-            },
-            "base": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Optional Git ref resolved to a commit when the worktree is created."
-            },
-            "setup": {
-              "type": "string",
-              "description": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped."
-            }
-          },
-          "required": ["mode"],
-          "additionalProperties": false
+          "$ref": "#/$defs/managedWorktreeConfig"
         },
         {
           "type": "object",
@@ -474,6 +448,16 @@
             "$ref": "#/$defs/conditionPreset"
           }
         },
+        "worktreePresets": {
+          "type": "object",
+          "description": "Named worktree presets that MCP agents may attach to an appended step by name (`worktree: { use: \"<name>\" }`), queuing it as a lane: a single-step sub-workflow that runs in its own managed worktree. Only the managed object form is accepted, so every use creates a fresh branch. Agents can choose a preset but can never supply or override its fields, including `setup`. The preset is copied into the lane when it is queued, so later edits do not change lanes already queued. Without this property, agents cannot queue steps in their own worktree. Not substituted: Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/managedWorktreeConfig"
+          }
+        },
         "trustedExternalRoots": {
           "oneOf": [
             {
@@ -547,8 +531,60 @@
               "$ref": "#/properties/_templateMeta"
             }
           }
+        },
+        {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/rootWorkflowStep" },
+            { "$ref": "#/$defs/workflowOnlyProperties" }
+          ],
+          "properties": {
+            "$schema": { "$ref": "#/$defs/rootScriptStep/properties/$schema" },
+            "schemaVersion": {
+              "$ref": "#/$defs/rootScriptStep/properties/schemaVersion"
+            },
+            "_templateMeta": { "$ref": "#/properties/_templateMeta" }
+          }
         }
       ]
+    },
+    "rootWorkflowStep": {
+      "type": "object",
+      "description": "A top-level sub-workflow step with workflow-only properties.",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "description": "Schema URL used by JSON-aware editors for validation and completion."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1. Not substituted: This structural field or identity value stays as authored."
+        },
+        "type": { "$ref": "#/$defs/subWorkflowStep/properties/type" },
+        "name": { "$ref": "#/$defs/stepDisplayProperties/properties/name" },
+        "enabled": {
+          "$ref": "#/$defs/stepDisplayProperties/properties/enabled"
+        },
+        "color": { "$ref": "#/$defs/stepDisplayProperties/properties/color" },
+        "workflow": { "$ref": "#/$defs/subWorkflowStep/properties/workflow" },
+        "onFail": { "$ref": "#/$defs/subWorkflowStep/properties/onFail" },
+        "_runtime": { "$ref": "#/$defs/subWorkflowStep/properties/_runtime" },
+        "worktree": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/worktree"
+        },
+        "vars": { "$ref": "#/$defs/workflowOnlyProperties/properties/vars" },
+        "trustedExternalRoots": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/trustedExternalRoots"
+        },
+        "maxSteps": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/maxSteps"
+        },
+        "_templateMeta": { "$ref": "#/properties/_templateMeta" }
+      },
+      "required": ["type", "workflow"],
+      "unevaluatedProperties": false
     },
     "rootScriptStep": {
       "type": "object",
@@ -568,13 +604,13 @@
           "$ref": "#/$defs/scriptStep/properties/type"
         },
         "name": {
-          "$ref": "#/$defs/scriptStep/properties/name"
+          "$ref": "#/$defs/stepDisplayProperties/properties/name"
         },
         "enabled": {
-          "$ref": "#/$defs/scriptStep/properties/enabled"
+          "$ref": "#/$defs/stepDisplayProperties/properties/enabled"
         },
         "color": {
-          "$ref": "#/$defs/scriptStep/properties/color"
+          "$ref": "#/$defs/stepDisplayProperties/properties/color"
         },
         "executionMode": {
           "$ref": "#/$defs/scriptStep/properties/executionMode"
@@ -928,6 +964,9 @@
             },
             {
               "$ref": "#/$defs/scriptStep"
+            },
+            {
+              "$ref": "#/$defs/subWorkflowStep"
             }
           ]
         },
@@ -954,10 +993,10 @@
     },
     "parallelGroupItem": {
       "type": "object",
-      "description": "An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.",
+      "description": "An authored group of prompt, script or workflow steps. Groups are flattened into steps plus parallelGroups when loaded. Prompt and script members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate them or merge their work, so give each member independent work. A workflow member is its own child run, so a child with its own `worktree` works in its own checkout. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.",
       "properties": {
         "parallel": {
-          "description": "The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.",
+          "description": "The prompt, script or workflow steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.",
           "type": "array",
           "items": {
             "allOf": [
@@ -1019,28 +1058,6 @@
               "const": "prompt",
               "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
             },
-            "name": {
-              "type": "string",
-              "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.",
-              "maxLength": 100
-            },
-            "enabled": {
-              "oneOf": [
-                {
-                  "type": "boolean",
-                  "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
-                },
-                {
-                  "$ref": "#/$defs/varPlaceholder"
-                }
-              ],
-              "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
-            },
-            "color": {
-              "type": "string",
-              "pattern": "^#[0-9a-fA-F]{6}$",
-              "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
-            },
             "prompt": {
               "type": "string",
               "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
@@ -1057,6 +1074,9 @@
             "type": "object",
             "required": ["script"]
           }
+        },
+        {
+          "$ref": "#/$defs/stepDisplayProperties"
         }
       ]
     },
@@ -1068,28 +1088,6 @@
           "description": "Step type discriminator. Required, and must be \"script\", for script steps. Not substituted: This structural field or identity value stays as authored.",
           "type": "string",
           "const": "script"
-        },
-        "name": {
-          "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
-          "type": "string",
-          "maxLength": 100
-        },
-        "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
-            },
-            {
-              "$ref": "#/$defs/varPlaceholder"
-            }
-          ],
-          "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
-        },
-        "color": {
-          "type": "string",
-          "pattern": "^#[0-9a-fA-F]{6}$",
-          "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
         },
         "executionMode": {
           "oneOf": [
@@ -1162,17 +1160,7 @@
           "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "onFail": {
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": ["continue", "stopWorkflow"],
-              "default": "stopWorkflow",
-              "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
-            },
-            {
-              "$ref": "#/$defs/varPlaceholder"
-            }
-          ],
+          "$ref": "#/$defs/stepOnFail",
           "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch."
         },
         "_runtime": {
@@ -1194,7 +1182,92 @@
           "$ref": "#/$defs/scriptProperties/properties/returns"
         }
       },
-      "required": ["type", "script"]
+      "required": ["type", "script"],
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepDisplayProperties"
+        }
+      ]
+    },
+    "subWorkflowStep": {
+      "type": "object",
+      "description": "Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage and run history. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends. A stopped child always stops the parent; onFail controls failed children.",
+      "allOf": [{ "$ref": "#/$defs/stepDisplayProperties" }],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workflow",
+          "description": "Marks this step as a sub-workflow step."
+        },
+        "workflow": {
+          "description": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "$ref": "#/$defs/inlineSubWorkflowDefinition" }
+          ]
+        },
+        "onFail": {
+          "$ref": "#/$defs/stepOnFail",
+          "description": "What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent."
+        },
+        "_runtime": {
+          "$ref": "#/$defs/subWorkflowRuntimeMetadata",
+          "description": "Per-step runtime linkage to the child run (added automatically during execution). Not substituted: This structural field or identity value stays as authored."
+        }
+      },
+      "required": ["type", "workflow"]
+    },
+    "inlineSubWorkflowDefinition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "not": { "required": ["_runtime"] },
+          "allOf": [
+            { "$ref": "#/$defs/promptStep" },
+            {
+              "type": "object",
+              "properties": { "worktree": { "$ref": "#/$defs/worktreeConfig" } }
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "type": "object",
+          "not": { "required": ["_runtime"] },
+          "allOf": [
+            { "$ref": "#/$defs/scriptStep" },
+            {
+              "type": "object",
+              "properties": { "worktree": { "$ref": "#/$defs/worktreeConfig" } }
+            }
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "subWorkflowRuntimeMetadata": {
+      "type": "object",
+      "description": "Runtime linkage to the child run this step started (added automatically during execution).",
+      "allOf": [
+        { "$ref": "#/$defs/stepLifecycleRuntime" },
+        {
+          "properties": {
+            "childWorkflowKey": {
+              "type": "string",
+              "description": "Lineage key of the child run."
+            },
+            "childRunRef": {
+              "type": "string",
+              "description": "Run reference of the child run, used to locate its output and history."
+            },
+            "resolvedWorkflowPath": {
+              "type": "string",
+              "description": "Absolute path the workflow reference resolved to when the child launched."
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
     },
     "endCondition": {
       "type": "object",
@@ -1599,6 +1672,9 @@
           "$ref": "#/$defs/executionProperties"
         },
         {
+          "$ref": "#/$defs/stepLifecycleRuntime"
+        },
+        {
           "not": {
             "type": "object",
             "required": ["worktree"]
@@ -1612,36 +1688,9 @@
         },
         {
           "properties": {
-            "startedAt": {
-              "type": "number",
-              "description": "Timestamp when the executor claimed this step for dispatch"
-            },
-            "stepId": {
-              "type": "string",
-              "description": "Stable internal identity for this queue step within its run"
-            },
-            "completedAt": {
-              "type": "number",
-              "description": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)"
-            },
-            "terminalStatus": {
-              "type": "string",
-              "enum": [
-                "completed",
-                "cancelled",
-                "failed",
-                "skipped",
-                "noTurnStarted"
-              ],
-              "description": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload."
-            },
             "retryCount": {
               "type": "number",
               "description": "Number of retry attempts for this prompt"
-            },
-            "elapsed": {
-              "type": "number",
-              "description": "Completed prompt duration in seconds"
             },
             "contextWindowUsed": {
               "type": "number",
@@ -1650,26 +1699,6 @@
             "contextWindowSize": {
               "type": "number",
               "description": "Context window size in tokens, captured from the last completed output"
-            },
-            "failureKind": {
-              "type": "string",
-              "enum": [
-                "userCancelled",
-                "processExit",
-                "harnessError",
-                "harnessNotInstalled",
-                "timeout",
-                "unknown"
-              ],
-              "description": "Structured classification of the last harness/session failure for this prompt."
-            },
-            "failureMessage": {
-              "type": "string",
-              "description": "Human-readable message describing the last harness/session failure."
-            },
-            "terminalFailure": {
-              "type": "boolean",
-              "description": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure."
             }
           }
         }
@@ -2505,6 +2534,133 @@
       "type": "string",
       "pattern": "^\\{\\{\\w+\\}\\}$",
       "description": "A whole-value workflow variable placeholder. See https://ctrlyoke.dev/docs/workflows/variables#where-substituted."
+    },
+    "stepDisplayProperties": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+          "maxLength": 100
+        },
+        "enabled": {
+          "oneOf": [
+            {
+              "type": "boolean",
+              "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+            },
+            {
+              "$ref": "#/$defs/varPlaceholder"
+            }
+          ],
+          "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
+        }
+      }
+    },
+    "stepOnFail": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["continue", "stopWorkflow"],
+          "default": "stopWorkflow",
+          "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
+        },
+        {
+          "$ref": "#/$defs/varPlaceholder"
+        }
+      ],
+      "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch."
+    },
+    "managedWorktreeConfig": {
+      "type": "object",
+      "description": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "managed",
+          "description": "Always `managed`: a fresh worktree and branch for each run."
+        },
+        "merge": {
+          "type": "boolean",
+          "description": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored."
+        },
+        "keep": {
+          "type": "boolean",
+          "description": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored."
+        },
+        "base": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional Git ref resolved to a commit when the worktree is created."
+        },
+        "setup": {
+          "type": "string",
+          "description": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped."
+        }
+      },
+      "required": ["mode"],
+      "additionalProperties": false
+    },
+    "stepLifecycleRuntime": {
+      "type": "object",
+      "properties": {
+        "startedAt": {
+          "type": "number",
+          "description": "Timestamp when the executor claimed this step for dispatch"
+        },
+        "stepId": {
+          "type": "string",
+          "description": "Stable internal identity for this queue step within its run"
+        },
+        "completedAt": {
+          "type": "number",
+          "description": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)"
+        },
+        "terminalStatus": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "cancelled",
+            "failed",
+            "skipped",
+            "noTurnStarted"
+          ],
+          "description": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload."
+        },
+        "elapsed": {
+          "type": "number",
+          "description": "Completed prompt duration in seconds"
+        },
+        "failureMessage": {
+          "type": "string",
+          "description": "Human-readable message describing the last harness/session failure."
+        },
+        "failureKind": {
+          "type": "string",
+          "enum": [
+            "userCancelled",
+            "processExit",
+            "harnessError",
+            "harnessNotInstalled",
+            "timeout",
+            "unknown"
+          ],
+          "description": "Structured classification of the last failure for this step."
+        },
+        "rewoundFailure": {
+          "type": "boolean",
+          "description": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position."
+        },
+        "terminalFailure": {
+          "type": "boolean",
+          "description": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure."
+        }
+      }
     }
   }
 }

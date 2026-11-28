@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { PROMPT_PROPERTIES, STEP_TYPES } from "@root/types/DashboardConstants";
+import { PROMPT_PROPERTIES } from "@root/types/DashboardConstants";
 import {
   getBulkDisplayValue,
   MIXED_VALUE,
@@ -11,6 +11,10 @@ import { getInheritedStepColor } from "../../utils/stepColor";
 import { Icon } from "../shared/Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
+import {
+  getEditorContentKind,
+  isPromptEditorStepType,
+} from "@utils/stepDraftContent";
 
 interface StepColorInputState {
   color: string;
@@ -27,6 +31,7 @@ export function useStepColorInput(): StepColorInputState {
     properties,
     setProperty,
     stepType,
+    subWorkflowInline,
     selectedPromptIndex,
     multiSelection,
     bulkPatch,
@@ -35,7 +40,14 @@ export function useStepColorInput(): StepColorInputState {
   const { steps } = useWorkflowStore();
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
-    stepType === STEP_TYPES.SCRIPT ? undefined : getEffectiveHarness(),
+    // Only a prompt step runs on the workflow's harness, an inline workflow
+    // step's prompt included; a script runs none and a file sub-workflow runs
+    // on its child's own.
+    isPromptEditorStepType(
+      getEditorContentKind({ stepType, subWorkflowInline })
+    )
+      ? getEffectiveHarness()
+      : undefined,
     globalSettings.harnessColors,
     globalSettings.stepColorMode,
     selectedPromptIndex ?? steps.length

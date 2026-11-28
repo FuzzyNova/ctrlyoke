@@ -34,7 +34,24 @@ export type McpAppendStepInput = Pick<
   executionMode?: ExecutionMode;
   endCondition?: McpConditionPresetUse;
   preCondition?: McpConditionPresetUse;
+  /** Queue the step as a lane in its own worktree, from an author-defined preset. */
+  worktree?: McpWorktreePresetUse;
 };
+
+/** Agent-selectable worktree preset reference; the preset's fields stay author-owned. */
+export interface McpWorktreePresetUse {
+  use: string;
+}
+
+/** One author-declared worktree preset, as `workflow_status` reports it. */
+export interface McpWorktreePresetSummary {
+  /** The name to pass as `worktree.use`. */
+  name: string;
+  /** Whether a lane's branch is merged back into this run's checkout when it settles. */
+  merge: boolean;
+  /** First line of the preset's setup command, or "" when it has none. */
+  setup: string;
+}
 
 /** Agent-selectable preset reference; script execution settings stay author-owned. */
 export interface McpConditionPresetUse {
@@ -116,6 +133,8 @@ export interface McpAppendStepResult {
     resumeSession: boolean;
     endConditionPreset?: string;
     preConditionPreset?: string;
+    /** Present when the step was queued as a lane: the worktree preset it uses. */
+    worktreePreset?: string;
   }>;
 }
 
@@ -141,6 +160,8 @@ export type McpStepUpdateArguments = Omit<
   additionalArgs?: string[];
   endCondition?: McpConditionPresetUse;
   preCondition?: McpConditionPresetUse;
+  /** Wrap the step into a lane, or switch a lane's preset (D14). */
+  worktree?: McpWorktreePresetUse;
 };
 
 export interface McpEditStepArguments {
@@ -158,11 +179,28 @@ export interface McpReorderStepsArguments {
 }
 
 export interface McpReadOutputArguments {
+  run?: { workflowKey: string; runRef: string };
   indices?: number[];
   cursor?: string;
   limit?: number;
   tail?: number;
 }
+
+export interface McpWorkflowStatusArguments {
+  run?: { workflowKey: string; runRef: string };
+}
+
+const MCP_DESCENDANT_RUN_SCHEMA: McpToolInputSchema = {
+  type: "object",
+  description:
+    "Inspect the attached run or a descendant started by one of its sub-workflow steps. Descendants at any depth are accepted.",
+  properties: {
+    workflowKey: { type: "string" },
+    runRef: { type: "string" },
+  },
+  required: ["workflowKey", "runRef"],
+  additionalProperties: false,
+};
 
 export interface McpGlobalStatusArguments {
   workflowKey?: string;
@@ -274,6 +312,25 @@ const MCP_SKILLS_SCHEMA: McpToolInputSchema = {
   description: "Skills to make available to the step.",
 };
 
+/** Field that queues or keeps a step as a lane (D14), in append_step and edit_step. */
+export const MCP_STEP_WORKTREE_FIELD = "worktree";
+
+function worktreePresetUseSchema(description: string): McpToolInputSchema {
+  return {
+    type: "object",
+    additionalProperties: false,
+    description,
+    properties: {
+      use: {
+        type: "string",
+        description:
+          "Name of a worktree preset the workflow declares; workflow_status lists them under metadata.worktreePresets.",
+      },
+    },
+    required: ["use"],
+  };
+}
+
 const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
   type: "object",
   properties: {
@@ -306,6 +363,9 @@ const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
     skills: MCP_SKILLS_SCHEMA,
     endCondition: conditionPresetUseSchema("endCondition"),
     preCondition: conditionPresetUseSchema("preCondition"),
+    worktree: worktreePresetUseSchema(
+      "Queue this step as a lane: it runs as its own single-step workflow in a fresh worktree and branch created from a named author-defined preset. workflow_status lists the presets under metadata.worktreePresets; when that list is empty, lanes are unavailable. A lane starts a new run, so it cannot resume or reference an earlier step's session or output."
+    ),
     resumeSession: {
       type: "boolean",
       description:
@@ -369,6 +429,9 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
     },
     endCondition: conditionPresetUseSchema("endCondition"),
     preCondition: conditionPresetUseSchema("preCondition"),
+    worktree: worktreePresetUseSchema(
+      "Run this pending prompt step as a lane in its own fresh worktree from a named author-defined preset, or switch a lane to another preset. The lane's prompt, name and other fields stay as they are. Clear worktree (clearProperties) to turn a lane back into a plain prompt step."
+    ),
     resumeSession: {
       type: "boolean",
       description: "Whether the step should resume a previous session.",
@@ -446,13 +509,16 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. metadata.conditionPresets lists the condition presets you can attach to a step as endCondition or preCondition { use: name }, with each one's script preview, required params, and retry limit; an empty list means the workflow declares none. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script.",
-    inputSchema: { type: "object", properties: {} },
+      "See each workflow step's type, status, sessionId, and whether it resumes an earlier session (resumeSession, including a value inherited from the workflow). Each prompt step also shows its harness and executionMode (interactive or headless): what it ran with once started, otherwise what it will run with. Finished prompt steps include gitOutcome when the git snapshot succeeded: HEAD at start and end for each repository, plus whether the tree was dirty at the end. This is advisory data, not an execution gate; it is omitted when unavailable. Prompt steps include a prompt preview; script steps include a script preview. A workflow step, including a lane queued with worktree { use }, includes childRun with its workflowKey and runRef (omitted when the step failed before a child run existed, leaving only its outcome): while the child runs, also its executionState and, for a lane, its worktree branch; once settled, its outcome, including a lane's branch and merge result. metadata shows the workflow's harness, model, resumeSession, and executionMode, which appended prompt steps inherit; append_step can override these. metadata.conditionPresets lists the condition presets you can attach to a step as endCondition or preCondition { use: name }, with each one's script preview, required params, and retry limit; an empty list means the workflow declares none. metadata.worktreePresets lists the worktree presets you can queue a step in its own worktree with (append_step worktree { use: name }), with whether each merges back and its setup preview; an empty list means lanes are unavailable. A headless step cannot wait on background work: its process exits when the agent ends its turn. Codex cannot wait on background work in either mode. Call read_output with a step's index to read its full prompt or script. Pass run to inspect the attached workflow or one of its descendant runs; descendants at any depth are accepted.",
+    inputSchema: {
+      type: "object",
+      properties: { run: MCP_DESCENDANT_RUN_SCHEMA },
+    },
   },
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more prompt steps or future parallel groups to your workflow's queue. Steps can include agent and skills overrides. Harness arguments and permission fields are never accepted. Script steps cannot be appended through MCP. Each added step's effective harness, model, execution mode, session behavior, and condition preset names are returned. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
+      "Add one or more prompt steps or future parallel groups to your workflow's queue. Steps can include agent and skills overrides. Harness arguments and permission fields are never accepted. Script steps cannot be appended through MCP. Give a step worktree { use: <preset> } to queue it as a lane that runs in its own fresh worktree, flat or as a parallel group member; workflow_status lists the presets. Each added step's effective harness, model, execution mode, session behavior, and condition and worktree preset names are returned. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -525,7 +591,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_EDIT_STEP_TOOL_NAME,
     description:
-      "Change the prompt or configuration of one pending step when you discover that its work needs correction or different settings.",
+      "Change the prompt or configuration of one pending step when you discover that its work needs correction or different settings. A lane queued with worktree { use } is edited like a prompt step: its prompt, name, model and other fields change in place. Set worktree { use } to move a prompt step into its own worktree or switch a lane's preset, and clear worktree to turn a lane back into a plain prompt step. Any other workflow step (a file reference, an inline script, a child with onFail or without a managed worktree) cannot be edited here.",
     inputSchema: {
       type: "object",
       properties: {
@@ -587,10 +653,11 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_READ_OUTPUT_TOOL_NAME,
     description:
-      "Read the full prompt of any step in your workflow, and what earlier steps produced. Use this to build on a previous step's conclusions instead of repeating its work, or to see exactly what a step was asked to do; for a large output, page one selected step with limit and cursor or inspect its tail.",
+      "Read the full output of any step in your workflow, and what earlier steps produced. A workflow step returns the same recursive XML metadata and child output used by prior context. Use this to build on a previous step's conclusions instead of repeating its work, or to see exactly what a step was asked to do; for a large output, page one selected step with limit and cursor or inspect its tail. Pass run to inspect the attached workflow or a child run started by one of its sub-workflow steps; descendants at any depth are accepted.",
     inputSchema: {
       type: "object",
       properties: {
+        run: MCP_DESCENDANT_RUN_SCHEMA,
         indices: {
           type: "array",
           items: { type: "number" },
@@ -793,7 +860,7 @@ export type McpToolName =
   | typeof MCP_RELEASE_PATHS_TOOL_NAME;
 
 export interface McpToolArgumentsByName {
-  [MCP_WORKFLOW_STATUS_TOOL_NAME]: Record<string, unknown>;
+  [MCP_WORKFLOW_STATUS_TOOL_NAME]: McpWorkflowStatusArguments;
   [MCP_APPEND_STEP_TOOL_NAME]: McpAppendStepArguments;
   [MCP_LIST_HARNESSES_TOOL_NAME]: Record<string, unknown>;
   [MCP_READ_OUTPUT_TOOL_NAME]: McpReadOutputArguments;

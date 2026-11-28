@@ -18,6 +18,8 @@ const DEFAULT_OPT_OUTS: Record<string, string> = {
   vars: "Workflow variables are authored per workflow and may contain workflow-specific values.",
   conditions:
     "Condition presets are authored per workflow; a global default would let settings supply scripts MCP agents can attach.",
+  worktreePresets:
+    "Worktree presets are authored per workflow; a global default would let settings supply setup scripts MCP agents can attach to lanes.",
 };
 
 suite("Workflow defaults schema coverage", () => {

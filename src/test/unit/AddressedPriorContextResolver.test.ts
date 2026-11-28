@@ -62,7 +62,13 @@ suite("AddressedPriorContextResolver", () => {
       resolveAllPriorContextItems: async (manifestPath: string) => {
         imported.push(path.basename(path.dirname(manifestPath)));
         return [
-          { index: 0, prompt: "source", text: "source output", detail: "full" },
+          {
+            index: 0,
+            stepKind: "prompt",
+            prompt: "source",
+            text: "source output",
+            detail: "full",
+          },
         ];
       },
     } as unknown as RunOutputResolver;
@@ -104,7 +110,13 @@ suite("AddressedPriorContextResolver", () => {
       ) => {
         addressedDetail = detail;
         return [
-          { index: 0, prompt: "source", text: "source output", detail: "full" },
+          {
+            index: 0,
+            stepKind: "prompt",
+            prompt: "source",
+            text: "source output",
+            detail: "full",
+          },
         ];
       },
     } as unknown as RunOutputResolver;
@@ -119,7 +131,13 @@ suite("AddressedPriorContextResolver", () => {
       async (local) => {
         assert.deepStrictEqual(local, ["previous"]);
         return [
-          { index: 0, prompt: "local", text: "local output", detail: "full" },
+          {
+            index: 0,
+            stepKind: "prompt",
+            prompt: "local",
+            text: "local output",
+            detail: "full",
+          },
         ];
       }
     );
@@ -144,7 +162,13 @@ suite("AddressedPriorContextResolver", () => {
     ).resolve([{ previous: 3 }], async (local) => {
       assert.deepStrictEqual(local, [{ previous: 3 }]);
       return [
-        { index: 0, prompt: "local", text: "local output", detail: "full" },
+        {
+          index: 0,
+          stepKind: "prompt",
+          prompt: "local",
+          text: "local output",
+          detail: "full",
+        },
       ];
     });
 

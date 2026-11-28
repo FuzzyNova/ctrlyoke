@@ -44,6 +44,156 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("accepts workflow steps in steps, finalStep, and the single-step root", () => {
+    for (const document of [
+      { steps: [{ type: "workflow", workflow: "child.ctrlyoke.yaml" }] },
+      {
+        steps: [{ prompt: "parent" }],
+        finalStep: { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+      },
+      {
+        type: "workflow",
+        workflow: "child.ctrlyoke.yaml",
+        worktree: true,
+      },
+      { type: "workflow", workflow: { prompt: "root inline" } },
+    ]) {
+      assert.strictEqual(
+        validate(document),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("accepts inline prompt and script definitions with optional worktree", () => {
+    for (const workflow of [
+      { prompt: "implement this" },
+      { prompt: "implement this", worktree: true },
+      { type: "script", script: "npm test" },
+      { type: "script", script: "npm test", worktree: { mode: "managed" } },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ type: "workflow", workflow }] }),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("rejects workflow-only and nested step shapes inside inline definitions", () => {
+    for (const workflow of [
+      { prompt: "x", steps: [{ prompt: "nested" }] },
+      { prompt: "x", finalStep: { prompt: "nested" } },
+      { prompt: "x", parallel: [] },
+      { type: "workflow", workflow: "nested.ctrlyoke.yaml" },
+      { prompt: "x", vars: {} },
+      { prompt: "x", maxSteps: 3 },
+      { prompt: "x", trustedExternalRoots: [] },
+      { prompt: "x", conditions: {} },
+      { prompt: "x", _runtime: { sessionId: "parent-session" } },
+      { prompt: "x", additionalWorkflowKey: true },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ type: "workflow", workflow }] }),
+        false,
+        JSON.stringify(workflow)
+      );
+    }
+  });
+
+  test("accepts queue lifecycle fields on every step kind's runtime", () => {
+    // `failureKind` and `rewoundFailure` live on StepLifecycleRuntime, which
+    // PromptQueue writes for prompt, script and workflow steps alike.
+    const lifecycle = {
+      stepId: "s1",
+      terminalStatus: "failed",
+      failureKind: "unknown",
+      rewoundFailure: true,
+    };
+    for (const step of [
+      { prompt: "x", _runtime: lifecycle },
+      { type: "script", script: "exit 1", _runtime: lifecycle },
+      {
+        type: "workflow",
+        workflow: "child.ctrlyoke.yaml",
+        _runtime: { ...lifecycle, childRunRef: "run-1" },
+      },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [step] }),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("rejects invalid workflow step fields and runtime metadata", () => {
+    for (const document of [
+      { steps: [{ type: "workflow", workflow: "child", worktree: true }] },
+      { steps: [{ type: "workflow", workflow: "child", unexpected: true }] },
+      { steps: [{ type: "workflow", workflow: "" }] },
+      {
+        steps: [
+          {
+            type: "workflow",
+            workflow: "child",
+            _runtime: { unexpected: true },
+          },
+        ],
+      },
+    ]) {
+      assert.strictEqual(validate(document), false, JSON.stringify(document));
+    }
+  });
+
+  test("accepts managed worktree presets only at a steps or prompt root", async () => {
+    const lane = { mode: "managed", merge: true, setup: "npm ci" };
+    for (const document of [
+      { steps: [{ prompt: "x" }], worktreePresets: { lane } },
+      { prompt: "x", worktreePresets: { lane, scratch: { mode: "managed" } } },
+      { steps: [{ prompt: "x" }], worktreePresets: {} },
+    ]) {
+      assert.strictEqual(
+        validate(document),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+    for (const worktreePresets of [
+      { lane: true },
+      { lane: "feature/x" },
+      { lane: { mode: "named", branch: "feature/x" } },
+      { lane: { mode: "managed", branch: "feature/x" } },
+      { lane: { merge: true } },
+      { "bad name": { mode: "managed" } },
+      { lane: { mode: "managed", setup: "{{laneSetup}}", extra: 1 } },
+    ]) {
+      assert.strictEqual(
+        validate({ steps: [{ prompt: "x" }], worktreePresets }),
+        false,
+        JSON.stringify(worktreePresets)
+      );
+    }
+    // R9: a root workflow or script step has no agent to use presets.
+    for (const root of [
+      { type: "script", script: "npm test" },
+      { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+    ]) {
+      assert.strictEqual(
+        validate({ ...root, worktreePresets: { lane } }),
+        false,
+        JSON.stringify(root)
+      );
+    }
+
+    const parsed = await new PromptFileParser().validateAndNormalize(
+      { steps: [{ prompt: "x" }], worktreePresets: { lane } },
+      process.cwd()
+    );
+    assert.deepStrictEqual(parsed.worktreePresets, { lane });
+  });
+
   test("stamps every bundled workflow template with schemaVersion 1", () => {
     const workflowsDirectory = path.resolve(
       __dirname,
@@ -127,6 +277,86 @@ suite("Workflow template schema", () => {
     assert.strictEqual(
       validate({ steps: [{ endCondition: { script: "test.py" } }] }),
       false
+    );
+  });
+
+  test("preserves extracted step schema definitions and their strictness", () => {
+    const validWorkflow = {
+      steps: [
+        {
+          prompt: "Prompt",
+          name: "Prompt name",
+          enabled: true,
+          color: "#123456",
+        },
+        {
+          type: "script",
+          script: "npm test",
+          name: "Script name",
+          enabled: "{{runScript}}",
+          color: "#abcdef",
+          onFail: "continue",
+          _runtime: {
+            stepId: "step-1",
+            startedAt: 1,
+            completedAt: 2,
+            terminalStatus: "completed",
+            elapsed: 1,
+            failureMessage: "",
+            terminalFailure: false,
+          },
+        },
+      ],
+      worktree: {
+        mode: "managed",
+        merge: false,
+        keep: true,
+        base: "main",
+        setup: "npm ci",
+      },
+    };
+    assert.strictEqual(
+      validate(validWorkflow),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({
+        steps: [{ type: "script", script: "x", onFail: "{{action}}" }],
+      }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    const invalids = [
+      { steps: [{ prompt: "x", unknownDisplay: true }] },
+      { steps: [{ type: "script", script: "x", unknownDisplay: true }] },
+      { steps: [{ type: "script", script: "x", onFail: "unknown" }] },
+      {
+        worktree: { mode: "managed", unknown: true },
+        steps: [{ prompt: "x" }],
+      },
+      { steps: [{ prompt: "x", _runtime: { stepId: "x", unknown: true } }] },
+    ];
+    for (const invalid of invalids) {
+      assert.strictEqual(validate(invalid), false, JSON.stringify(invalid));
+    }
+
+    // worktreePresets (D14) reuse this def, so it must be the managed object
+    // arm of worktreeConfig, not the named-branch string shorthand.
+    const managed = schema.$defs.managedWorktreeConfig;
+    assert.strictEqual(managed.type, "object");
+    assert.strictEqual(managed.properties.mode.const, "managed");
+    assert.ok(
+      schema.$defs.worktreeConfig.oneOf.some(
+        (variant: { $ref?: string }) =>
+          variant.$ref === "#/$defs/managedWorktreeConfig"
+      )
+    );
+    assert.strictEqual(
+      validate({ worktree: "feature/x", steps: [{ prompt: "x" }] }),
+      true,
+      JSON.stringify(validate.errors)
     );
   });
 
@@ -803,6 +1033,22 @@ suite("Workflow template schema", () => {
             { prompt: "Research one", harness: "{selectedHarness}" },
             { prompt: "Research two", harness: "{selectedHarness}" },
           ],
+        },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
+
+  test("accepts file and inline workflow members inside parallel", () => {
+    const valid = validate({
+      steps: [
+        {
+          parallel: [
+            { type: "workflow", workflow: "lanes/one.ctrlyoke.yaml" },
+            { type: "workflow", workflow: { prompt: "inline lane" } },
+            { prompt: "plain member" },
+          ],
+          failFast: true,
         },
       ],
     });

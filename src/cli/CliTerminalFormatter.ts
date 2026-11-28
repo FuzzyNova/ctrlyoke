@@ -42,8 +42,11 @@ import {
   STATUS_MESSAGE_SEVERITY,
   USER_STEER_ATTRIBUTIONS,
   DIFF_LINE_TYPES,
+  formatSubWorkflowRunsLabel,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
   type HarnessId,
 } from "../types/DashboardConstants";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "../types/SubWorkflowTypes";
 import {
   generateDiffLines,
   getStructuredPatchDiffLines,
@@ -229,6 +232,18 @@ function scriptOutcomePresentation(outcome: ScriptVerdict["outcome"]): {
     return { icon: "✖", label: "Failed", color: chalk.red };
   }
   return { icon: "⚠", label: "Errored", color: chalk.yellow };
+}
+
+/**
+ * The one rule for labelling a sub-workflow child's progress: its label
+ * (`[name] `) goes in front of the step name or caption. The root run has no
+ * prefix, so its lines are returned unchanged.
+ */
+export function applyCliLinePrefix(
+  prefix: string | undefined,
+  text: string
+): string {
+  return prefix ? `[${prefix}] ${text}` : text;
 }
 
 export interface CliOutputTarget {
@@ -477,11 +492,17 @@ export class CliTerminalFormatter {
   /** Renders the live start marker for one workflow parallel group. */
   static renderParallelGroupHeader(
     group: ParallelGroupDefinition,
-    memberCount: number
+    memberCount: number,
+    prefix?: string
   ): void {
     console.log();
     console.log(
-      chalk.bold(`Parallel group ${group.id} — ${memberCount} member(s)`)
+      chalk.bold(
+        applyCliLinePrefix(
+          prefix,
+          `Parallel group ${group.id} — ${memberCount} member(s)`
+        )
+      )
     );
   }
 
@@ -490,11 +511,12 @@ export class CliTerminalFormatter {
     groupId: string,
     running: number,
     completed: number,
-    failed: number
+    failed: number,
+    prefix?: string
   ): void {
     console.log(
       chalk.dim(
-        `  Parallel group ${groupId}: ${running} running · ${completed} done · ${failed} failed`
+        `  ${applyCliLinePrefix(prefix, `Parallel group ${groupId}`)}: ${running} running · ${completed} done · ${failed} failed`
       )
     );
   }
@@ -572,10 +594,10 @@ export class CliTerminalFormatter {
   }
 
   /** Renders the caption that starts one finalStep pass in the terminal stream. */
-  static renderFinalStepLabel(loopIndex: number): void {
+  static renderFinalStepLabel(loopIndex: number, prefix?: string): void {
     console.log();
     console.log(
-      `${chalk.blue("│")} ${chalk.dim(formatFinalPassLabel(loopIndex + 1))}`
+      `${chalk.blue("│")} ${chalk.dim(applyCliLinePrefix(prefix, formatFinalPassLabel(loopIndex + 1)))}`
     );
   }
 
@@ -664,6 +686,23 @@ export class CliTerminalFormatter {
       const indent = group ? "  " : "";
       const name = step.stepName ? ` — ${step.stepName}` : "";
       writeLine(`${indent}Step ${step.stepIndex + 1}${name} (${step.type})`);
+      if (step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.FILE) {
+        // The child resolves its own harness and settings when it starts.
+        writeLine(
+          `${indent}  ${formatSubWorkflowRunsLabel(step.subWorkflow.workflowPath)}`
+        );
+        writeLine("");
+        continue;
+      }
+      if (step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE) {
+        const worktree = step.subWorkflow.worktree;
+        writeLine(
+          `${indent}  ${SUB_WORKFLOW_DASHBOARD_LABELS.previewChildRun}: ${step.subWorkflow.childName}${worktree ? ` · ${SUB_WORKFLOW_DASHBOARD_LABELS.worktreeTitle.toLowerCase()} (${worktree.branch ?? worktree.mode})` : ""}`
+        );
+        if (step.subWorkflow.note) {
+          writeLine(`${indent}  ${step.subWorkflow.note}`);
+        }
+      }
       writeLine(`${indent}  Harness: ${step.resolvedProperties.harnessId}`);
       if (step.resolvedProperties.model) {
         writeLine(`${indent}  Model: ${step.resolvedProperties.model}`);
@@ -1835,9 +1874,14 @@ export class CliTerminalFormatter {
    * Renders a workflow status message (end condition result, retry notification, etc.)
    * using severity-appropriate chalk colour.
    */
-  static renderStatusMessage(message: string, severity: string): void {
+  static renderStatusMessage(
+    message: string,
+    severity: string,
+    prefix?: string
+  ): void {
     CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     CliTerminalFormatter.flushStreamingBuffer();
+    message = applyCliLinePrefix(prefix, message);
     if (severity === STATUS_MESSAGE_SEVERITY.ERROR) {
       // Red left border mirrors border-l-severity-error in the webview
       console.log(`${chalk.red("│")} ${chalk.red("✗ " + message)}`);

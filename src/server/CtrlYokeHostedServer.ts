@@ -1045,6 +1045,11 @@ export class CtrlYokeHostedServer
   ): void {
     this.sink.updateCliOutput(stepIndex, output, workflowId, prompt);
   }
+  updateSubWorkflowSettled(
+    data: Parameters<NonNullable<IDashboardSink["updateSubWorkflowSettled"]>>[0]
+  ): void {
+    this.sink.updateSubWorkflowSettled?.(data);
+  }
   updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,

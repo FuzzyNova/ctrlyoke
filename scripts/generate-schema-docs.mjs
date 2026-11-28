@@ -86,6 +86,10 @@ const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
   "singleStepRoot",
   "toolPermissions",
   "workflowStep",
+  "managedWorktreeConfig",
+  "inlineSubWorkflowDefinition",
+  "stepDisplayProperties",
+  "stepOnFail",
 ]);
 
 const WORKFLOW_ROOT_PROPERTIES = "#/oneOf/1/allOf/2/properties";
@@ -126,13 +130,34 @@ const WORKFLOW_PAGES = [
         title: "Prompt step",
         summary: "A step that sends a prompt to a harness.",
         refs: ["#/$defs/promptStep"],
-        properties: [{ pointer: "#/$defs/promptStep/allOf/1/properties" }],
+        properties: [
+          { pointer: "#/$defs/promptStep/allOf/1/properties" },
+          { pointer: "#/$defs/stepDisplayProperties/properties" },
+        ],
       },
       {
         id: "script-step",
         title: "Script step",
         refs: ["#/$defs/scriptStep", "#/$defs/rootScriptStep"],
-        properties: [{ pointer: "#/$defs/scriptStep/properties" }],
+        properties: [
+          { pointer: "#/$defs/scriptStep/properties" },
+          { pointer: "#/$defs/stepDisplayProperties/properties" },
+        ],
+      },
+      {
+        id: "sub-workflow-step",
+        title: "Sub-workflow step",
+        summary:
+          "A step that runs a referenced workflow file or an inline single step as a child run.",
+        refs: [
+          "#/$defs/subWorkflowStep",
+          "#/$defs/rootWorkflowStep",
+          "#/$defs/inlineSubWorkflowDefinition",
+        ],
+        properties: [
+          { pointer: "#/$defs/subWorkflowStep/properties" },
+          { pointer: "#/$defs/stepDisplayProperties/properties" },
+        ],
       },
       {
         id: "parallel-group",
@@ -274,9 +299,15 @@ const WORKFLOW_PAGES = [
       {
         id: "step-runtime",
         title: "Step runtime",
-        refs: ["#/$defs/promptRuntimeMetadata"],
+        refs: [
+          "#/$defs/promptRuntimeMetadata",
+          "#/$defs/stepLifecycleRuntime",
+          "#/$defs/subWorkflowRuntimeMetadata",
+        ],
         properties: [
-          { pointer: "#/$defs/promptRuntimeMetadata/allOf/3/properties" },
+          { pointer: "#/$defs/stepLifecycleRuntime/properties" },
+          { pointer: "#/$defs/promptRuntimeMetadata/allOf/4/properties" },
+          { pointer: "#/$defs/subWorkflowRuntimeMetadata/allOf/1/properties" },
         ],
       },
       {

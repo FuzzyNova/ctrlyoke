@@ -253,6 +253,34 @@ export function mapSourceDefinitionPathToExecution(
 }
 
 /**
+ * The inverse direction for one path: a path inside a distinct execution
+ * checkout, renamed to where the source checkout keeps it, so a reference
+ * built from it outlives that checkout. Without a distinct pair, or for a
+ * path outside the execution checkout, the path is returned unchanged.
+ */
+export function mapExecutionPathToSourceCheckout(
+  filePath: string,
+  sourceCheckoutRoot: string | undefined,
+  executionCheckoutRoot: string | undefined
+): string {
+  if (
+    !sourceCheckoutRoot ||
+    !executionCheckoutRoot ||
+    pathsEqual(
+      path.resolve(sourceCheckoutRoot),
+      path.resolve(executionCheckoutRoot)
+    )
+  ) {
+    return filePath;
+  }
+  const executionRoot = path.resolve(executionCheckoutRoot);
+  const resolved = path.resolve(filePath);
+  return isPathWithinDirectory(resolved, executionRoot)
+    ? path.resolve(sourceCheckoutRoot, path.relative(executionRoot, resolved))
+    : filePath;
+}
+
+/**
  * Resolve a reference path against exactly one lexical base. The only
  * filesystem probe is the single-root `<rootname>/…` disambiguation in
  * `resolveWorkspaceOrNamedPath`. A leading `./` or `../` requires a known workflow-file

@@ -14,6 +14,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { DashboardMessageRouter } from "../../ui/DashboardMessageRouter";
+import type { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
@@ -34,6 +35,10 @@ import {
   LOG_LEVELS,
   EXECUTION_STATES,
   WORKTREE_MERGE_OUTCOMES,
+  APPEND_MODES,
+  INLINE_PARALLEL_APPEND_REFUSAL,
+  PANEL_CLIENT_ID,
+  QUEUE_POSITION,
 } from "../../types/DashboardConstants";
 import type { HarnessId, WorkingFile } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
@@ -300,6 +305,221 @@ suite("DashboardMessageRouter — run bundle import", () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+suite("DashboardMessageRouter — sub-workflow step file picker", () => {
+  type StepReferenceBuilder = Pick<
+    WorkflowOrchestrator,
+    "buildSubWorkflowStepReferenceForClient"
+  >;
+
+  /**
+   * Records what the router asks the orchestrator to build and answers with
+   * `answer`: the orchestrator owns the reference build and its check
+   * (covered against real files in WorkflowOrchestrator.test.ts).
+   */
+  class RecordingReferenceBuilder implements StepReferenceBuilder {
+    readonly calls: Array<{ filePath: string; clientId: string }> = [];
+    constructor(
+      private readonly answer: (
+        filePath: string
+      ) => Awaited<
+        ReturnType<
+          StepReferenceBuilder["buildSubWorkflowStepReferenceForClient"]
+        >
+      >
+    ) {}
+    async buildSubWorkflowStepReferenceForClient(
+      filePath: string,
+      clientId: string
+    ) {
+      this.calls.push({ filePath, clientId });
+      return this.answer(filePath);
+    }
+  }
+
+  const root = path.join(os.tmpdir(), "sub-workflow-picker-root");
+  const relativeTo = (filePath: string) =>
+    path.relative(root, filePath).split(path.sep).join("/");
+  /** Inside the workspace: its relative path; outside: the launch's refusal. */
+  const workspaceRelative = (
+    filePath: string
+  ): Awaited<
+    ReturnType<StepReferenceBuilder["buildSubWorkflowStepReferenceForClient"]>
+  > =>
+    filePath.startsWith(root)
+      ? { ok: true, workflow: relativeTo(filePath) }
+      : { ok: false, message: `Sub-workflow could not resolve '${filePath}'` };
+
+  function pickerRouter(
+    orchestrator: StepReferenceBuilder,
+    picked: string | undefined,
+    requests: Array<{ kind: string; title?: string }> = []
+  ): DashboardMessageRouter {
+    return buildRouter(
+      orchestrator,
+      () => undefined,
+      undefined,
+      {
+        openWorkspaceTarget: async () => ({ status: "unsupported" }),
+        selectWorkspacePath: async (request: {
+          kind: string;
+          title?: string;
+        }) => {
+          requests.push(request);
+          return picked;
+        },
+      },
+      () => [{ name: "workspace", fsPath: root }]
+    );
+  }
+
+  test("replies with the orchestrator's workspace-relative reference for the native pick", async () => {
+    const requests: Array<{ kind: string; title?: string }> = [];
+    const emitted: unknown[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const picked = path.join(root, "workflows", "verify.ctrlyoke.yaml");
+    const router = pickerRouter(orchestrator, picked, requests);
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
+        targetKey: "queue:2",
+      },
+      {
+        clientTag: "browser:editor",
+        postMessage: (message) => emitted.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(requests, [
+      {
+        kind: PATH_SELECTION_KINDS.FILE,
+        title: PATH_SELECTION_TITLES.SUB_WORKFLOW_STEP_FILE,
+      },
+    ]);
+    // Built for the workflow this client edits, not the panel's.
+    assert.deepStrictEqual(orchestrator.calls, [
+      { filePath: picked, clientId: "browser:editor" },
+    ]);
+    assert.deepStrictEqual(emitted, [
+      {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: "workflows/verify.ctrlyoke.yaml",
+        // Echoed so the editor drops a pick that returns after it moved on.
+        targetKey: "queue:2",
+      },
+    ]);
+  });
+
+  test("refuses a pick the launch would refuse, through WORKFLOW_ACTION_FAILED", async () => {
+    const emitted: any[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const outside = path.join(os.tmpdir(), "elsewhere", "child.ctrlyoke.yaml");
+    const router = pickerRouter(orchestrator, outside);
+
+    await router.route(
+      { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
+      { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+    );
+
+    assert.strictEqual(
+      emitted.some(
+        (message) =>
+          message.type === MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED
+      ),
+      false
+    );
+    const failure = emitted.find(
+      (message) => message.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.deepStrictEqual(
+      { action: failure?.action, error: failure?.error },
+      {
+        action: "use the workflow file for this step",
+        error: `Sub-workflow could not resolve '${outside}'`,
+      }
+    );
+  });
+
+  test("normalizes a hosted modal's pick the same way, resolving a workspace-relative path first", async () => {
+    const emitted: unknown[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    // The hosted dashboard never opens the native picker.
+    const router = pickerRouter(orchestrator, undefined);
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+        filePath: path.join(root, "flows", "absolute.ctrlyoke.yaml"),
+        targetKey: "newPrompt",
+      },
+      {
+        clientTag: "browser:hosted",
+        postMessage: (message) => emitted.push(message),
+      }
+    );
+    await router.route(
+      {
+        type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE,
+        filePath: "flows/typed.ctrlyoke.yaml",
+      },
+      {
+        clientTag: "browser:hosted",
+        postMessage: (message) => emitted.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(
+      orchestrator.calls.map((call) => call.filePath),
+      [
+        path.join(root, "flows", "absolute.ctrlyoke.yaml"),
+        path.join(root, "flows", "typed.ctrlyoke.yaml"),
+      ]
+    );
+    assert.deepStrictEqual(emitted, [
+      {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: "flows/absolute.ctrlyoke.yaml",
+        targetKey: "newPrompt",
+      },
+      {
+        type: MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED,
+        path: "flows/typed.ctrlyoke.yaml",
+      },
+    ]);
+  });
+
+  test("refuses an empty hosted pick without asking the orchestrator", async () => {
+    const emitted: any[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const router = pickerRouter(orchestrator, undefined);
+
+    await router.route(
+      { type: MESSAGE_TYPES.NORMALIZE_SUB_WORKFLOW_STEP_FILE, filePath: "  " },
+      { clientTag: "browser:hosted", postMessage: (m) => emitted.push(m) }
+    );
+
+    assert.deepStrictEqual(orchestrator.calls, []);
+    assert.strictEqual(
+      emitted.filter(
+        (message) => message.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      ).length,
+      1
+    );
+  });
+
+  test("replies nothing when the picker is cancelled", async () => {
+    const emitted: unknown[] = [];
+    const orchestrator = new RecordingReferenceBuilder(workspaceRelative);
+    const router = pickerRouter(orchestrator, undefined);
+    await router.route(
+      { type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE },
+      { clientTag: "panel", postMessage: (message) => emitted.push(message) }
+    );
+    assert.deepStrictEqual(emitted, []);
+    assert.deepStrictEqual(orchestrator.calls, []);
   });
 });
 
@@ -1339,6 +1559,190 @@ suite("DashboardMessageRouter — client workflow file paths", () => {
       seen,
       [absolute, absolute],
       "an already-absolute path must not be rewritten"
+    );
+  });
+
+  type AppendCall = [unknown, string, string, unknown, unknown];
+  function appendRecorder(calls: AppendCall[], failWith?: Error) {
+    return {
+      appendFromFileForClient: async (
+        mutation: unknown,
+        filePath: string,
+        clientId: string,
+        position: unknown,
+        appendMode: unknown
+      ) => {
+        calls.push([mutation, filePath, clientId, position, appendMode]);
+        if (failWith) throw failWith;
+      },
+      publishViewIdentityToViewers: async () => null,
+    };
+  }
+
+  test("APPEND_FILE forwards appendMode and position with the mutation", async () => {
+    const calls: AppendCall[] = [];
+    const router = buildRouter(appendRecorder(calls));
+    const mutation = {
+      address: {
+        workflowKey: "wf",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1",
+      },
+      expectedDefinitionRevision: 3,
+      expectedDescriptorRevision: 4,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: path.resolve("flows/child.ctrlyoke.yaml"),
+      mutation,
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+    });
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      filePath: path.resolve("flows/inline.ctrlyoke.yaml"),
+    });
+
+    assert.deepStrictEqual(
+      calls.map(([m, , , position, appendMode]) => [m, position, appendMode]),
+      [
+        [
+          mutation,
+          QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+          APPEND_MODES.SUB_WORKFLOW,
+        ],
+        [undefined, QUEUE_POSITION.END, APPEND_MODES.INLINE],
+      ]
+    );
+  });
+
+  test("APPEND_FILE without a path forwards appendMode, position and mutation after the picker", async () => {
+    const calls: AppendCall[] = [];
+    const picked = path.resolve("flows/picked.ctrlyoke.yaml");
+    const router = buildRouter(appendRecorder(calls), () => {}, undefined, {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+      selectWorkspacePath: async () => picked,
+    });
+    const mutation = {
+      address: { workflowKey: "wf", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      expectedDefinitionRevision: 1,
+      expectedDescriptorRevision: 1,
+    };
+
+    await router.route({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      mutation,
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.NEXT,
+    });
+    await router.route({ type: MESSAGE_TYPES.APPEND_FILE, mutation });
+
+    assert.deepStrictEqual(calls, [
+      [
+        mutation,
+        picked,
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.NEXT,
+        APPEND_MODES.SUB_WORKFLOW,
+      ],
+      // The inline picker path keeps its original instance-bound call.
+      [undefined, picked, PANEL_CLIENT_ID, QUEUE_POSITION.END, undefined],
+    ]);
+  });
+
+  test("APPEND_FILE reports a refused sub-workflow queue to the client instead of throwing", async () => {
+    const calls: AppendCall[] = [];
+    const replies: { type?: string; action?: string; error?: string }[] = [];
+    const router = buildRouter(
+      appendRecorder(calls, new Error("Parallel width is 1."))
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.APPEND_FILE,
+        filePath: path.resolve("flows/child.ctrlyoke.yaml"),
+        appendMode: APPEND_MODES.SUB_WORKFLOW,
+        position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+      },
+      { clientTag: "browser:3", postMessage: (reply) => replies.push(reply) }
+    );
+
+    const failure = replies.find(
+      (reply) => reply.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.ok(failure, "the refusal must reach the client");
+    assert.strictEqual(
+      failure.action,
+      "run the workflow alongside the current step"
+    );
+    assert.match(failure.error ?? "", /Parallel width is 1/);
+  });
+
+  test("APPEND_FILE refuses inline parallelWithCurrent on both branches, before the picker opens", async () => {
+    const calls: AppendCall[] = [];
+    const replies: { type?: string; action?: string; error?: string }[] = [];
+    let picked = 0;
+    const router = buildRouter(appendRecorder(calls), () => {}, undefined, {
+      openWorkspaceTarget: async () => ({ status: "unsupported" }),
+      selectWorkspacePath: async () => {
+        picked += 1;
+        return path.resolve("flows/picked.ctrlyoke.yaml");
+      },
+    });
+
+    for (const extra of [
+      {},
+      { filePath: path.resolve("flows/child.ctrlyoke.yaml") },
+    ]) {
+      await router.route(
+        {
+          type: MESSAGE_TYPES.APPEND_FILE,
+          appendMode: APPEND_MODES.INLINE,
+          position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+          ...extra,
+        },
+        { clientTag: "browser:3", postMessage: (reply) => replies.push(reply) }
+      );
+    }
+
+    assert.strictEqual(calls.length, 0);
+    assert.strictEqual(picked, 0, "no file is asked for");
+    const failures = replies.filter(
+      (reply) => reply.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+    );
+    assert.strictEqual(failures.length, 2);
+    for (const failure of failures) {
+      assert.strictEqual(
+        failure.action,
+        "run the workflow alongside the current step"
+      );
+      assert.strictEqual(failure.error, INLINE_PARALLEL_APPEND_REFUSAL);
+    }
+  });
+
+  test("APPEND_FILE refuses an unknown append mode or position without queueing", async () => {
+    const calls: AppendCall[] = [];
+    const replies: { type?: string }[] = [];
+    const router = buildRouter(appendRecorder(calls));
+
+    for (const extra of [{ appendMode: "nested" }, { position: "sideways" }]) {
+      await router.route(
+        {
+          type: MESSAGE_TYPES.APPEND_FILE,
+          filePath: path.resolve("flows/child.ctrlyoke.yaml"),
+          ...extra,
+        },
+        { clientTag: "browser:3", postMessage: (reply) => replies.push(reply) }
+      );
+    }
+
+    assert.strictEqual(calls.length, 0);
+    assert.strictEqual(
+      replies.filter(
+        (reply) => reply.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      ).length,
+      2
     );
   });
 });

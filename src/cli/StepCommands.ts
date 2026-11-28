@@ -9,10 +9,10 @@ import type {
   WorkflowKey,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
+import { isScriptStep } from "../types/CtrlYokeTypes";
 import {
   RUN_DEFINITION_DECISIONS,
   RUNNER_IDS,
-  STEP_TYPES,
   type RunDefinitionDecision,
 } from "../types/DashboardConstants";
 import { WorkingFileManager } from "../core/WorkingFileManager";
@@ -86,7 +86,8 @@ export async function editStepCommand(
         target.runRef
       )
     );
-    if (workingFile.steps?.[index]?.type === STEP_TYPES.SCRIPT) {
+    const step = workingFile.steps?.[index];
+    if (step && isScriptStep(step)) {
       throw new Error(
         `step ${index} is a script step; --prompt only edits prompt steps. Pass a one-step file to change a script step or its type`
       );

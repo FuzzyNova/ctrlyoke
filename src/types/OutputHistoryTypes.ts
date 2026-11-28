@@ -8,6 +8,8 @@ import {
   type OutputActivityKind,
   type SnapshotBaseSource,
 } from "./DashboardConstants";
+import type { SubWorkflowOutput } from "./CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "./SubWorkflowTypes";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
@@ -62,6 +64,12 @@ export interface OrderedRuntimeHistoryEntry extends OrderedHistoryEntryBase {
   };
 }
 
+export interface OrderedSubWorkflowHistoryEntry extends OrderedHistoryEntryBase {
+  kind: typeof OUTPUT_HISTORY_KINDS.SUB_WORKFLOW;
+  target: OutputExecutionTarget;
+  subWorkflowOutput: SubWorkflowOutput;
+}
+
 export interface OutputActivityEntry {
   timestampMs: number;
   sequence: number;
@@ -90,7 +98,8 @@ export interface OutputActivityEntry {
 export type OrderedHistoryEntry =
   | OrderedCliHistoryEntry
   | OrderedStatusHistoryEntry
-  | OrderedRuntimeHistoryEntry;
+  | OrderedRuntimeHistoryEntry
+  | OrderedSubWorkflowHistoryEntry;
 
 /**
  * Complete output history for a single workflow run.
@@ -114,6 +123,7 @@ export interface WorkflowOutputHistory {
   importedSequenceBoundary?: number;
   /** Bundle provenance for imported runs. */
   importedFrom?: import("./CtrlYokeTypes").WorkflowLineageDescriptor["importedFrom"];
+  parentRun?: SubWorkflowParentLink;
 
   // Per-step outputs (keyed by stepIndex)
   promptOutputs: {
@@ -140,6 +150,7 @@ export type WorkflowRunMetadata = Pick<
   | "stopReason"
   | "worktree"
   | "worktreeNotice"
+  | "parentRun"
 > &
   Pick<WorkflowOutputHistory, "importedSequenceBoundary" | "importedFrom">;
 

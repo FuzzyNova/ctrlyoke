@@ -3,6 +3,7 @@ import { useUiStore } from "@store/uiStore";
 import {
   postRunLifecycleMutation,
   postSetStartPositionMutation,
+  postSubWorkflowAppend,
 } from "@utils/workflowMutation";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
@@ -118,5 +119,49 @@ describe("postRunLifecycleMutation", () => {
 
     expect(posted).toBe(false);
     expect(postMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("postSubWorkflowAppend", () => {
+  const postMessage = vi.fn();
+  const target = { postMessage };
+
+  beforeEach(() => {
+    postMessage.mockClear();
+    useUiStore.getState().resetUi();
+  });
+
+  it("posts no mutation for an explicitly captured undefined, even once a view is displayed", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: WORKFLOW_KEY,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+      displayedDefinitionRevision: 1,
+      displayedDescriptorRevision: 2,
+    });
+
+    postSubWorkflowAppend(target, {
+      filePath: "flows/child.ctrlyoke.yaml",
+      mutation: undefined,
+    });
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage.mock.calls[0][0]).not.toHaveProperty("mutation");
+  });
+
+  it("reads the displayed view's mutation when none was captured", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: WORKFLOW_KEY,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+      displayedDefinitionRevision: 1,
+      displayedDescriptorRevision: 2,
+    });
+
+    postSubWorkflowAppend(target, { filePath: "flows/child.ctrlyoke.yaml" });
+
+    expect(postMessage.mock.calls[0][0]).toHaveProperty("mutation");
   });
 });

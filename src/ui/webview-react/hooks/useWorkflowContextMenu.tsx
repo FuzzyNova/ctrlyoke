@@ -5,22 +5,31 @@ import {
 } from "@components/shared/ContextMenu";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
+  EXECUTION_STATES,
   MESSAGE_TYPES,
+  QUEUE_POSITION,
+  SUB_WORKFLOW_QUEUE_LABELS,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_DELETE_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type ExecutionState,
   type WorkflowDeleteScope,
 } from "@root/types/DashboardConstants";
 import { writeClipboardText } from "@utils/clipboard";
 import { notifyUser } from "@utils/notifyUser";
 import { openWorkflowDryRun } from "@utils/executionPreview";
 import { generateId } from "@utils/string";
+import { isWorkflowActive } from "@utils/status";
+import { getParallelDispatchRefusal } from "@utils/parallelDispatch";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { sendMessage } from "@messaging/sendMessage";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
+import { useSubWorkflowFilePicker } from "@hooks/useSubWorkflowFilePicker";
+import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import type { WorkflowSchedule } from "@root/types/CtrlYokeTypes";
 import { WORKFLOW_SCHEDULE_LABELS } from "@/constants";
 import { upcomingScheduleRunLabel } from "@utils/workflowScheduleDisplay";
@@ -73,6 +82,16 @@ const copyRunDirectoryTitle =
 const exitTerminalExplanation =
   "Sends the harness its exit keystroke (Ctrl+C) so the TUI quits, then ends the process. Sessions stay resumable, and a named worktree held only by an open terminal is released.";
 
+/** Displayed-run states a workflow can be queued after (live or settled). */
+const QUEUE_NEXT_STATES: readonly ExecutionState[] = [
+  EXECUTION_STATES.RUNNING,
+  EXECUTION_STATES.PAUSING,
+  EXECUTION_STATES.PAUSED,
+  EXECUTION_STATES.COMPLETED,
+  EXECUTION_STATES.STOPPED,
+  EXECUTION_STATES.ERROR,
+];
+
 function copyToClipboard(text: string, what: string): void {
   void writeClipboardText(text)
     .then(() => {
@@ -102,6 +121,19 @@ export function useWorkflowContextMenu({
   );
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
   const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
+  const displayedExecutionState = useWorkflowStore(
+    (state) => state.executionState
+  );
+  const finalStepPhase = useWorkflowStore((state) => state.finalStepPhase);
+  const activeStepIndices = useWorkflowStore(
+    (state) => state.activeStepIndices
+  );
+  const effectiveParallelGroupWidth = useSettingsStore(
+    (state) => state.globalSettings.effectiveParallelGroupWidth
+  );
+  const loadedWorkflows = useUiStore((state) => state.loadedWorkflows);
+  const { requestSubWorkflowFile, subWorkflowPickerModal } =
+    useSubWorkflowFilePicker();
 
   const openContextMenu = useCallback(
     (
@@ -143,11 +175,48 @@ export function useWorkflowContextMenu({
         displayedViewAddress !== null &&
         workflowViewAddressKey(displayedViewAddress) ===
           workflowViewAddressKey(target.address);
-      const dryRunDisabledTitle = isViewingDeletedWorkflow
+      // Dry Run and the sub-workflow queue items all act on the displayed
+      // workflow's definition, so they share one refusal.
+      const definitionActionDisabledTitle = isViewingDeletedWorkflow
         ? "This workflow has been deleted"
         : isSystemGeneratedWorkflow
           ? "Managed automatically by commit message generation"
           : undefined;
+      // Queuing a sub-workflow is offered only on the row that addresses the
+      // displayed run: a settled run continues through the revision-checked
+      // append-and-continue path, and the client holds revisions only for
+      // the view it displays.
+      const subWorkflowRunAddress =
+        isDisplayedTarget && runAddress && !target.isUnstarted
+          ? runAddress
+          : null;
+      const isExternallyOwned = loadedWorkflows.some(
+        (workflow) =>
+          workflow.externalOwner &&
+          workflow.workflowKey === target.address.workflowKey &&
+          workflow.runRef === runAddress?.runRef
+      );
+      const showQueueNext =
+        subWorkflowRunAddress !== null &&
+        QUEUE_NEXT_STATES.includes(displayedExecutionState);
+      // An externally executing run has no in-memory queue here, and
+      // append-and-continue refuses an executing run.
+      const queueNextDisabledTitle =
+        definitionActionDisabledTitle ??
+        (isExternallyOwned && isWorkflowActive(displayedExecutionState)
+          ? SUB_WORKFLOW_QUEUE_LABELS.externalRun
+          : undefined);
+      const showRunAlongside =
+        subWorkflowRunAddress !== null &&
+        displayedExecutionState === EXECUTION_STATES.RUNNING;
+      const runAlongsideDisabledTitle =
+        definitionActionDisabledTitle ??
+        getParallelDispatchRefusal({
+          executionState: displayedExecutionState,
+          finalStepPhase,
+          activeStepIndices,
+          effectiveParallelGroupWidth,
+        });
       const exportDisabledTitle =
         target.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
           ? "Export is available for a saved run"
@@ -182,15 +251,47 @@ export function useWorkflowContextMenu({
                 },
               ]
             : []),
+          ...(showQueueNext
+            ? [
+                {
+                  label: SUB_WORKFLOW_QUEUE_LABELS.queueNext,
+                  icon: "codicon-list-ordered",
+                  disabled: queueNextDisabledTitle !== undefined,
+                  title: SUB_WORKFLOW_QUEUE_LABELS.queueNextTitle,
+                  disabledTitle: queueNextDisabledTitle,
+                  onClick: () => {
+                    onCloseDropdown();
+                    requestSubWorkflowFile(QUEUE_POSITION.END);
+                  },
+                },
+              ]
+            : []),
+          ...(showRunAlongside
+            ? [
+                {
+                  label: SUB_WORKFLOW_QUEUE_LABELS.runAlongside,
+                  icon: "codicon-split-horizontal",
+                  disabled: runAlongsideDisabledTitle !== undefined,
+                  title: SUB_WORKFLOW_QUEUE_LABELS.runAlongsideTitle,
+                  disabledTitle: runAlongsideDisabledTitle,
+                  onClick: () => {
+                    onCloseDropdown();
+                    requestSubWorkflowFile(
+                      QUEUE_POSITION.PARALLEL_WITH_CURRENT
+                    );
+                  },
+                },
+              ]
+            : []),
           ...(isDisplayedTarget
             ? [
                 {
                   label: "Dry Run",
                   icon: "codicon-telescope",
-                  disabled: dryRunDisabledTitle !== undefined,
+                  disabled: definitionActionDisabledTitle !== undefined,
                   title:
                     "Preview what each step would send to its harness, without running anything",
-                  disabledTitle: dryRunDisabledTitle,
+                  disabledTitle: definitionActionDisabledTitle,
                   onClick: () => {
                     onCloseDropdown();
                     openWorkflowDryRun();
@@ -313,21 +414,32 @@ export function useWorkflowContextMenu({
       });
     },
     [
+      activeStepIndices,
       activeTerminalWorkflows,
+      displayedExecutionState,
       displayedViewAddress,
+      effectiveParallelGroupWidth,
+      finalStepPhase,
       isSystemGeneratedWorkflow,
       isViewingDeletedWorkflow,
+      loadedWorkflows,
       onCloseDropdown,
       onDelete,
       onDuplicate,
       onEditSchedule,
       onToggleFavorite,
+      requestSubWorkflowFile,
     ]
   );
 
-  const workflowContextMenuPortal = contextMenu ? (
-    <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
-  ) : null;
+  const workflowContextMenuPortal = (
+    <>
+      {contextMenu && (
+        <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+      )}
+      {subWorkflowPickerModal}
+    </>
+  );
 
   return { openContextMenu, workflowContextMenuPortal };
 }

@@ -156,6 +156,13 @@ Common properties:
 - Precedence is step-level -> workflow-level -> global settings.
 - Use `null` in many properties to explicitly disable inherited defaults.
 - Script steps use `type: script` and `script:` instead of `prompt:`.
+
+Workflow steps (sub-workflows):
+
+- `type: workflow` runs another workflow as a child run and waits for it; `workflow:` is a workflow file path or an inline single prompt or script step, optionally with its own `worktree`. `onFail: continue` lets the parent move on when the child fails; the default stops it.
+- In the Steps panel the step has a Workflow badge and the workflow file. Once the child run exists, **Open run →** opens its own output and history; the parent's output shows the child's outcome, branch and merge result.
+- The child's output lives in its own run, next to the parent's in the same run storage. Later parent steps get it through `$previous` / `$step:N` (metadata plus every child step) or `:summary`; see the `ctrlyoke-syntax` skill.
+- Full guide: `ctrlyoke.dev/docs/workflows/sub-workflow-steps`.
   </workflowFiles>
 
 <contextAndReferences>

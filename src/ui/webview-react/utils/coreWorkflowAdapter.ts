@@ -1,4 +1,10 @@
 import { STEP_TYPES, type HarnessId } from "@root/types/DashboardConstants";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isSubWorkflowStep,
+} from "@root/types/CtrlYokeTypes";
 import type {
   PromptFile,
   PromptStep as CorePromptStep,
@@ -10,7 +16,7 @@ import type { WorkflowStep } from "@store/workflowStore";
 
 /** Convert the webview's prompt-step representation to the core workflow type. */
 export function toCorePromptStep(
-  step: Exclude<WorkflowStep, CoreScriptStep>
+  step: Extract<WorkflowStep, { prompt: string }>
 ): CorePromptStep {
   return {
     type: step.type,
@@ -40,9 +46,19 @@ export function toCorePromptStep(
 }
 
 function toCoreStep(step: WorkflowStep): CoreWorkflowStep {
-  return step.type === STEP_TYPES.SCRIPT
-    ? (step as CoreScriptStep)
-    : toCorePromptStep(step);
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      if (isPromptStep(step)) return toCorePromptStep(step);
+      throw new Error("Invalid prompt step kind");
+    case STEP_TYPES.SCRIPT:
+      return step as CoreScriptStep;
+    case STEP_TYPES.WORKFLOW:
+      if (isSubWorkflowStep(step)) return step;
+      throw new Error("Invalid workflow step kind");
+    default:
+      return assertNever(stepType);
+  }
 }
 
 /** Convert the webview workflow and settings projections into core types. */

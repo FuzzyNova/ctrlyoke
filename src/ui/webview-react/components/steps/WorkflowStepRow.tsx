@@ -1,8 +1,24 @@
 import React, { useCallback } from "react";
 import { getProtectedTerminalFailure } from "@root/utils/StepStatusDerivation";
 import { useSortable } from "@dnd-kit/sortable";
-import { EXECUTION_STATES, STEP_STATUS } from "@root/types/DashboardConstants";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  PROMPT_TERMINAL_STATUS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isSubWorkflowStep,
+  getWorkflowStepText,
+  getSubWorkflowDisplayName,
+  type PromptStep,
+  type ScriptStep,
+  type SubWorkflowOutput,
+} from "@root/types/CtrlYokeTypes";
+import { useUiStore } from "@store/uiStore";
 import type { ExecutionState, StepStatus } from "../../types/messages";
 import {
   WorkflowStepItem,
@@ -11,6 +27,7 @@ import {
   type StepClickModifiers,
 } from "./WorkflowStepItem";
 import type { WorkflowStep } from "@store/workflowStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { VAR_SUBSTITUTION_POLICY } from "@root/utils/VarSubstitutionPolicy";
 import {
@@ -23,6 +40,12 @@ import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
 import { type WorkflowStepDragHandleProps } from "@utils/dndKit";
+import {
+  findLatestSubWorkflowSettlement,
+  getInlineWorktreeDefinedBranch,
+  getSubWorkflowMergeWarning,
+  hasInlineWorktree,
+} from "@utils/subWorkflowDisplay";
 import {
   IN_OUTPUT_VIEW_TITLE,
   InOutputViewBar,
@@ -41,6 +64,7 @@ export type StepHarnessModel = Pick<
   | "harnessIsDefault"
   | "modelLabel"
   | "modelIsDefault"
+  | "harnessModelIsExpected"
 >;
 
 export type StepContextMenuRequest = {
@@ -96,7 +120,17 @@ export type WorkflowStepRowProps = {
 };
 
 function getStepText(step: WorkflowStep): string {
-  return isScriptStep(step) ? step.script : step.prompt;
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.PROMPT:
+      return (step as PromptStep).prompt;
+    case STEP_TYPES.SCRIPT:
+      return (step as ScriptStep).script;
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? getWorkflowStepText(step) : "";
+    default:
+      return assertNever(stepType);
+  }
 }
 
 /**
@@ -130,6 +164,29 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     onSetStartPosition,
     onOpenContextMenu,
   }) => {
+    const childWorkflowKey = isSubWorkflowStep(step)
+      ? step._runtime?.childWorkflowKey
+      : undefined;
+    const childWorkflow = useUiStore((state) =>
+      childWorkflowKey
+        ? state.loadedWorkflows.find(
+            (workflow) => workflow.workflowKey === childWorkflowKey
+          )
+        : undefined
+    );
+    const isViewingHistory = useUiStore((state) => state.isViewingHistory);
+    const childRunRef = isSubWorkflowStep(step)
+      ? step._runtime?.childRunRef
+      : undefined;
+    const childSettlement = useWorkflowStore((state) => {
+      if (!childRunRef) return undefined;
+      const entries =
+        isViewingHistory && state.historyOutputs
+          ? state.historyOutputs.orderedEntries
+          : state.liveOrderedEntries;
+      return findLatestSubWorkflowSettlement(entries, childRunRef);
+    });
+    const childSettledStatus = settledChildExecutionState(childSettlement);
     const storedVars = useSettingsStore(
       (state) => state.workflowProperties.vars
     );
@@ -139,6 +196,9 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
       (match, name: string) =>
         Object.prototype.hasOwnProperty.call(vars, name) ? vars[name] : match
     );
+    const displayedName = VAR_SUBSTITUTION_POLICY["steps[].name"]
+      ? resolvedName
+      : step.name;
     const harnessModel = getStepHarnessModel(step, status);
     const overrides = getStepOverrides(step);
     const details: StepDetails = {};
@@ -185,7 +245,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
           isExecutionTargetLocked,
           direction: startPositionDirection,
           latestOutput,
-          runtimeMeta: !isScriptStep(step) ? step._runtime : undefined,
+          runtimeMeta: isPromptStep(step) ? step._runtime : undefined,
           liveContextWindow,
         }),
       [
@@ -206,9 +266,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         text={getStepText(step)}
         index={index}
         displayNumber={slotNumber}
-        name={
-          VAR_SUBSTITUTION_POLICY["steps[].name"] ? resolvedName : step.name
-        }
+        name={displayedName}
         status={status}
         retryState={retryState}
         details={details}
@@ -224,6 +282,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         harnessIsDefault={harnessModel.harnessIsDefault}
         modelLabel={harnessModel.modelLabel}
         modelIsDefault={harnessModel.modelIsDefault}
+        harnessModelIsExpected={harnessModel.harnessModelIsExpected}
         overrides={overrides}
         canSetStartPosition={canSetStartPosition}
         startPositionDirection={startPositionDirection}
@@ -232,13 +291,73 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         hideBorderBottom={hideBorderBottom}
         dimmed={dimmed}
         dragHandleProps={dragHandleProps}
-        isScript={isScriptStep(step)}
+        stepType={getStepType(step)}
+        workflowRun={
+          isSubWorkflowStep(step) &&
+          step._runtime?.childWorkflowKey &&
+          step._runtime.childRunRef
+            ? {
+                workflowKey: step._runtime.childWorkflowKey,
+                runRef: step._runtime.childRunRef,
+                workflowName:
+                  childWorkflow?.workflowName ??
+                  getSubWorkflowDisplayName(step),
+              }
+            : undefined
+        }
+        childExecutionState={
+          childWorkflow?.executionState ?? childSettledStatus
+        }
+        showFailureWarning={
+          isSubWorkflowStep(step) &&
+          status === STEP_STATUS.COMPLETED &&
+          !!step._runtime?.failureMessage
+        }
+        workflowIsInline={
+          isSubWorkflowStep(step) && typeof step.workflow !== "string"
+        }
+        inlineWorkflowTitle={
+          isSubWorkflowStep(step) && typeof step.workflow !== "string"
+            ? getSubWorkflowDisplayName({ ...step, name: displayedName })
+            : undefined
+        }
+        worktreeBadge={
+          isSubWorkflowStep(step) && hasInlineWorktree(step)
+            ? {
+                branchName:
+                  childWorkflow?.worktree?.branchName ??
+                  childSettlement?.worktree?.branchName ??
+                  getInlineWorktreeDefinedBranch(step),
+              }
+            : undefined
+        }
+        mergeWarning={
+          status === STEP_STATUS.COMPLETED
+            ? getSubWorkflowMergeWarning(childSettlement?.worktree)
+            : undefined
+        }
       />
     );
   }
 );
 
 const EMPTY_WORKFLOW_VARS: Readonly<Record<string, string>> = {};
+
+/** The child's own state, from its settlement, once it is no longer tracked live. */
+function settledChildExecutionState(
+  settlement: SubWorkflowOutput | undefined
+): ExecutionState | undefined {
+  switch (settlement?.outcome.status) {
+    case PROMPT_TERMINAL_STATUS.COMPLETED:
+      return EXECUTION_STATES.COMPLETED;
+    case PROMPT_TERMINAL_STATUS.FAILED:
+      return EXECUTION_STATES.ERROR;
+    case PROMPT_TERMINAL_STATUS.CANCELLED:
+      return EXECUTION_STATES.STOPPED;
+    default:
+      return undefined;
+  }
+}
 
 WorkflowStepRow.displayName = "WorkflowStepRow";
 

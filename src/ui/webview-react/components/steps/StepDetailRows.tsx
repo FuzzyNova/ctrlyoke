@@ -8,6 +8,7 @@ import { Icon } from "../shared/Icon";
 import { CopyButton } from "../shared/CopyButton";
 import { formatRetryDenominator } from "../../../../utils/LimitUtils";
 import { formatClockDuration } from "../../utils/time";
+import { SUB_WORKFLOW_DASHBOARD_LABELS } from "@root/types/DashboardConstants";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -28,6 +29,12 @@ interface StepDetailRowsProps {
   harnessIsDefault?: boolean;
   modelLabel?: string;
   modelIsDefault?: boolean;
+  /**
+   * The harness and model are what the step is expected to run with, not a
+   * record of what it used (a lane whose child run already exists). Shown as
+   * one "(expected)" marker in place of the per-value "(default)" markers.
+   */
+  harnessModelIsExpected?: boolean;
   retryState?: RetryState;
   latestOutput?: CliOutput | null;
   details?: StepDetails;
@@ -57,6 +64,7 @@ export const StepDetailRows: React.FC<StepDetailRowsProps> = ({
   harnessIsDefault,
   modelLabel,
   modelIsDefault,
+  harnessModelIsExpected = false,
   retryState,
   latestOutput,
   details,
@@ -73,6 +81,14 @@ export const StepDetailRows: React.FC<StepDetailRowsProps> = ({
     details?.duration ?? latestOutput?.elapsed ?? runtimeMeta?.elapsed;
   const sessionId =
     latestOutput?.structured?.metadata?.sessionId ?? runtimeMeta?.sessionId;
+  const showHarnessDefault = harnessIsDefault && !harnessModelIsExpected;
+  const showModelDefault = modelIsDefault && !harnessModelIsExpected;
+  const expectedMarker = harnessModelIsExpected && (
+    <span className="opacity-60">
+      {" "}
+      ({SUB_WORKFLOW_DASHBOARD_LABELS.expected})
+    </span>
+  );
 
   return (
     <>
@@ -82,12 +98,21 @@ export const StepDetailRows: React.FC<StepDetailRowsProps> = ({
       {(harnessLabel || modelLabel) && (
         <div
           className={`mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          title={
+            harnessModelIsExpected
+              ? SUB_WORKFLOW_DASHBOARD_LABELS.expectedHarnessTitle
+              : undefined
+          }
         >
           {harnessLabel && (
             <span
               className="inline-flex min-w-0 max-w-full items-center gap-1"
               title={
-                harnessIsDefault ? `${harnessLabel} (default)` : harnessLabel
+                harnessModelIsExpected
+                  ? undefined
+                  : harnessIsDefault
+                    ? `${harnessLabel} (default)`
+                    : harnessLabel
               }
             >
               {harnessId && (
@@ -99,9 +124,10 @@ export const StepDetailRows: React.FC<StepDetailRowsProps> = ({
               )}
               <span className="truncate">
                 {harnessLabel}
-                {harnessIsDefault && (
+                {showHarnessDefault && (
                   <span className="opacity-60"> (default)</span>
                 )}
+                {!modelLabel && expectedMarker}
               </span>
             </span>
           )}
@@ -110,12 +136,19 @@ export const StepDetailRows: React.FC<StepDetailRowsProps> = ({
               {harnessLabel && <span className="shrink-0 opacity-40">·</span>}
               <span
                 className="truncate"
-                title={modelIsDefault ? `${modelLabel} (default)` : modelLabel}
+                title={
+                  harnessModelIsExpected
+                    ? undefined
+                    : modelIsDefault
+                      ? `${modelLabel} (default)`
+                      : modelLabel
+                }
               >
                 {modelLabel}
-                {modelIsDefault && (
+                {showModelDefault && (
                   <span className="opacity-60"> (default)</span>
                 )}
+                {expectedMarker}
               </span>
             </span>
           )}

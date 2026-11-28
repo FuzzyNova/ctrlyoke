@@ -11,14 +11,20 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { buildHarnessModelOptions } from "../utils/HarnessModelOptions";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
-import { toVSCodeWorkflowCompletionItem } from "./CompletionHelpers";
+import {
+  getCompletionCore,
+  toVSCodeWorkflowCompletionItem,
+} from "./CompletionHelpers";
+import type { PlainCompletionItem } from "./CompletionCore";
 import { getCtrlYokeFileKind } from "../utils/WorkflowFileKind";
 import {
   getWorkflowLocation,
   parseWorkflowDocumentRoot,
 } from "./WorkflowDocumentLocation";
 import {
+  formatWorkflowFilePathInsert,
   getWorkflowFileCompletions,
+  type WorkflowFileCompletionRequest,
   type WorkflowModelOption,
   type WorkflowValueDataSource,
 } from "./WorkflowFileCompletionCore";
@@ -75,15 +81,22 @@ class VsCodeWorkflowValueDataSource implements WorkflowValueDataSource {
 
 /**
  * Key and value completions for every ctrlyoke workflow file (YAML, JSON and
- * `.prompt.md` frontmatter), driven by `getWorkflowFileCompletions`. Prompt
- * text is `PromptCompletionProvider`'s; this provider returns nothing there,
- * and nothing for script text, comments or unknown objects.
+ * `.prompt.md` frontmatter), driven by `getWorkflowFileCompletions`, plus
+ * workflow-file paths for a sub-workflow step's `workflow`. Prompt text is
+ * `PromptCompletionProvider`'s; this provider returns nothing there, and
+ * nothing for script text, comments or unknown objects.
  */
 export class WorkflowFileCompletionProvider
   implements vscode.CompletionItemProvider
 {
   constructor(
-    private readonly getSecretRegistry?: () => SecretRegistryService | undefined
+    private readonly getSecretRegistry?: () =>
+      SecretRegistryService | undefined,
+    /** Workflow-file path items for a query; the shared completion core by default. */
+    private readonly queryWorkflowFilePaths: (
+      query: string
+    ) => Promise<PlainCompletionItem[]> = (query) =>
+      getCompletionCore().getWorkflowFilePathCompletions(query)
   ) {}
 
   async provideCompletionItems(
@@ -98,6 +111,15 @@ export class WorkflowFileCompletionProvider
     const text = document.getText();
     const offset = document.offsetAt(position);
     const location = getWorkflowLocation(text, offset, kind);
+    if (location.role === WORKFLOW_LOCATION_ROLES.WORKFLOW_FILE_PATH) {
+      return this.provideWorkflowFilePaths(document, {
+        text,
+        offset,
+        location,
+        documentRoot: parseWorkflowDocumentRoot(text, kind),
+        data: new VsCodeWorkflowValueDataSource(NO_VALUE_LISTS),
+      });
+    }
     if (
       location.role !== WORKFLOW_LOCATION_ROLES.KEY &&
       location.role !== WORKFLOW_LOCATION_ROLES.VALUE
@@ -143,6 +165,38 @@ export class WorkflowFileCompletionProvider
         return vscodeItem;
       }),
       false
+    );
+  }
+
+  /**
+   * Workflow files from the prompt-file path index, filtered to workflow
+   * kinds. Incomplete, so each keystroke re-queries the index.
+   */
+  private async provideWorkflowFilePaths(
+    document: vscode.TextDocument,
+    request: WorkflowFileCompletionRequest
+  ): Promise<vscode.CompletionList | undefined> {
+    const { replaceRange } = getWorkflowFileCompletions(request);
+    const query = request.text.slice(replaceRange.start, request.offset);
+    const paths = await this.queryWorkflowFilePaths(query);
+    if (paths.length === 0) return undefined;
+    const range = new vscode.Range(
+      document.positionAt(replaceRange.start),
+      document.positionAt(replaceRange.end)
+    );
+    return new vscode.CompletionList(
+      paths.map((item) => {
+        const insertText = formatWorkflowFilePathInsert(
+          item.insertText ?? item.label,
+          request.location
+        );
+        // VS Code filters the typed path against this, not the basename label.
+        return toVSCodeWorkflowCompletionItem(
+          { ...item, insertText, filterText: insertText },
+          range
+        );
+      }),
+      true
     );
   }
 

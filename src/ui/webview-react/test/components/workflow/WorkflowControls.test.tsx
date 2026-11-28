@@ -14,7 +14,12 @@ import { WorkflowControls } from "@components/workflow/WorkflowControls";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  APPEND_MODES,
+  QUEUE_POSITION,
+  SUB_WORKFLOW_QUEUE_LABELS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
 // We just need a reference to the postMessage spy.
@@ -129,6 +134,62 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(screen.getByRole("option", { name: /Queue from File/i }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.APPEND_FILE,
+    });
+  });
+
+  it("'Queue as Sub-workflow' is disabled when no workflow is loaded", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowControls />);
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
+    expect(
+      screen.getByRole("option", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflow,
+      })
+    ).toBeDisabled();
+  });
+
+  it("asks the native picker to queue a file as a sub-workflow on the displayed run", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({ fileName: "/path/to/workflow.yaml" });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 5,
+    });
+    render(<WorkflowControls />);
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
+    // Like the inline sibling, it says the run continues with the step.
+    expect(
+      screen.queryByRole("option", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflow,
+      })
+    ).toBeNull();
+    await user.click(
+      screen.getByRole("option", {
+        name: SUB_WORKFLOW_QUEUE_LABELS.appendAndContinueAsSubWorkflow,
+      })
+    );
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.APPEND_FILE,
+      appendMode: APPEND_MODES.SUB_WORKFLOW,
+      position: QUEUE_POSITION.END,
+      mutation: {
+        address: {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
+        expectedDefinitionRevision: 2,
+        expectedDescriptorRevision: 5,
+      },
     });
   });
 

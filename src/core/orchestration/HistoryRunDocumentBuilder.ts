@@ -116,6 +116,15 @@ export class HistoryRunDocumentBuilder {
           event.payload,
           event.phase
         );
+      case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
+        return [
+          event.payload.childWorkflowKey,
+          event.payload.childRunRef,
+          event.payload.outcome.status,
+          event.payload.outcome.failureMessage,
+        ].flatMap((text) =>
+          text ? this.candidateExtractor.collectStatusCandidates(text) : []
+        );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
         return this.candidateExtractor.collectStatusCandidates(
           event.payload.statusMessage.message
@@ -132,6 +141,7 @@ export class HistoryRunDocumentBuilder {
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
       case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
       case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
+      case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
       case TIMELINE_EVENT_TYPES.ATTEMPT_STARTED:
         return event.attemptIndex;
       default:

@@ -18,7 +18,7 @@ import type { UserFeedback } from "../../core/UserFeedbackSink";
 import {
   PromptFile,
   WorkflowStep,
-  isScriptStep,
+  isPromptStep,
 } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -49,6 +49,25 @@ suite("PromptFileLoader Tests", () => {
     for (const tempDir of tempDirs.splice(0)) {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
+  });
+
+  test("throwing in-memory load reports validation errors to its caller", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-inline-load-error-")
+    );
+    tempDirs.push(workspace);
+    const loader = new PromptFileLoader(
+      new PromptFileParser(),
+      new PromptQueue()
+    );
+    await assert.rejects(
+      loader.loadFromMemoryOrThrow(
+        { steps: [{ type: "script", script: "" } as WorkflowStep] },
+        "bad inline child",
+        workspace
+      ),
+      /Validation failed:[\s\S]*Empty script command/i
+    );
   });
 
   suite("operational feedback", () => {
@@ -771,8 +790,8 @@ suite("PromptFileLoader Tests", () => {
     function assertPromptStep(
       step: WorkflowStep,
       message: string
-    ): asserts step is Exclude<WorkflowStep, { type: "script" }> {
-      assert.ok(!isScriptStep(step), message);
+    ): asserts step is Extract<WorkflowStep, { type?: "prompt" }> {
+      assert.ok(isPromptStep(step), message);
     }
 
     test("should load all explicit properties from the manual property sync workflow into memory and the working file", async () => {

@@ -11,13 +11,14 @@ import type { DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
-import {
-  BULK_EDIT_DISABLED_REASONS,
-  STEP_TYPES,
-} from "@root/types/DashboardConstants";
+import { BULK_EDIT_DISABLED_REASONS } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { SplitButton } from "../shared/SplitButton";
+import {
+  getEditorContentKind,
+  isPromptEditorStepType,
+} from "@utils/stepDraftContent";
 import type {
   RunDispatchTarget,
   SteerDispatchTarget,
@@ -129,7 +130,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
     [footerRef, footerRefSmall]
   );
   const stepType = useEditorStore((s) => s.stepType);
-  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  const subWorkflowInline = useEditorStore((s) => s.subWorkflowInline);
+  // Properties, quick pickers and the drawer tab bar are prompt-only; an
+  // inline workflow step's wrapped prompt counts as one.
+  const isPromptMode = isPromptEditorStepType(
+    getEditorContentKind({ stepType, subWorkflowInline })
+  );
   // Model, agent, skills and permissions all draw their options from the
   // effective harness, so they share one gate.
   const harnessScopedPickerDisabled =
@@ -149,8 +155,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
       className="editor-footer cy-no-select shrink-0 flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
       style={{ height: `${EDITOR_FOOTER_HEIGHT_REM}rem` }}
     >
-      {/* Properties toggle button — hidden in script mode */}
-      {!isScriptMode && (
+      {/* Properties toggle button — prompt mode only */}
+      {isPromptMode && (
         <button
           className={`btn-properties shrink-0 px-2 py-1 text-xs rounded-sm flex items-center gap-1 transition-colors ${
             propertiesOpen
@@ -174,8 +180,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
         </button>
       )}
 
-      {/* Swappable zone: quick pickers ↔ DrawerTabBar — hidden in script mode */}
-      {!isScriptMode && (
+      {/* Swappable zone: quick pickers ↔ DrawerTabBar — prompt mode only */}
+      {isPromptMode && (
         <div className="relative flex-1 min-w-0 self-stretch overflow-hidden">
           {/* Quick pickers — unified layout, exits upward as a single unit */}
           <div
@@ -256,8 +262,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
         </div>
       )}
 
-      {/* Spacer for script mode — pushes action buttons to the right */}
-      {isScriptMode && <div className="flex-1" />}
+      {/* Spacer for the other modes — pushes action buttons to the right */}
+      {!isPromptMode && <div className="flex-1" />}
 
       {/* Action buttons — always visible */}
       <div className="flex items-center gap-2 shrink-0 ml-1 pl-2 border-l border-panel-border">

@@ -10,6 +10,7 @@ import { StepOutputTextMode } from "../../../../types/DashboardConstants";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { getExecutionRuntime } from "@root/types/CtrlYokeTypes";
 import {
   NOTIFICATION_SEVERITY,
   OUTPUT_TABS,
@@ -183,6 +184,63 @@ describe("WORKSPACE_STATS_UPDATED", () => {
     });
 
     expect(useWorkspaceStatsStore.getState().snapshot).toBe(snapshot);
+  });
+});
+
+describe("SUB_WORKFLOW_STEP_FILE_SELECTED", () => {
+  const handle = (path: unknown, targetKey: string = "newPrompt") =>
+    createMessageHandlers(false)[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED](
+      { path, targetKey } as never
+    );
+
+  it("fills the Workflow-mode file field with the picked reference", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    handle("workflows/verify.ctrlyoke.yaml");
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/verify.ctrlyoke.yaml"
+    );
+  });
+
+  it("drops a pick that lands after the editor left Workflow mode", () => {
+    handle("workflows/verify.ctrlyoke.yaml");
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+  });
+
+  it("lands a pick only on the target it was asked for", () => {
+    const fileStep = (workflow: string) => ({
+      type: STEP_TYPES.WORKFLOW,
+      workflow,
+    });
+    useEditorStore
+      .getState()
+      .enterEditMode(1, fileStep("workflows/one.ctrlyoke.yaml"));
+    // Asked for step 2; the user has since selected step 1, another file step.
+    handle("workflows/picked.ctrlyoke.yaml", "queue:2");
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/one.ctrlyoke.yaml"
+    );
+
+    handle("workflows/picked.ctrlyoke.yaml", "queue:1");
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/picked.ctrlyoke.yaml"
+    );
+  });
+
+  it("drops a reply that names no target", () => {
+    useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+    createMessageHandlers(false)[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED](
+      { path: "workflows/verify.ctrlyoke.yaml" } as never
+    );
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
+  });
+
+  it("never turns an inline workflow step into a file reference", () => {
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Inline lane" },
+    });
+    handle("workflows/verify.ctrlyoke.yaml", "queue:0");
+    expect(useEditorStore.getState().subWorkflowPath).toBe("");
   });
 });
 
@@ -4083,8 +4141,8 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
 
     const store = useWorkflowStore.getState();
     expect(store.liveContextWindow[1]).toBeUndefined();
-    expect(store.steps[1]._runtime?.contextWindowUsed).toBe(152797);
-    expect(store.steps[1]._runtime?.contextWindowSize).toBe(200000);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowUsed).toBe(152797);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowSize).toBe(200000);
   });
 
   it("keeps the previous step live context until durable tokens arrive", () => {
@@ -4136,8 +4194,8 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
 
     const store = useWorkflowStore.getState();
     expect(store.liveContextWindow[1]).toBeUndefined();
-    expect(store.steps[1]._runtime?.contextWindowUsed).toBe(152797);
-    expect(store.steps[1]._runtime?.contextWindowSize).toBe(200000);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowUsed).toBe(152797);
+    expect(getExecutionRuntime(store.steps[1])?.contextWindowSize).toBe(200000);
   });
 
   it("stores live context for the active final-step pass and ignores terminal updates", () => {

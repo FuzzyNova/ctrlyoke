@@ -432,7 +432,7 @@ Latest end-condition evaluation retained for the final step's automation result 
 
 Per-prompt runtime execution metadata (optional, added automatically during execution). Execution-property fields record the values the step actually ran with after inheritance, including the session ID the harness reported; secrets are recorded by name only, never by value. The step's response text is not stored here — the run's events.jsonl is the only record of step output.
 
-Also includes every field from [Execution properties](/reference/workflow-schema#execution-properties).
+Also includes every field from [Execution properties](/reference/workflow-schema#execution-properties) and [Step runtime](#step-runtime).
 
 ### `startedAt` {#step-runtime-startedat}
 
@@ -458,17 +458,41 @@ Timestamp when this prompt completed execution (set for all terminal states, not
 
 Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.
 
-### `retryCount` {#step-runtime-retrycount}
-
-- **Type:** `number`
-
-Number of retry attempts for this prompt
-
 ### `elapsed` {#step-runtime-elapsed}
 
 - **Type:** `number`
 
 Completed prompt duration in seconds
+
+### `failureMessage` {#step-runtime-failuremessage}
+
+- **Type:** `string`
+
+Human-readable message describing the last harness/session failure.
+
+### `failureKind` {#step-runtime-failurekind}
+
+- **Type:** `"userCancelled" | "processExit" | "harnessError" | "harnessNotInstalled" | "timeout" | "unknown"`
+
+Structured classification of the last failure for this step.
+
+### `rewoundFailure` {#step-runtime-rewoundfailure}
+
+- **Type:** `boolean`
+
+Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.
+
+### `terminalFailure` {#step-runtime-terminalfailure}
+
+- **Type:** `boolean`
+
+Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.
+
+### `retryCount` {#step-runtime-retrycount}
+
+- **Type:** `number`
+
+Number of retry attempts for this prompt
 
 ### `contextWindowUsed` {#step-runtime-contextwindowused}
 
@@ -482,23 +506,23 @@ Context window tokens in use, captured from the last completed output
 
 Context window size in tokens, captured from the last completed output
 
-### `failureKind` {#step-runtime-failurekind}
-
-- **Type:** `"userCancelled" | "processExit" | "harnessError" | "harnessNotInstalled" | "timeout" | "unknown"`
-
-Structured classification of the last harness/session failure for this prompt.
-
-### `failureMessage` {#step-runtime-failuremessage}
+### `childWorkflowKey` {#step-runtime-childworkflowkey}
 
 - **Type:** `string`
 
-Human-readable message describing the last harness/session failure.
+Lineage key of the child run.
 
-### `terminalFailure` {#step-runtime-terminalfailure}
+### `childRunRef` {#step-runtime-childrunref}
 
-- **Type:** `boolean`
+- **Type:** `string`
 
-Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.
+Run reference of the child run, used to locate its output and history.
+
+### `resolvedWorkflowPath` {#step-runtime-resolvedworkflowpath}
+
+- **Type:** `string`
+
+Absolute path the workflow reference resolved to when the child launched.
 
 ## Parallel group topology {#parallel-group-topology}
 

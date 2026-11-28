@@ -2,7 +2,12 @@ import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
-import { isScriptStep, type PriorContext } from "@root/types/CtrlYokeTypes";
+import {
+  getExecutionRuntime,
+  isPromptStep,
+  isScriptStep,
+  type PriorContext,
+} from "@root/types/CtrlYokeTypes";
 import { formatPriorContextLabel } from "@utils/priorContext";
 import {
   PRIOR_CONTEXT_DETAILS,
@@ -12,6 +17,7 @@ import {
   sandboxValueLabel,
 } from "@root/types/DashboardConstants";
 import { formatClockDuration } from "./time";
+import { getStepKindLabel } from "./status";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
 export interface StepRuntimeMetaSnapshot {
@@ -43,17 +49,18 @@ export function getStepSessionDetails(
     };
   }
 
+  const executionRuntime = getExecutionRuntime(step);
   const runtimeSessionId = runtimeMeta?.sessionId;
   if (typeof runtimeSessionId === "string" && runtimeSessionId.length > 0) {
     return {
       sessionId: runtimeSessionId,
-      harness: runtimeMeta?.harness ?? step._runtime?.harness,
+      harness: runtimeMeta?.harness ?? executionRuntime?.harness,
     };
   }
 
-  const stepSessionId = step._runtime?.sessionId;
+  const stepSessionId = executionRuntime?.sessionId;
   if (typeof stepSessionId === "string" && stepSessionId.length > 0) {
-    return { sessionId: stepSessionId, harness: step._runtime?.harness };
+    return { sessionId: stepSessionId, harness: executionRuntime?.harness };
   }
 
   return {};
@@ -196,8 +203,9 @@ export function buildStepMetadataClipboardText({
     getEffectiveSecrets,
   } = useSettingsStore.getState();
 
-  const isScript = isScriptStep(step);
-  const stepKind = isScript ? "Script" : "Prompt";
+  const stepKind = getStepKindLabel(step.type);
+  const executionStep =
+    isPromptStep(step) || isScriptStep(step) ? step : undefined;
   const headerLabel = isFinalStep
     ? `Final ${stepKind.toLowerCase()} step`
     : `${stepKind} step ${slotNumber}`;
@@ -207,13 +215,13 @@ export function buildStepMetadataClipboardText({
     "Execution properties:",
     resolvedLine(
       "executionMode",
-      step.executionMode,
+      executionStep?.executionMode,
       getEffectiveExecutionMode(),
       fmtString
     ),
   ];
 
-  if (!isScript) {
+  if (isPromptStep(step)) {
     const stepHarness = isHarnessId(step.harness) ? step.harness : undefined;
     const resolvedSandbox = resolveSandboxRequest(
       step.sandbox,
@@ -330,7 +338,7 @@ export function buildStepMetadataClipboardText({
   lines.push(
     resolvedLine(
       "errorBehavior",
-      step.errorBehavior,
+      executionStep?.errorBehavior,
       workflowProperties.errorBehavior ?? globalSettings.defaultErrorBehavior,
       fmtErrorBehavior
     )

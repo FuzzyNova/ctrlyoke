@@ -49,6 +49,10 @@ const OBJECT_SOURCES = {
     pointers: ["#/$defs/scriptStep"],
     forbiddenFrom: ["#/$defs/workflowStep"],
   },
+  subWorkflowStep: {
+    pointers: ["#/$defs/subWorkflowStep"],
+    forbiddenFrom: ["#/$defs/workflowStep"],
+  },
   parallelGroup: { pointers: ["#/$defs/parallelGroupItem"] },
   endCondition: { pointers: ["#/$defs/endCondition"] },
   preCondition: { pointers: ["#/$defs/preCondition"] },

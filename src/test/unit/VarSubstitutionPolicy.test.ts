@@ -26,6 +26,19 @@ import {
   type VarSubstitutionPolicyEntry,
 } from "../../utils/VarSubstitutionPolicy";
 
+/**
+ * Whether a policy field (authored workflow coordinates, e.g.
+ * `steps[].workflow.prompt`) is one of the excluded fields or nested under one.
+ */
+function isExcludedPolicyField(
+  field: string,
+  excludedPaths: readonly string[]
+): boolean {
+  return excludedPaths.some(
+    (excluded) => field === excluded || field.startsWith(`${excluded}.`)
+  );
+}
+
 const POLICY_ENTRIES = Object.entries(VAR_SUBSTITUTION_POLICY) as Array<
   [string, VarSubstitutionPolicyEntry]
 >;
@@ -160,6 +173,27 @@ suite("VarSubstitutionPolicy documentation", () => {
     ) as ScriptStep & Record<string, unknown>;
     assert.strictEqual(resolved.expected, 3);
     assert.strictEqual(resolved.sessionId, 1);
+  });
+
+  test("leaves workflow paths literal and leaves inline definitions for the child run", () => {
+    for (const authoredWorkflow of [
+      "{{childPath}}.ctrlyoke.yaml",
+      {
+        prompt: "Run {{task}}",
+        worktree: { mode: "managed", branch: "{{branch}}" },
+      },
+    ]) {
+      const authored = {
+        type: "workflow" as const,
+        workflow: authoredWorkflow,
+      } as unknown as WorkflowStep;
+      const resolved = VarSubstitutor.substituteStepView(
+        authored,
+        { childPath: "child", task: "build", branch: "topic" },
+        "dispatch"
+      ) as WorkflowStep & { workflow: unknown };
+      assert.deepStrictEqual(resolved.workflow, authoredWorkflow);
+    }
   });
 
   test("reports unresolved strict fields with their indexed schema path", () => {
@@ -305,11 +339,26 @@ suite("VarSubstitutionPolicy documentation", () => {
       assert.ok(!seen.has(key), `${field} and ${seen.get(key)} share ${key}`);
       seen.set(key, field);
     }
-    for (const { path: excluded } of VAR_SUBSTITUTION_EXCLUDED_FIELDS)
+    const excludedPaths = VAR_SUBSTITUTION_EXCLUDED_FIELDS.map(
+      ({ path: excluded }) => excluded
+    );
+    for (const [field] of POLICY_ENTRIES) {
       assert.ok(
-        !POLICY_ENTRIES.some(([, entry]) => entry.path.includes(excluded)),
-        `${excluded} is excluded but has a policy entry`
+        !isExcludedPolicyField(field, excludedPaths),
+        `${field} is excluded but has a policy entry`
       );
+    }
+  });
+
+  test("an exclusion owns its own field and the fields nested under it", () => {
+    assert.ok(
+      isExcludedPolicyField("steps[].workflow.prompt", ["steps[].workflow"])
+    );
+    assert.ok(isExcludedPolicyField("steps[].workflow", ["steps[].workflow"]));
+    assert.ok(!isExcludedPolicyField("steps[].prompt", ["steps[].workflow"]));
+    assert.ok(
+      !isExcludedPolicyField("steps[].workflowName", ["steps[].workflow"])
+    );
   });
 
   test("walker: text fields substitute, keep advisory placeholders, and honor fences", () => {

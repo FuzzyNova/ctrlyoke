@@ -201,6 +201,7 @@ export const PATH_SELECTION_KINDS = {
 export const PATH_SELECTION_TITLES = {
   LOAD_WORKFLOW: "Select a prompt file to load",
   APPEND_WORKFLOW: "Select a prompt file to append to queue",
+  SUB_WORKFLOW_STEP_FILE: "Select the workflow file this step runs",
   IMPORT_OFFLINE_LICENSE: "Import Pro License File",
 } as const;
 
@@ -653,6 +654,7 @@ export const MESSAGE_TYPES = {
   STEP_STATUS_CHANGED: "stepStatusChanged",
   RETRY_ATTEMPT_CHANGED: "retryAttemptChanged",
   CLI_OUTPUT: "cliOutput",
+  SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
   CLI_STREAMING_EVENTS: "cliStreamingEvents", // Structured events for Claude/Codex CLI
   CONTEXT_WINDOW_UPDATE: "contextWindowUpdate", // Live context window usage update (extension -> webview)
@@ -911,6 +913,9 @@ export const MESSAGE_TYPES = {
   WORKFLOW_VARIANT_FAILED: "workflowVariantFailed",
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
+  SELECT_SUB_WORKFLOW_STEP_FILE: "selectSubWorkflowStepFile", // Webview -> Extension: native file picker for the step editor's workflow file (VS Code panel only); { targetKey? } echoed on the reply
+  NORMALIZE_SUB_WORKFLOW_STEP_FILE: "normalizeSubWorkflowStepFile", // Webview -> Extension: { filePath, targetKey? } — a file the hosted WorkflowFilePickerModal picked, to be built and checked as SELECT_SUB_WORKFLOW_STEP_FILE's pick is
+  SUB_WORKFLOW_STEP_FILE_SELECTED: "subWorkflowStepFileSelected", // Extension -> Webview: { path, targetKey? } — the picked file as a step's `workflow` reference (a refused file replies WORKFLOW_ACTION_FAILED instead)
   REQUEST_RUN_EXPORT_INFO: "requestRunExportInfo",
   RUN_EXPORT_INFO: "runExportInfo",
   EXPORT_RUN: "exportRun",
@@ -1587,6 +1592,8 @@ export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
   INTEGRATION_CREATION: "parallelGroup.preflight.integrationCreation",
   INTERACTIVE_MULTIPLEX: "parallelGroup.preflight.interactiveMultiplex",
   EFFECTIVE_WIDTH: "parallelGroup.preflight.effectiveWidth",
+  MERGE_INTO_SHARED_ROOT: "parallelGroup.preflight.mergeIntoSharedRoot",
+  WORKTREE_COLLISION: "parallelGroup.preflight.worktreeCollision",
 } as const;
 
 export type ParallelGroupPreflightDiagnosticCode =
@@ -2065,6 +2072,7 @@ export const PREVIEW_RAIL_SELECTIONS = {
 export const PREVIEW_STEP_TYPES = {
   PROMPT: "prompt",
   SCRIPT: "script",
+  WORKFLOW: "workflow",
 } as const;
 
 export const PREVIEW_PERMISSION_ACTIONS = {
@@ -3016,6 +3024,21 @@ export type WorktreeIdentityKind =
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
+/**
+ * Where a sub-workflow child runs, from its own `worktree` key (the D4
+ * table): absent inherits the parent's execution root, `false` runs in the
+ * workspace's main checkout, and the object forms create a worktree.
+ */
+export const SUB_WORKFLOW_WORKTREE_PLACEMENTS = {
+  INHERITED: "inherited",
+  MAIN_CHECKOUT: "mainCheckout",
+  MANAGED: "managed",
+  NAMED: "named",
+} as const;
+
+export type SubWorkflowWorktreePlacement =
+  (typeof SUB_WORKFLOW_WORKTREE_PLACEMENTS)[keyof typeof SUB_WORKFLOW_WORKTREE_PLACEMENTS];
+
 /** Whether a named worktree `directory` value is a path or a bare name. */
 export const WORKTREE_DIRECTORY_VALUE_KINDS = {
   PATH: "path",
@@ -3191,6 +3214,24 @@ export const WORKTREE_MERGE_OUTCOMES = {
 
 export type WorktreeMergeOutcome =
   (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
+
+/**
+ * Why an execution lease is held, when it is not ordinary editing. A merge
+ * lease is an `exclusive-worktree` lease held only for the merge guard and
+ * `git merge` into a checkout, so a sibling lane's merge can wait it out.
+ */
+export const EXECUTION_LEASE_PURPOSES = {
+  MERGE: "merge",
+} as const;
+
+export type ExecutionLeasePurpose =
+  (typeof EXECUTION_LEASE_PURPOSES)[keyof typeof EXECUTION_LEASE_PURPOSES];
+
+/**
+ * How long a sub-workflow lane's `merge: true` waits for a sibling lane's
+ * merge lease on the same checkout before ending `blocked` (D4d).
+ */
+export const WORKTREE_MERGE_LEASE_WAIT_MS = 120_000;
 
 // ============================================================================
 // WORKFLOW VIEW ADDRESS KIND - Discriminant for WorkflowViewAddress
@@ -3437,6 +3478,8 @@ export type CommitSubmissionChannel =
 
 /** Selector-only choice for the workflow value `worktree: false`. */
 export const WORKTREE_MODE_SELECTIONS = {
+  /** No `worktree` key: an inline sub-workflow child runs in its parent's checkout (D4a). */
+  INHERIT: "inherit",
   NONE: "none",
   MANAGED: "managed",
   NAMED: "named",
@@ -3562,6 +3605,35 @@ export const QUEUE_POSITION = {
   BEFORE_CURRENT: "beforeCurrent", // Insert before current prompt (stopped/idle with prompts)
   PARALLEL_WITH_CURRENT: "parallelWithCurrent", // Append to the live group containing current
 } as const;
+
+/** Whether a wire value names a {@link QUEUE_POSITION}. */
+export function isQueuePosition(value: unknown): value is QueuePosition {
+  return (Object.values(QUEUE_POSITION) as unknown[]).includes(value);
+}
+
+/**
+ * How "Queue from File" adds a workflow file to a run: `inline` splices the
+ * file's steps into the run, `subWorkflow` appends one workflow step that
+ * runs the file as a child run.
+ */
+export const APPEND_MODES = {
+  INLINE: "inline",
+  SUB_WORKFLOW: "subWorkflow",
+} as const;
+
+export type AppendMode = (typeof APPEND_MODES)[keyof typeof APPEND_MODES];
+
+/** Whether a wire value names an {@link APPEND_MODES} value. */
+export function isAppendMode(value: unknown): value is AppendMode {
+  return (Object.values(APPEND_MODES) as unknown[]).includes(value);
+}
+
+/**
+ * Why an `inline` append cannot take `parallelWithCurrent`: only one
+ * workflow step can join the running step, and inline splices many.
+ */
+export const INLINE_PARALLEL_APPEND_REFUSAL =
+  "Only a workflow queued as a sub-workflow can run alongside the current step; nothing was queued.";
 
 /**
  * Resolve the array index a queue position splices at, given the execution head
@@ -3887,6 +3959,15 @@ export const PROMPT_TERMINAL_STATUS = {
 
 export type PromptTerminalStatus =
   (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
+
+/** Identifies who initiated cancellation of a child workflow run. */
+export const SUB_WORKFLOW_CANCELLATION_SOURCES = {
+  PARENT: "parent",
+  CHILD: "child",
+} as const;
+
+export type SubWorkflowCancellationSource =
+  (typeof SUB_WORKFLOW_CANCELLATION_SOURCES)[keyof typeof SUB_WORKFLOW_CANCELLATION_SOURCES];
 
 const PROMPT_TERMINAL_STATUSES: ReadonlySet<string> = new Set(
   Object.values(PROMPT_TERMINAL_STATUS)
@@ -4526,6 +4607,7 @@ export type UndoDialogIntent =
 export const STEP_TYPES = {
   PROMPT: "prompt",
   SCRIPT: "script",
+  WORKFLOW: "workflow",
 } as const;
 
 // ============================================================================
@@ -4802,6 +4884,7 @@ export const PROMPT_PROPERTIES = {
   FINAL_STEP: "finalStep",
   VARS: "vars",
   CONDITIONS: "conditions",
+  WORKTREE_PRESETS: "worktreePresets",
   WORKTREE: "worktree",
   TRUSTED_EXTERNAL_ROOTS: "trustedExternalRoots",
   MAX_STEPS: "maxSteps",
@@ -4811,6 +4894,7 @@ export const PROMPT_PROPERTIES = {
 
   // Script step properties
   SCRIPT: "script",
+  WORKFLOW_REF: "workflow",
   ENV: "env",
   TIMEOUT: "timeoutSec",
   COMPARE_SOURCE: "compareSource",
@@ -4881,6 +4965,8 @@ export const WORKFLOW_LOCATION_ROLES = {
   PROMPT_TEXT: "promptText",
   /** Shell text: step and condition `script`, hook `command`. */
   SCRIPT_TEXT: "scriptText",
+  /** A sub-workflow step's `workflow` file path. */
+  WORKFLOW_FILE_PATH: "workflowFilePath",
   NONE: "none",
 } as const;
 export type WorkflowLocationRole =
@@ -4891,6 +4977,8 @@ export const WORKFLOW_OBJECT_KINDS = {
   WORKFLOW_ROOT: "workflowRoot",
   PROMPT_STEP: "promptStep",
   SCRIPT_STEP: "scriptStep",
+  /** A `type: workflow` step. Its inline `workflow` object is a prompt or script step. */
+  SUB_WORKFLOW_STEP: "subWorkflowStep",
   PARALLEL_GROUP: "parallelGroup",
   END_CONDITION: "endCondition",
   PRE_CONDITION: "preCondition",
@@ -4922,6 +5010,15 @@ export const SCRIPT_STEP_COPY_FIELDS = [
   PROMPT_PROPERTIES.SHELL,
   PROMPT_PROPERTIES.ERROR_BEHAVIOR,
   PROMPT_PROPERTIES.ON_PASS,
+  PROMPT_PROPERTIES.ON_FAIL,
+] as const;
+
+/** Sub-workflow step fields copied from authored workflow files into normalized steps. */
+export const SUB_WORKFLOW_STEP_COPY_FIELDS = [
+  PROMPT_PROPERTIES.NAME,
+  PROMPT_PROPERTIES.ENABLED,
+  PROMPT_PROPERTIES.COLOR,
+  PROMPT_PROPERTIES.WORKFLOW_REF,
   PROMPT_PROPERTIES.ON_FAIL,
 ] as const;
 
@@ -5388,6 +5485,156 @@ export const OUTPUT_HISTORY_KINDS = {
   CLI: "cli",
   STATUS: "status",
   RUNTIME: "runtime",
+  SUB_WORKFLOW: "subWorkflow",
+} as const;
+
+export const SUB_WORKFLOW_DASHBOARD_LABELS = {
+  workflow: "Workflow",
+  openRun: "Open run →",
+  warning: "Completed with a warning",
+  startedBy: "Started by",
+  unavailable: "unavailable",
+  outcome: "Outcome",
+  failure: "Failure",
+  branch: "Branch",
+  merge: "Merge",
+  conflictFiles: "Conflicts",
+  worktree: "Worktree",
+  worktreeTitle: "Runs in its own worktree",
+  expected: "expected",
+  expectedHarnessTitle:
+    "Expected from the current settings. Open the run to see what it used.",
+  mergeConflict: "Merge conflict",
+  mergeConflictReason:
+    "The lane's branch conflicts with the parent's checkout. Its branch is kept for a later step to merge.",
+  mergeBlocked: "Merge blocked",
+  mergeBlockedReason:
+    "The parent's checkout was busy, so the lane did not merge. Its branch is kept for a later step to merge.",
+  mergeAbortFailed: "Merge abort failed",
+  mergeAbortFailedReason:
+    "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
+  /** Execution preview: a file child's entry reads "Runs <file>". */
+  previewRuns: "Runs",
+  previewFileNote:
+    "The child workflow uses its own harness, model and settings when it starts. Its steps are not previewed.",
+  previewChildRun: "Child run",
+  previewInlineNote:
+    "Runs as a child run with this workflow's settings and variables. Its earlier-step references address the child run.",
+  previewDisabledChildNote:
+    "The child's step is disabled, so the child starts, skips it and runs nothing.",
+} as const;
+
+/** The execution preview's "Runs <file>" entry for a file-referenced child. */
+export function formatSubWorkflowRunsLabel(workflowPath: string): string {
+  return `${SUB_WORKFLOW_DASHBOARD_LABELS.previewRuns} ${workflowPath}`;
+}
+
+/** The step editor's Prompt / Script / Workflow switch: each kind's label and tooltip. */
+export const STEP_EDITOR_MODE_LABELS = {
+  [STEP_TYPES.PROMPT]: {
+    label: "Prompt",
+    title: "Prompt step — sends text to an AI harness",
+  },
+  [STEP_TYPES.SCRIPT]: {
+    label: "Script",
+    title: "Script step — runs a shell command with no AI interaction",
+  },
+  [STEP_TYPES.WORKFLOW]: {
+    label: "Workflow",
+    title:
+      "Workflow step — runs another workflow, from a file or defined inline, as a child run",
+  },
+} as const satisfies Record<
+  (typeof STEP_TYPES)[keyof typeof STEP_TYPES],
+  { label: string; title: string }
+>;
+
+/**
+ * The step editor's Workflow mode (`type: workflow`): its File form
+ * (`workflow: <path>`) and its Inline form (an inline single-step definition,
+ * D13, edited in the prompt or script editor of the step it wraps).
+ */
+export const SUB_WORKFLOW_EDITOR_LABELS = {
+  newStep: "New Workflow Step",
+  editing: "Editing: Workflow Step",
+  editingFinal: "Editing: Final Workflow Step",
+  file: "Workflow file",
+  fileTitle:
+    "The workflow file this step runs as a child run. A relative path resolves from the workspace, like a prompt file reference.",
+  filePlaceholder: "path/to/workflow.ctrlyoke.yaml",
+  browse: "Browse…",
+  browseTitle: "Pick a workflow file",
+  pickerTitle: "Select Workflow File",
+  pickerAction: "Use File",
+  onFail: "On Fail",
+  onFailTitle:
+    "What to do when the child run fails or cannot start. A stopped child always stops the parent.",
+  fileRequired: "Workflow file is required",
+  form: "Workflow",
+  formFile: "File",
+  formFileTitle: "Run a workflow file as the child run",
+  formInline: "Inline",
+  formInlineTitle:
+    "Define the child run here as one prompt or script step. It inherits this workflow's settings and vars, as an ordinary step would.",
+  inlineKind: "Inline step",
+  worktree: "Worktree",
+  worktreeTitle:
+    "Where the inline child runs. Parent's checkout runs it where this workflow runs; None runs it in the main checkout; Managed and Named give it its own worktree, branched from this workflow's checkout.",
+} as const;
+
+/**
+ * The step editor's Workflow-mode forms: a workflow file reference or an
+ * inline single-step definition (D13). Never stored; the form is read from
+ * the step's `workflow` shape.
+ */
+export const SUB_WORKFLOW_EDITOR_FORMS = {
+  FILE: "file",
+  INLINE: "inline",
+} as const;
+
+export type SubWorkflowEditorForm =
+  (typeof SUB_WORKFLOW_EDITOR_FORMS)[keyof typeof SUB_WORKFLOW_EDITOR_FORMS];
+
+/**
+ * Dashboard entry points that queue a workflow file as one sub-workflow step
+ * (`APPEND_FILE` with `appendMode: subWorkflow`): the workflow dropdown's row
+ * menu, the New split button and the workspace viewer's file menus.
+ */
+export const SUB_WORKFLOW_QUEUE_LABELS = {
+  queueNext: "Queue Workflow to Run Next…",
+  queueNextTitle:
+    "Pick a workflow file to run as a child run after this run's queued steps",
+  runAlongside: "Run Workflow Alongside Current Step…",
+  runAlongsideTitle:
+    "Pick a workflow file to run as a child run beside the step running now",
+  queueAsSubWorkflow: "Queue as Sub-workflow…",
+  queueAsSubWorkflowTitle:
+    "Add one step that runs a workflow file as a child run, instead of copying its steps",
+  /** The New menu's item while the view is a run: the run continues with it. */
+  appendAndContinueAsSubWorkflow: "Append and Continue as Sub-workflow…",
+  queueFileAsSubWorkflow: "Queue as Sub-workflow",
+  /** The workspace viewer's item while the view is a run. */
+  appendAndContinueFileAsSubWorkflow: "Append and Continue as Sub-workflow",
+  queueFileAsSubWorkflowTitle:
+    "Add one step that runs this file as a child run, instead of copying its steps",
+  pickerTitle: "Queue Workflow File as Sub-workflow",
+  pickerAlongsideTitle: "Run Workflow File Alongside Current Step",
+  pickerAction: "Queue Sub-workflow",
+  pickerAlongsideAction: "Run Alongside",
+  externalRun:
+    "This run is executing in another process; only Run Alongside can reach it",
+} as const;
+
+/**
+ * Why a step cannot be started beside the running one. Shared by the prompt
+ * editor's Run menu and "Run Workflow Alongside Current Step…", which the
+ * backend refuses for the same reasons.
+ */
+export const PARALLEL_DISPATCH_REFUSALS = {
+  pausing: "Workflow is pausing",
+  noStepRunning: "No step is running",
+  finalStep: "The final step can't run in parallel",
+  widthOne: "Parallel width is 1 — raise `queue.maxParallelSteps`",
 } as const;
 
 export const OUTPUT_ACTIVITY_KINDS = {
@@ -5410,6 +5657,7 @@ export type OutputMessageType =
 // RUN OUTPUT RESOLVER EVENT KINDS - Events emitted while reducing a run timeline
 // ============================================================================
 export const RUN_OUTPUT_RESOLVER_EVENT_KINDS = {
+  SUB_WORKFLOW_SETTLED: "subWorkflowSettled",
   ATTEMPT_SETTLED: "attemptSettled",
   ATTEMPT_STARTED: "attemptStarted",
   STREAMING_CHUNK: "streamingChunk",
@@ -5725,10 +5973,19 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
   RUNS: "runs",
 } as const;
 
+/** The New split button's menu items (`SplitButtonOption.value`, also their React key). */
+export const WORKFLOW_CONTROLS_MENU_VALUES = {
+  FROM_TEMPLATE: "from-template",
+  LOAD_FILE: "load-file",
+  IMPORT_RUN: "import-run",
+  QUEUE_FILE: "queue-file",
+  QUEUE_SUB_WORKFLOW: "queue-sub-workflow",
+  DUPLICATE_WORKFLOW: "duplicate-workflow",
+} as const;
+
 /** File-picker modes used by workflow load and queue actions. */
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
-  QUEUE: "queue",
   IMPORT_RUN: "import-run",
 } as const;
 
@@ -5818,6 +6075,15 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   WorkspaceEntryKind,
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
+
+/** Which files a lone-path completion query lists: prompt files, or workflow files (`getCtrlYokeFileKind`). */
+export const PATH_QUERY_FILE_SETS = {
+  PROMPT: "prompt",
+  WORKFLOW: "workflow",
+} as const;
+
+export type PathQueryFileSet =
+  (typeof PATH_QUERY_FILE_SETS)[keyof typeof PATH_QUERY_FILE_SETS];
 
 /** Lifecycle states exposed by the workspace file completion index. */
 export const WORKSPACE_FILE_INDEX_STATES = {

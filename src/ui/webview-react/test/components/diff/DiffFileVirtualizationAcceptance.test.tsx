@@ -18,7 +18,10 @@ import {
   DIFF_FILE_FIXTURE_SIZES,
   createDiffFileFixture,
 } from "../../fixtures/diffFileFixture";
-import { stubElementLayoutForFile } from "../../fixtures/elementLayout";
+import {
+  stubBoundingClientRect,
+  stubElementLayoutForFile,
+} from "../../fixtures/elementLayout";
 
 const diffViewUnmountCount = vi.hoisted(() => ({ value: 0 }));
 
@@ -46,8 +49,7 @@ vi.mock("@components/diff/TextDiffView", async () => {
 });
 
 const SCROLLER_CLASS = "diff-fixture-scroller";
-const originalGetBoundingClientRect =
-  HTMLElement.prototype.getBoundingClientRect;
+let restoreBoundingClientRect: (() => void) | undefined;
 
 stubElementLayoutForFile({
   height: (element) => {
@@ -62,13 +64,14 @@ stubElementLayoutForFile({
 });
 
 beforeAll(() => {
-  HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
-    const isScroller = this.classList.contains(SCROLLER_CLASS);
-    const measuredChild = this.querySelector<HTMLElement>("[data-test-height]");
+  restoreBoundingClientRect = stubBoundingClientRect((element) => {
+    const isScroller = element.classList.contains(SCROLLER_CLASS);
+    const measuredChild =
+      element.querySelector<HTMLElement>("[data-test-height]");
     const height = isScroller
       ? 180
       : Number(
-          this.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 24
+          element.dataset.testHeight ?? measuredChild?.dataset.testHeight ?? 24
         );
     return {
       width: 800,
@@ -81,11 +84,11 @@ beforeAll(() => {
       left: 0,
       toJSON: () => ({}),
     } as DOMRect;
-  };
+  });
 });
 
 afterAll(() => {
-  HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+  restoreBoundingClientRect?.();
 });
 
 class TrackingResizeObserver implements ResizeObserver {

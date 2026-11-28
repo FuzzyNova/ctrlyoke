@@ -47,7 +47,19 @@ import {
 } from "../../core/harness/PtyProcessManager";
 import { MockPlatform } from "../helpers/mockHarness";
 import {
+  resolveSubWorkflowReference,
+  subWorkflowUnresolvedMessage,
+} from "../../core/SubWorkflowReferenceStep";
+import {
+  buildPromptFileResolutionOptions,
+  type PromptFileResolutionInput,
+} from "../../core/PromptFileResolutionOptions";
+import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
+import {
   ACTION_TYPES,
+  APPEND_MODES,
+  FINAL_STEP_PHASES,
+  STEP_TYPES,
   EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   EXECUTION_STATES,
@@ -576,6 +588,109 @@ function createTestOrchestrator(
   internal.runLifecycleServiceInstance = undefined;
   return orchestrator;
 }
+
+suite("WorkflowOrchestrator execution preview definition sources", () => {
+  // Reaches the private seam the dry run builds its request from.
+  interface DefinitionSourcesSeam {
+    getViewDefinitionSources(
+      clientId: string,
+      instance: unknown
+    ): Promise<{
+      sourceDefinitionPath?: string;
+      workflowTrustSourcePath?: string;
+    }>;
+  }
+  const childKey = "child-lineage" as WorkflowKey;
+  const olderRun = "run-2026-11-26T00-00-00-000Z" as RunRef;
+  const liveRun = "run-2026-11-27T00-00-00-000Z" as RunRef;
+  // An inline child: the parent's authored file is its base, and the
+  // parent's identity its trust, though its descriptor records neither.
+  const inlineChildOwning = (runRef?: RunRef) => ({
+    getQueueState: () => ({ workflowKey: childKey, runRef }),
+    getSourceDefinitionPath: () => "/ws/flows/parent.ctrlyoke.json",
+    getWorkflowTrustSourcePath: () => "/ws/parent identity",
+  });
+  const childInstance = inlineChildOwning();
+
+  function createSeam(
+    viewedKey: WorkflowKey,
+    viewedRunRef?: RunRef
+  ): {
+    seam: DefinitionSourcesSeam;
+    descriptorReads: string[];
+  } {
+    const orchestrator = createTestOrchestrator();
+    const descriptorReads: string[] = [];
+    Object.assign(orchestrator, {
+      getViewAddress: () =>
+        viewedRunRef
+          ? {
+              workflowKey: viewedKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+              runRef: viewedRunRef,
+            }
+          : { workflowKey: viewedKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      getViewSourceDefinitionPath: async (clientId: string) => {
+        descriptorReads.push(clientId);
+        return "/ws/descriptor.ctrlyoke.json";
+      },
+    });
+    return {
+      seam: orchestrator as unknown as DefinitionSourcesSeam,
+      descriptorReads,
+    };
+  }
+
+  test("takes the base and trust identity from the instance that owns the viewed lineage", async () => {
+    const { seam, descriptorReads } = createSeam(childKey);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", childInstance),
+      {
+        sourceDefinitionPath: "/ws/flows/parent.ctrlyoke.json",
+        workflowTrustSourcePath: "/ws/parent identity",
+      }
+    );
+    assert.deepStrictEqual(descriptorReads, []);
+  });
+
+  test("falls back to the descriptor for a lineage the instance does not own", async () => {
+    const { seam } = createSeam("other-lineage" as WorkflowKey);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", childInstance),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", undefined),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+  });
+
+  test("takes them from the instance only for the exact run it owns", async () => {
+    const { seam, descriptorReads } = createSeam(childKey, liveRun);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", inlineChildOwning(liveRun)),
+      {
+        sourceDefinitionPath: "/ws/flows/parent.ctrlyoke.json",
+        workflowTrustSourcePath: "/ws/parent identity",
+      }
+    );
+    assert.deepStrictEqual(descriptorReads, []);
+  });
+
+  test("an older run of the instance's lineage previews with the stored sources, not the live run's", async () => {
+    const { seam, descriptorReads } = createSeam(childKey, olderRun);
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", inlineChildOwning(liveRun)),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+    // A draft-holding instance does not own a run address either.
+    assert.deepStrictEqual(
+      await seam.getViewDefinitionSources("client", childInstance),
+      { sourceDefinitionPath: "/ws/descriptor.ctrlyoke.json" }
+    );
+    assert.deepStrictEqual(descriptorReads, ["client", "client"]);
+  });
+});
 
 suite("WorkflowOrchestrator snapshot content requests", () => {
   test("deduplicates concurrent requests for the same address, target, and path", async () => {
@@ -6420,6 +6535,866 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
+  });
+
+  suite("appendFromFileForClient in sub-workflow mode", () => {
+    let workspace: string;
+
+    setup(async () => {
+      workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-")
+      );
+      // The parse is stubbed, but the reference is resolved on disk as its
+      // launch resolves it, so the file has to exist.
+      await fs.mkdir(path.dirname(childPath()), { recursive: true });
+      await fs.writeFile(childPath(), "steps:\n  - prompt: c\n");
+    });
+
+    teardown(async () => {
+      await fs.rm(workspace, { recursive: true, force: true });
+    });
+
+    const childPath = () =>
+      path.join(workspace, "flows", "child.ctrlyoke.yaml");
+
+    /**
+     * What an instance that has not prepared a worktree resolves from: the
+     * default execution workspace every instance starts with.
+     */
+    const idleResolutionInput = (): PromptFileResolutionInput => ({
+      executionWorkspace: createNoWorktreeExecutionWorkspace(
+        new MockPlatform(workspace),
+        workspace
+      ),
+      workspaceFolderPath: workspace,
+    });
+
+    async function patchRun(
+      workingFilePath: string,
+      patch: (file: any) => void
+    ): Promise<void> {
+      const file = JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+      patch(file);
+      await writeTrustedRunFile(workingFilePath, file);
+    }
+
+    /** The created run's only step is in flight. */
+    async function markRunning(workingFilePath: string): Promise<void> {
+      await patchRun(workingFilePath, (file) => {
+        file._runtime.executionState = EXECUTION_STATES.RUNNING;
+        file._runtime.currentIndex = 0;
+        file.steps[0]._runtime = {
+          ...file.steps[0]._runtime,
+          startedAt: Date.now(),
+        };
+      });
+    }
+
+    async function runMutation(run: Awaited<ReturnType<typeof createRun>>) {
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      return {
+        address: {
+          workflowKey: run.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: run.runRef,
+        },
+        expectedDefinitionRevision: 1,
+        expectedDescriptorRevision: descriptor.revision,
+      } as const;
+    }
+
+    function stubParser(internal: any, parsed: unknown): string[] {
+      const calls: string[] = [];
+      internal.promptFileParser = {
+        parsePromptFile: async (filePath: string) => {
+          calls.push(filePath);
+          return parsed;
+        },
+        lastParseError: parsed ? undefined : new Error("YAML parsing error"),
+      };
+      return calls;
+    }
+
+    async function readRun(workingFilePath: string): Promise<any> {
+      return JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+    }
+
+    test("without a run address it appends one sub-workflow step to the bound instance", async () => {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      const parseCalls = stubParser(internal, { steps: [{ prompt: "c" }] });
+      const appended: unknown[][] = [];
+      internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "draft"]]);
+      internal.instances = new Map([
+        [
+          "draft",
+          {
+            getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+            getPromptFileResolutionInput: idleResolutionInput,
+            appendFromFile: async (...args: unknown[]) => {
+              appended.push(args);
+            },
+          },
+        ],
+      ]);
+
+      await orchestrator.appendFromFileForClient(
+        undefined,
+        childPath(),
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.NEXT,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+
+      // The orchestrator builds the reference step against the workspace
+      // root a launch resolves it from, so the instance never derives one
+      // from the file's own folder (a bare "child.ctrlyoke.yaml").
+      assert.deepStrictEqual(appended, [
+        [
+          childPath(),
+          QUEUE_POSITION.NEXT,
+          { type: STEP_TYPES.WORKFLOW, workflow: "flows/child.ctrlyoke.yaml" },
+        ],
+      ]);
+      // The instance parses the file itself; the orchestrator does not.
+      assert.deepStrictEqual(parseCalls, []);
+    });
+
+    test("queueSubWorkflowFromFileForPanel queues one sub-workflow step on the run the panel is showing", async () => {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      stubParser(internal, { steps: [{ prompt: "c" }] });
+      const appended: unknown[][] = [];
+      internal.instances = new Map([
+        [
+          "live",
+          {
+            getQueueState: () => ({
+              workflowKey: run.workflowKey,
+              runRef: run.runRef,
+              status: EXECUTION_STATES.RUNNING,
+            }),
+            getPromptFileResolutionInput: idleResolutionInput,
+            appendFromFile: async (...args: unknown[]) => {
+              appended.push(args);
+            },
+          },
+        ],
+      ]);
+
+      await orchestrator.queueSubWorkflowFromFileForPanel(childPath());
+
+      assert.deepStrictEqual(appended, [
+        [
+          childPath(),
+          QUEUE_POSITION.END,
+          { type: STEP_TYPES.WORKFLOW, workflow: "flows/child.ctrlyoke.yaml" },
+        ],
+      ]);
+    });
+
+    for (const status of [
+      EXECUTION_STATES.RUNNING,
+      EXECUTION_STATES.PAUSING,
+      EXECUTION_STATES.PAUSED,
+    ]) {
+      test(`a ${status} run executing here takes the step in memory, not through a continuation`, async () => {
+        const run = await createRun(workspace);
+        const { orchestrator, internal } = createHarness(
+          workspace,
+          run.workflowKey,
+          run.runRef
+        );
+        stubParser(internal, { steps: [{ prompt: "c" }] });
+        const appended: unknown[][] = [];
+        internal.instances = new Map([
+          [
+            "live",
+            {
+              getQueueState: () => ({
+                workflowKey: run.workflowKey,
+                runRef: run.runRef,
+                status,
+              }),
+              getPromptFileResolutionInput: idleResolutionInput,
+              appendFromFile: async (...args: unknown[]) => {
+                appended.push(args);
+              },
+            },
+          ],
+        ]);
+        let continued = false;
+        internal.buildWorkflowInstance = () => ({
+          executeContinuationAtRun: async () => {
+            continued = true;
+          },
+        });
+        const before = await fs.readFile(run.workingFilePath, "utf8");
+
+        await orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          childPath(),
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        );
+
+        assert.deepStrictEqual(appended, [
+          [
+            childPath(),
+            QUEUE_POSITION.END,
+            {
+              type: STEP_TYPES.WORKFLOW,
+              workflow: "flows/child.ctrlyoke.yaml",
+            },
+          ],
+        ]);
+        assert.strictEqual(continued, false);
+        assert.strictEqual(
+          await fs.readFile(run.workingFilePath, "utf8"),
+          before,
+          "the in-memory append is the instance's; nothing is written here"
+        );
+      });
+    }
+
+    for (const status of [
+      EXECUTION_STATES.COMPLETED,
+      EXECUTION_STATES.STOPPED,
+      EXECUTION_STATES.ERROR,
+    ]) {
+      test(`a ${status} run is continued with exactly one workspace-relative workflow step`, async () => {
+        const run = await createRun(workspace);
+        await patchRun(run.workingFilePath, (file) => {
+          file._runtime.executionState = status;
+        });
+        const { orchestrator, internal } = createHarness(
+          workspace,
+          run.workflowKey,
+          run.runRef
+        );
+        const parseCalls = stubParser(internal, {
+          steps: [{ prompt: "child one" }, { prompt: "child two" }],
+        });
+        let executed: unknown[] | undefined;
+        internal.buildWorkflowInstance = () => ({
+          executeContinuationAtRun: async (...args: unknown[]) => {
+            executed = args;
+          },
+        });
+
+        await orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          childPath(),
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        );
+
+        assert.deepStrictEqual(parseCalls, [childPath()]);
+        assert.deepStrictEqual(executed?.slice(0, 2), [
+          run.workflowKey,
+          run.runRef,
+        ]);
+        const written = await readRun(run.workingFilePath);
+        assert.strictEqual(written.steps.length, 2);
+        assert.strictEqual(written.steps[1].type, STEP_TYPES.WORKFLOW);
+        assert.strictEqual(
+          written.steps[1].workflow,
+          "flows/child.ctrlyoke.yaml"
+        );
+      });
+    }
+    suite("a file outside the workspace", () => {
+      let outside: string;
+
+      setup(async () => {
+        outside = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-outside-")
+        );
+        await fs.writeFile(
+          path.join(outside, "child.ctrlyoke.yaml"),
+          "steps:\n  - prompt: c\n"
+        );
+      });
+
+      teardown(async () => {
+        await fs.rm(outside, { recursive: true, force: true });
+      });
+
+      const outsidePath = () => path.join(outside, "child.ctrlyoke.yaml");
+
+      /** A settled run in a harness whose only workspace root is `workspace`. */
+      async function outsideHarness(approvedExternalRoots: string[] = []) {
+        const run = await createRun(workspace);
+        await patchRun(run.workingFilePath, (file) => {
+          file._runtime.executionState = EXECUTION_STATES.COMPLETED;
+        });
+        const harness = createHarness(workspace, run.workflowKey, run.runRef);
+        harness.internal.platform.getWorkspaceRoots = () => [workspace];
+        harness.internal.platform.getNamedWorkspaceRoots = () => [];
+        harness.internal.platform.getApprovedExternalFileRoots = () =>
+          approvedExternalRoots;
+        stubParser(harness.internal, { steps: [{ prompt: "c" }] });
+        let continued = false;
+        harness.internal.buildWorkflowInstance = () => ({
+          executeContinuationAtRun: async () => {
+            continued = true;
+          },
+        });
+        return { run, ...harness, wasContinued: () => continued };
+      }
+
+      test("is refused at queue time with the message its launch would fail with", async () => {
+        const { run, orchestrator, internal, wasContinued } =
+          await outsideHarness();
+        const appended: unknown[][] = [];
+        internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "draft"]]);
+        internal.instances = new Map([
+          [
+            "draft",
+            {
+              getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+              getPromptFileResolutionInput: idleResolutionInput,
+              appendFromFile: async (...args: unknown[]) => {
+                appended.push(args);
+              },
+            },
+          ],
+        ]);
+        const before = await fs.readFile(run.workingFilePath, "utf8");
+        const expected = `${subWorkflowUnresolvedMessage(outsidePath())}; nothing was queued.`;
+        const isExpected = (error: unknown) =>
+          error instanceof Error && error.message === expected;
+
+        // A settled run's continuation, and an unaddressed in-memory append.
+        await assert.rejects(
+          orchestrator.appendFromFileForClient(
+            await runMutation(run),
+            outsidePath(),
+            PANEL_CLIENT_ID,
+            QUEUE_POSITION.END,
+            APPEND_MODES.SUB_WORKFLOW
+          ),
+          isExpected
+        );
+        await assert.rejects(
+          orchestrator.appendFromFileForClient(
+            undefined,
+            outsidePath(),
+            PANEL_CLIENT_ID,
+            QUEUE_POSITION.END,
+            APPEND_MODES.SUB_WORKFLOW
+          ),
+          isExpected
+        );
+
+        assert.strictEqual(wasContinued(), false);
+        assert.deepStrictEqual(appended, []);
+        assert.strictEqual(
+          await fs.readFile(run.workingFilePath, "utf8"),
+          before
+        );
+      });
+
+      test("is queued by its absolute path under an approved external root", async () => {
+        const { run, orchestrator, wasContinued } = await outsideHarness([
+          outside,
+        ]);
+
+        await orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          outsidePath(),
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        );
+
+        assert.strictEqual(wasContinued(), true);
+        const written = await readRun(run.workingFilePath);
+        assert.strictEqual(written.steps[1].workflow, outsidePath());
+      });
+
+      test("the step editor's pick is built and refused exactly as a queued file is", async () => {
+        const { orchestrator, internal } = await outsideHarness();
+        internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "draft"]]);
+        internal.instances = new Map([
+          [
+            "draft",
+            {
+              getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+              getPromptFileResolutionInput: idleResolutionInput,
+            },
+          ],
+        ]);
+
+        assert.deepStrictEqual(
+          await orchestrator.buildSubWorkflowStepReferenceForClient(
+            childPath(),
+            PANEL_CLIENT_ID
+          ),
+          { ok: true, workflow: "flows/child.ctrlyoke.yaml" }
+        );
+        // A client bound to nothing is checked as a fresh instance would be.
+        assert.deepStrictEqual(
+          await orchestrator.buildSubWorkflowStepReferenceForClient(
+            outsidePath(),
+            "browser:unbound"
+          ),
+          { ok: false, message: subWorkflowUnresolvedMessage(outsidePath()) }
+        );
+      });
+    });
+
+    suite("a worktree run", () => {
+      let worktree: string;
+
+      setup(async () => {
+        worktree = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-worktree-")
+        );
+      });
+
+      teardown(async () => {
+        await fs.rm(worktree, { recursive: true, force: true });
+      });
+
+      /**
+       * A RUNNING instance executing in `worktree`, a linked checkout of
+       * `workspace`: the execution workspace a managed worktree run holds.
+       */
+      function worktreeResolutionInput(): PromptFileResolutionInput {
+        return {
+          executionWorkspace: {
+            stateRoot: workspace,
+            executionRoot: worktree,
+            sourceCheckoutRoot: workspace,
+            executionCheckoutRoot: worktree,
+            workspaceRoots: [worktree],
+            namedWorkspaceRoots: [
+              { name: path.basename(workspace), fsPath: worktree },
+            ],
+            approvedExternalRoots: [],
+          },
+          workspaceFolderPath: workspace,
+        };
+      }
+
+      test("resolves a file that so far exists only on the run's branch, as its launch will, and stores it against the workspace root", async () => {
+        const branchOnly = path.join(worktree, "flows", "new.ctrlyoke.yaml");
+        await fs.mkdir(path.dirname(branchOnly), { recursive: true });
+        await fs.writeFile(branchOnly, "steps:\n  - prompt: c\n");
+        const run = await createRun(workspace);
+        const { orchestrator, internal } = createHarness(
+          workspace,
+          run.workflowKey,
+          run.runRef
+        );
+        internal.platform.getWorkspaceRoots = () => [workspace];
+        internal.platform.getNamedWorkspaceRoots = () => [];
+        stubParser(internal, { steps: [{ prompt: "c" }] });
+        const appended: unknown[][] = [];
+        internal.instances = new Map([
+          [
+            "live",
+            {
+              getQueueState: () => ({
+                workflowKey: run.workflowKey,
+                runRef: run.runRef,
+                status: EXECUTION_STATES.RUNNING,
+              }),
+              getPromptFileResolutionInput: worktreeResolutionInput,
+              appendFromFile: async (...args: unknown[]) => {
+                appended.push(args);
+              },
+            },
+          ],
+        ]);
+
+        // The main checkout's resolver, which queue time used to build,
+        // refuses it: the file is in neither the workspace nor an approved
+        // root. The run's launch resolves from its own checkout.
+        const mainCheckout = buildPromptFileResolutionOptions(
+          idleResolutionInput(),
+          () => []
+        );
+        assert.strictEqual(
+          (
+            await resolveSubWorkflowReference(
+              branchOnly,
+              mainCheckout.promptFileResolver
+            )
+          ).ok,
+          false
+        );
+
+        await orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          branchOnly,
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        );
+
+        // Named where the source checkout keeps it, so the reference outlives
+        // the worktree; the launch finds it in the worktree first.
+        assert.deepStrictEqual(appended, [
+          [
+            branchOnly,
+            QUEUE_POSITION.END,
+            { type: STEP_TYPES.WORKFLOW, workflow: "flows/new.ctrlyoke.yaml" },
+          ],
+        ]);
+        const launch = buildPromptFileResolutionOptions(
+          worktreeResolutionInput(),
+          () => []
+        );
+        assert.deepStrictEqual(
+          await resolveSubWorkflowReference(
+            "flows/new.ctrlyoke.yaml",
+            launch.promptFileResolver
+          ),
+          { ok: true, path: branchOnly }
+        );
+      });
+
+      test("still refuses a file outside both checkouts", async () => {
+        const outside = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-append-subworkflow-wt-outside-")
+        );
+        try {
+          const outsideFile = path.join(outside, "child.ctrlyoke.yaml");
+          await fs.writeFile(outsideFile, "steps:\n  - prompt: c\n");
+          const run = await createRun(workspace);
+          const { orchestrator, internal } = createHarness(
+            workspace,
+            run.workflowKey,
+            run.runRef
+          );
+          internal.platform.getWorkspaceRoots = () => [workspace];
+          internal.platform.getNamedWorkspaceRoots = () => [];
+          stubParser(internal, { steps: [{ prompt: "c" }] });
+          const appended: unknown[][] = [];
+          internal.instances = new Map([
+            [
+              "live",
+              {
+                getQueueState: () => ({
+                  workflowKey: run.workflowKey,
+                  runRef: run.runRef,
+                  status: EXECUTION_STATES.RUNNING,
+                }),
+                getPromptFileResolutionInput: worktreeResolutionInput,
+                appendFromFile: async (...args: unknown[]) => {
+                  appended.push(args);
+                },
+              },
+            ],
+          ]);
+
+          await assert.rejects(
+            orchestrator.appendFromFileForClient(
+              await runMutation(run),
+              outsideFile,
+              PANEL_CLIENT_ID,
+              QUEUE_POSITION.END,
+              APPEND_MODES.SUB_WORKFLOW
+            ),
+            (error: unknown) =>
+              error instanceof Error &&
+              error.message ===
+                `${subWorkflowUnresolvedMessage(outsideFile)}; nothing was queued.`
+          );
+          assert.deepStrictEqual(appended, []);
+        } finally {
+          await fs.rm(outside, { recursive: true, force: true });
+        }
+      });
+    });
+
+    test("a settled run refuses a file that does not parse, before writing anything", async () => {
+      const run = await createRun(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      stubParser(internal, null);
+      let continued = false;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async () => {
+          continued = true;
+        },
+      });
+      const before = await fs.readFile(run.workingFilePath, "utf8");
+
+      await assert.rejects(
+        orchestrator.appendFromFileForClient(
+          await runMutation(run),
+          childPath(),
+          PANEL_CLIENT_ID,
+          QUEUE_POSITION.END,
+          APPEND_MODES.SUB_WORKFLOW
+        ),
+        /Cannot queue child\.ctrlyoke\.yaml: YAML parsing error/
+      );
+      assert.strictEqual(continued, false);
+      assert.strictEqual(
+        await fs.readFile(run.workingFilePath, "utf8"),
+        before
+      );
+    });
+
+    test("parallelWithCurrent joins the running step as a promoted group with the workflow step", async () => {
+      const run = await createRun(workspace);
+      await markRunning(run.workingFilePath);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      const parseCalls = stubParser(internal, { steps: [{ prompt: "c" }] });
+
+      await orchestrator.appendFromFileForClient(
+        await runMutation(run),
+        childPath(),
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+
+      assert.deepStrictEqual(parseCalls, [childPath()]);
+      const written = await readRun(run.workingFilePath);
+      assert.strictEqual(written.steps.length, 2);
+      assert.strictEqual(written.steps[1].type, STEP_TYPES.WORKFLOW);
+      assert.strictEqual(
+        written.steps[1].workflow,
+        "flows/child.ctrlyoke.yaml"
+      );
+      assert.deepStrictEqual(
+        written.parallelGroups.map((group: any) => [
+          group.startIndex,
+          group.endIndex,
+        ]),
+        [[0, 1]]
+      );
+      assert.strictEqual(
+        written._runtime.activeParallelGroup.groupId,
+        written.parallelGroups[0].id
+      );
+    });
+
+    test("parallelWithCurrent republishes the join's revision to the run's viewers and records its author", async () => {
+      const run = await createRun(workspace);
+      await markRunning(run.workingFilePath);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      stubParser(internal, { steps: [{ prompt: "c" }] });
+      const mutation = await runMutation(run);
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, mutation.address],
+        ["browser:watcher", mutation.address],
+      ]);
+      const operations: string[] = [];
+      const identities: any[] = [];
+      const recordIdentity = (clientId: string) => (message: unknown) => {
+        operations.push(`identity:${clientId}`);
+        identities.push(message);
+      };
+      internal.viewMessageSinks = new Map([
+        [PANEL_CLIENT_ID, recordIdentity(PANEL_CLIENT_ID)],
+        ["browser:watcher", recordIdentity("browser:watcher")],
+      ]);
+      internal.invalidateRunViews = async () => {
+        operations.push("snapshot");
+      };
+
+      await orchestrator.appendFromFileForClient(
+        mutation,
+        childPath(),
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+
+      const written = await readRun(run.workingFilePath);
+      assert.ok(written.definitionRevision > 1);
+      assert.deepStrictEqual(operations, [
+        `identity:${PANEL_CLIENT_ID}`,
+        "identity:browser:watcher",
+        "snapshot",
+      ]);
+      for (const identity of identities) {
+        assert.strictEqual(
+          identity.definitionRevision,
+          written.definitionRevision
+        );
+      }
+      // The acting client's next edit, still echoing the revision it saw
+      // before the join, is reconciled to the join's revision.
+      assert.strictEqual(
+        internal.reconcileRunRevisions(
+          mutation.address,
+          PANEL_CLIENT_ID,
+          mutation.expectedDefinitionRevision,
+          mutation.expectedDescriptorRevision
+        ).expectedDefinitionRevision,
+        written.definitionRevision
+      );
+    });
+
+    test("parallelWithCurrent without a run address uses the bound instance's run", async () => {
+      const run = await createRun(workspace);
+      await markRunning(run.workingFilePath);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      stubParser(internal, { steps: [{ prompt: "c" }] });
+      internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "bound"]]);
+      internal.instances = new Map([
+        [
+          "bound",
+          {
+            getQueueState: () => ({
+              workflowKey: run.workflowKey,
+              runRef: run.runRef,
+              status: EXECUTION_STATES.RUNNING,
+            }),
+            getExecutionRoot: () => workspace,
+            getPromptFileResolutionInput: idleResolutionInput,
+          },
+        ],
+      ]);
+
+      await orchestrator.appendFromFileForClient(
+        undefined,
+        childPath(),
+        PANEL_CLIENT_ID,
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        APPEND_MODES.SUB_WORKFLOW
+      );
+
+      assert.strictEqual((await readRun(run.workingFilePath)).steps.length, 2);
+    });
+
+    suite("parallelWithCurrent refusals", () => {
+      async function assertRefused(
+        prepare: (workingFilePath: string) => Promise<void>,
+        expected: RegExp,
+        options: { parsed?: unknown; appendMode?: string } = {}
+      ): Promise<void> {
+        const run = await createRun(workspace);
+        await prepare(run.workingFilePath);
+        const { orchestrator, internal } = createHarness(
+          workspace,
+          run.workflowKey,
+          run.runRef
+        );
+        stubParser(internal, options.parsed ?? { steps: [{ prompt: "c" }] });
+        const before = await fs.readFile(run.workingFilePath, "utf8");
+
+        await assert.rejects(
+          orchestrator.appendFromFileForClient(
+            await runMutation(run),
+            childPath(),
+            PANEL_CLIENT_ID,
+            QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+            (options.appendMode ?? APPEND_MODES.SUB_WORKFLOW) as never
+          ),
+          expected
+        );
+        assert.strictEqual(
+          await fs.readFile(run.workingFilePath, "utf8"),
+          before,
+          "a refused join writes nothing"
+        );
+      }
+
+      test("a run that is not RUNNING", async () => {
+        await assertRefused(
+          async () => undefined,
+          /parallelWithCurrent requires a running queue step; run is in state completed/
+        );
+      });
+
+      test("a run in its final-step phase", async () => {
+        await assertRefused(async (workingFilePath) => {
+          await markRunning(workingFilePath);
+          await patchRun(workingFilePath, (file) => {
+            file._runtime.finalStep = { phase: FINAL_STEP_PHASES.FINAL_STEP };
+          });
+        }, /The final step cannot run in parallel/);
+      });
+
+      test("a parallel width of 1", async () => {
+        const original = ConfigurationUtils.getDynamicQueueConfig;
+        (ConfigurationUtils as any).getDynamicQueueConfig = () => ({
+          ...original.call(ConfigurationUtils),
+          maxParallelSteps: 1,
+        });
+        try {
+          await assertRefused(markRunning, /Parallel width is 1/);
+        } finally {
+          (ConfigurationUtils as any).getDynamicQueueConfig = original;
+        }
+      });
+
+      test("a file child that merges into the checkout the running prompt step edits", async () => {
+        await assertRefused(
+          markRunning,
+          /parallelWithCurrent was rejected: .*merges into the parent's checkout/,
+          {
+            parsed: {
+              steps: [{ prompt: "c" }],
+              worktree: { mode: "managed", merge: true },
+            },
+          }
+        );
+      });
+
+      test("inline mode", async () => {
+        await assertRefused(
+          markRunning,
+          /Only a workflow queued as a sub-workflow can run alongside/,
+          { appendMode: APPEND_MODES.INLINE }
+        );
+      });
+
+      test("no run to join", async () => {
+        const { orchestrator, internal } = createHarness(
+          workspace,
+          "wf" as never,
+          "run" as never
+        );
+        stubParser(internal, { steps: [{ prompt: "c" }] });
+        await assert.rejects(
+          orchestrator.appendFromFileForClient(
+            undefined,
+            childPath(),
+            PANEL_CLIENT_ID,
+            QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+            APPEND_MODES.SUB_WORKFLOW
+          ),
+          /needs a running workflow/
+        );
+      });
+    });
   });
 
   test("run-addressed property update pushes properties to run viewers instead of a full snapshot", async () => {

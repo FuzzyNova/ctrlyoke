@@ -4,6 +4,7 @@ import type {
   OutputActivityEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
+import type { SubWorkflowOutput } from "@root/types/CtrlYokeTypes";
 import type { CliOutput, OutputStatusMessage } from "../types/messages";
 import type { CliEvent } from "../types/cliEvents";
 import {
@@ -16,11 +17,14 @@ import {
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_MESSAGE_TYPES,
   STATUS_MESSAGE_SEVERITY,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
+  PROMPT_TERMINAL_STATUS,
   type OutputMessageType,
   type ExecutionPhase,
 } from "@root/types/DashboardConstants";
 import { normalizeCliEventsWithSource } from "@root/utils/CliEventNormalizer";
 import { formatTime } from "./outputUtils";
+import { getSubWorkflowMergeWarning } from "./subWorkflowDisplay";
 
 export interface OutputMessageTarget {
   kind: FinalStepPhase;
@@ -40,6 +44,14 @@ export interface OutputMessage {
   phase?: ExecutionPhase;
   /** True when this is a semantic activity projection rather than an attempt aggregate. */
   isActivity?: boolean;
+  /**
+   * True for a sub-workflow step's settlement block (D12a). It is the step's
+   * own output, not a status-history aggregate, so no status activity at the
+   * same target ever stands in for it.
+   */
+  isSubWorkflowSettlement?: boolean;
+  /** The settlement a sub-workflow settlement block renders. */
+  subWorkflowOutput?: SubWorkflowOutput;
   activityKey?: string;
   activityKind?: OutputActivityEntry["kind"];
   activityText?: string;
@@ -245,7 +257,48 @@ export function mapOrderedHistoryEntriesToMessages(
         }
         break;
       }
-      case "runtime":
+      case OUTPUT_HISTORY_KINDS.SUB_WORKFLOW: {
+        const output = entry.subWorkflowOutput;
+        const details = [
+          `${SUB_WORKFLOW_DASHBOARD_LABELS.outcome}: ${output.outcome.status}`,
+          // A step that failed before a child run existed has no child run to
+          // open, so its message is the only place the reason appears.
+          output.childRunRef === undefined && output.outcome.failureMessage
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.failure}: ${output.outcome.failureMessage}`
+            : undefined,
+          output.worktree?.branchName
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.branch}: ${output.worktree.branchName}`
+            : undefined,
+          output.worktree?.mergeOutcome
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.merge}: ${output.worktree.mergeOutcome}`
+            : undefined,
+          output.worktree?.conflictFiles?.length
+            ? `${SUB_WORKFLOW_DASHBOARD_LABELS.conflictFiles}: ${output.worktree.conflictFiles.join(", ")}`
+            : undefined,
+        ].filter((value): value is string => value !== undefined);
+        aggregateMessages.push({
+          type: OUTPUT_MESSAGE_TYPES.STATUS,
+          target: toOutputMessageTarget(entry.target),
+          timestamp: entry.timestampMs,
+          sequence: entry.sequence,
+          isSubWorkflowSettlement: true,
+          subWorkflowOutput: output,
+          data: {
+            message: details.join(" · "),
+            // A clean merge is reported quietly; a merge that did not land
+            // is a warning even though the step completed (D4e).
+            severity:
+              output.outcome.status === PROMPT_TERMINAL_STATUS.FAILED ||
+              getSubWorkflowMergeWarning(output.worktree)
+                ? STATUS_MESSAGE_SEVERITY.WARNING
+                : STATUS_MESSAGE_SEVERITY.INFO,
+            timestamp: formatTime(entry.timestampMs),
+            timestampMs: entry.timestampMs,
+          },
+        });
+        break;
+      }
+      case OUTPUT_HISTORY_KINDS.RUNTIME:
         break;
     }
   }
@@ -376,6 +429,7 @@ export function mapOrderedHistoryEntriesToMessages(
     }
     if (
       aggregate.type === OUTPUT_MESSAGE_TYPES.STATUS &&
+      !aggregate.isSubWorkflowSettlement &&
       statusActivityTargets.has(getTargetKey(aggregate.target))
     ) {
       continue;

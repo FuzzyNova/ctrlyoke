@@ -429,6 +429,38 @@ suite("PromptCompletionProvider", () => {
       );
     });
 
+    test("an inline sub-workflow prompt offers script outputs, not parent step outputs", async () => {
+      const labelsAt = async (text: string, marker: string) =>
+        (
+          (await completeAt(
+            "w.ctrlyoke.yaml",
+            "yaml",
+            text,
+            marker
+          )) as vscode.CompletionList
+        ).items.map((item) =>
+          typeof item.label === "string" ? item.label : item.label.label
+        );
+      const inline = await labelsAt(
+        [
+          "steps:",
+          "  - prompt: hi",
+          "  - type: workflow",
+          "    workflow:",
+          "      prompt: use $",
+        ].join("\n"),
+        "use $"
+      );
+      assert.ok(inline.includes("preCondition:stdout"), inline.join(", "));
+      assert.ok(!inline.includes("previous"), inline.join(", "));
+      assert.ok(!inline.includes("step:"), inline.join(", "));
+      const step = await labelsAt(
+        ["steps:", "  - prompt: hi", "  - prompt: use $"].join("\n"),
+        "use $"
+      );
+      assert.ok(step.includes("previous"));
+    });
+
     test("offers nothing in script text, other YAML values, or comments", async () => {
       const script = [
         "steps:",

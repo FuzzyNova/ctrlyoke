@@ -19,7 +19,11 @@ import type {
   StepStatus,
   StatusMessageSeverity,
 } from "./DashboardConstants";
-import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
+import type {
+  OutputExecutionTarget,
+  WorkspaceSnapshot,
+} from "./OutputHistoryTypes";
+import type { SubWorkflowOutput } from "./CtrlYokeTypes";
 import type { CtrlYokeNotificationEvent } from "../core/notifications/NotificationEventFactory";
 import type { HarnessUsageSnapshot } from "./UsageTypes";
 
@@ -128,6 +132,16 @@ export interface IDashboardSink {
     workflowId?: string,
     prompt?: string
   ): void;
+
+  updateSubWorkflowSettled?(data: {
+    target: OutputExecutionTarget;
+    runIndex: number;
+    attemptIndex: number;
+    timestampMs: number;
+    sequence: number;
+    output: SubWorkflowOutput;
+    workflowId?: string;
+  }): void;
 
   updateCliStreamingChunk(
     stepIndex: number,

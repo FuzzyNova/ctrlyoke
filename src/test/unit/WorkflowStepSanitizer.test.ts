@@ -8,9 +8,135 @@ import {
   buildPromptStepProperties,
   normalizeAgentSelection,
   stripTimelineDuplicatedWorkingFileOutput,
+  buildWorkflowStepFromProperties,
 } from "../../core/WorkflowStepSanitizer";
+import {
+  getSubWorkflowDisplayName,
+  getWorkflowStepText,
+  isInlineSubWorkflowDefinition,
+  type SubWorkflowStep,
+} from "../../types/CtrlYokeTypes";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
+  test("round-trips an authored inline sub-workflow definition", () => {
+    const step = {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      workflow: {
+        prompt: "Implement the task",
+        worktree: true,
+      },
+    } as import("../../types/CtrlYokeTypes").WorkflowStep;
+    assert.deepStrictEqual(
+      parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
+      step
+    );
+  });
+
+  test("rejects inline child runtime metadata from clipboard input", () => {
+    assert.throws(
+      () =>
+        sanitizeClipboardWorkflowStep({
+          type: STEP_TYPES.WORKFLOW,
+          workflow: {
+            prompt: "child",
+            _runtime: { sessionId: "parent-session", stepId: "parent-step" },
+          },
+        }),
+      /path or inline definition/
+    );
+  });
+
+  test("an enabled toggle keeps a named sub-workflow step's workflow", () => {
+    // The dashboard toggle sends getWorkflowStepText as `text`; it must carry
+    // the path (or keep the inline object), never the step's display name.
+    const fileStep: SubWorkflowStep = {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      workflow: "lanes/check.ctrlyoke.yaml",
+    };
+    const inlineStep: SubWorkflowStep = {
+      type: STEP_TYPES.WORKFLOW,
+      name: "Lane",
+      workflow: { prompt: "Implement the task", worktree: true },
+    };
+    for (const step of [fileStep, inlineStep]) {
+      const rebuilt = buildWorkflowStepFromProperties(
+        getWorkflowStepText(step),
+        { type: STEP_TYPES.WORKFLOW, workflow: step.workflow, enabled: false },
+        step.name
+      );
+      assert.deepStrictEqual(rebuilt, { ...step, enabled: false });
+    }
+    assert.strictEqual(getSubWorkflowDisplayName(fileStep), "Lane");
+  });
+
+  test("rejects runtime metadata rather than converting inline workflow to text", () => {
+    assert.throws(
+      () =>
+        buildWorkflowStepFromProperties("display text", {
+          type: STEP_TYPES.WORKFLOW,
+          workflow: { prompt: "child", _runtime: { sessionId: "parent" } },
+        }),
+      /cannot contain _runtime/
+    );
+  });
+
+  test("names what is missing for null, an empty object and a name-only object", () => {
+    const cases: Array<[unknown, RegExp]> = [
+      [null, /needs a workflow file path or an inline definition/],
+      [{}, /needs non-empty prompt text, or type: script with a script/],
+      [
+        { name: "x" },
+        /needs non-empty prompt text, or type: script with a script/,
+      ],
+      [{ prompt: "   " }, /needs non-empty prompt text/],
+      [{ type: STEP_TYPES.SCRIPT }, /its script step needs a non-empty script/],
+    ];
+    for (const [workflow, message] of cases) {
+      assert.throws(
+        () =>
+          buildWorkflowStepFromProperties("display text", {
+            type: STEP_TYPES.WORKFLOW,
+            workflow,
+          }),
+        message,
+        JSON.stringify(workflow)
+      );
+      assert.strictEqual(isInlineSubWorkflowDefinition(workflow), false);
+    }
+    assert.strictEqual(isInlineSubWorkflowDefinition({ prompt: "go" }), true);
+    assert.strictEqual(
+      isInlineSubWorkflowDefinition({ type: STEP_TYPES.SCRIPT, script: "ls" }),
+      true
+    );
+  });
+
+  test("rejects every object that is not an inline definition", () => {
+    for (const workflow of [
+      { type: "parallel", prompt: "child" },
+      { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+      ["child.ctrlyoke.yaml"],
+      42,
+    ]) {
+      assert.throws(
+        () =>
+          buildWorkflowStepFromProperties("display text", {
+            type: STEP_TYPES.WORKFLOW,
+            workflow,
+          }),
+        /must be a single prompt or script step/,
+        JSON.stringify(workflow)
+      );
+    }
+    assert.deepStrictEqual(
+      buildWorkflowStepFromProperties("child.ctrlyoke.yaml", {
+        type: STEP_TYPES.WORKFLOW,
+      }),
+      { type: STEP_TYPES.WORKFLOW, workflow: "child.ctrlyoke.yaml" }
+    );
+  });
+
   test("preserves sandbox booleans and leaves an absent override absent", () => {
     for (const sandbox of [true, false]) {
       assert.strictEqual(

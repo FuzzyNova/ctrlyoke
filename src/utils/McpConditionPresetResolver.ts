@@ -15,22 +15,12 @@ import {
   promptFirstLinePreview,
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
 } from "./TextUtils";
+import { formatDeclaredPresetList, getDeclaredPreset } from "./McpNamedPresets";
 
 /** Maximum size of one caller-provided environment value for a preset. */
 const MCP_CONDITION_PARAM_MAX_LENGTH = 4096;
 
 type ConditionField = "endCondition" | "preCondition";
-
-/** Resolve only presets explicitly declared by the workflow. */
-function getDeclaredConditionPreset(
-  workingFile: WorkingFile,
-  name: string
-): ConditionPreset | undefined {
-  const conditions = workingFile.conditions;
-  return conditions && Object.hasOwn(conditions, name)
-    ? conditions[name]
-    : undefined;
-}
 
 /**
  * Describe every preset the workflow declares, in declaration order. This is
@@ -54,34 +44,55 @@ export function summarizeMcpConditionPresets(
 
 /** "committed, inspect (params: BUG_FILE)", or "none". */
 function formatPresetList(workingFile: WorkingFile): string {
-  const entries = Object.entries(workingFile.conditions ?? {});
-  if (entries.length === 0) return "none";
-  return entries
-    .map(([name, preset]) =>
-      preset.params && preset.params.length > 0
-        ? `${name} (params: ${preset.params.join(", ")})`
-        : name
-    )
-    .join(", ");
+  return formatDeclaredPresetList(workingFile.conditions, (name, preset) =>
+    preset.params && preset.params.length > 0
+      ? `${name} (params: ${preset.params.join(", ")})`
+      : name
+  );
+}
+
+/** The preset name lane guidance recommends, when the workflow declares it. */
+const LANE_COMMIT_PRESET_NAME = "committed";
+
+function formatIndexList(indices: readonly number[]): string {
+  return `${indices.length === 1 ? "Step" : "Steps"} ${indices.join(", ")}`;
 }
 
 /**
  * Warning for appended steps that run with no end condition at all while the
- * workflow declares presets one of them could have attached. Returns
- * undefined when there is nothing to warn about.
+ * workflow declares presets one of them could have attached. Lanes (D14) are
+ * listed too and get their own sentence: a lane runs in its own worktree, so
+ * a clean-tree preset can gate it even as a parallel member, and it should
+ * carry one. Returns undefined when there is nothing to warn about.
  */
 export function formatUngatedAppendedStepsWarning(
   workingFile: WorkingFile,
-  ungatedIndices: readonly number[]
+  ungatedIndices: readonly number[],
+  ungatedLaneIndices: readonly number[] = []
 ): string | undefined {
+  const indices = [...new Set([...ungatedIndices, ...ungatedLaneIndices])].sort(
+    (a, b) => a - b
+  );
   if (
-    ungatedIndices.length === 0 ||
+    indices.length === 0 ||
     Object.keys(workingFile.conditions ?? {}).length === 0
   ) {
     return undefined;
   }
-  const noun = ungatedIndices.length === 1 ? "Step" : "Steps";
-  return `${noun} ${ungatedIndices.join(", ")} will run with no end condition, but this workflow declares condition presets: ${formatPresetList(workingFile)}. To gate a step, call ${MCP_EDIT_STEP_TOOL_NAME} with updates.endCondition: { "use": "<name>" }; ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`;
+  const warning = `${formatIndexList(indices)} will run with no end condition, but this workflow declares condition presets: ${formatPresetList(workingFile)}. To gate a step, call ${MCP_EDIT_STEP_TOOL_NAME} with updates.endCondition: { "use": "<name>" }; ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`;
+  if (ungatedLaneIndices.length === 0) return warning;
+  const lanes = [...ungatedLaneIndices].sort((a, b) => a - b);
+  const recommended = getDeclaredPreset(
+    workingFile.conditions,
+    LANE_COMMIT_PRESET_NAME
+  )
+    ? ` such as { "use": "${LANE_COMMIT_PRESET_NAME}" }`
+    : "";
+  const lanePhrase =
+    lanes.length === 1
+      ? "is a lane and runs in its own worktree, so it"
+      : "are lanes and run in their own worktree, so they";
+  return `${warning} ${formatIndexList(lanes)} ${lanePhrase} should carry an end condition${recommended} that checks the work was committed.`;
 }
 
 /** Resolve an MCP preset reference into an ordinary, immutable step condition. */
@@ -91,7 +102,7 @@ export function materializeMcpConditionPreset(
   reference: McpConditionPresetUse,
   defaultMaxRetries = 0
 ): EndCondition | PreCondition {
-  const preset = getDeclaredConditionPreset(workingFile, reference.use);
+  const preset = getDeclaredPreset(workingFile.conditions, reference.use);
   if (!preset) {
     throw new Error(
       `${field}: unknown condition preset '${reference.use}'. Available presets: ${formatPresetList(workingFile)}. ${MCP_WORKFLOW_STATUS_TOOL_NAME} lists each preset under metadata.conditionPresets.`

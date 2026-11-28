@@ -1,6 +1,14 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { IntegrationFactory } from "../IntegrationFactory";
+import {
+  assertNever,
+  getExecutionRuntime,
+  getStepType,
+  getWorkflowStepText,
+  isPromptStep,
+  isScriptStep,
+} from "../../types/CtrlYokeTypes";
 import { CliSessionResolverAdapter } from "../harness/shared/CliSessionResolverAdapter";
 import {
   defaultRunChangesTarget,
@@ -29,7 +37,6 @@ import type { RunImportPreview } from "../../types/RunImportPreviewTypes";
 import { REDACTION_MARKER } from "../../types/PreviewRedactor";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { SettingsPropertyResolver } from "../../utils/SettingsPropertyResolver";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
 import {
   getDeclaredSecretGrants,
   findUnapprovedSecretGrants,
@@ -201,12 +208,20 @@ export class RunImportPreviewService {
     };
     const previewSteps = await Promise.all(
       pendingEntries.map(async ({ step, index: actualIndex }) => {
-        const isScript = isScriptStep(step);
-        const resolved = isScript
-          ? undefined
-          : SettingsPropertyResolver.resolve(step as PromptStep, workflow, {
+        const stepType = getStepType(step);
+        switch (stepType) {
+          case STEP_TYPES.SCRIPT:
+          case STEP_TYPES.PROMPT:
+          case STEP_TYPES.WORKFLOW:
+            break;
+          default:
+            assertNever(stepType);
+        }
+        const resolved = isPromptStep(step)
+          ? SettingsPropertyResolver.resolve(step, workflow, {
               hostCanProvidePty: false,
-            });
+            })
+          : undefined;
         const grants = getDeclaredSecretGrants(step, workflow);
         const unapproved = new Set(
           findUnapprovedSecretGrants(grants, workspaceRoot)
@@ -221,7 +236,37 @@ export class RunImportPreviewService {
         const provenanceStep = header.manifest.provenance.steps.find(
           (item) => item.stepIndex === actualIndex
         );
-        if (!isScript && resolved) {
+        let stepContent:
+          | { promptPreview: string }
+          | {
+              script: {
+                script: string;
+                env?: Record<string, string>;
+                shell?: string;
+              };
+            }
+          | undefined;
+        switch (stepType) {
+          case STEP_TYPES.PROMPT:
+            if (isPromptStep(step))
+              stepContent = { promptPreview: step.prompt };
+            break;
+          case STEP_TYPES.SCRIPT:
+            if (isScriptStep(step))
+              stepContent = {
+                script: {
+                  script: step.script,
+                  env: step.env,
+                  shell: step.shell,
+                },
+              };
+            break;
+          case STEP_TYPES.WORKFLOW:
+            break;
+          default:
+            assertNever(stepType);
+        }
+        if (isPromptStep(step) && resolved) {
           const harness = resolved.harness ?? HARNESS_IDS.COPILOT_CLI;
           const provider = (
             dependencies.createProvider ??
@@ -240,8 +285,8 @@ export class RunImportPreviewService {
                 allPrompts: allSteps,
                 workflowFile: wf,
                 hostCanProvidePty: false,
-                finalStepSessionId: wf.finalStep?._runtime?.sessionId as
-                  string | undefined,
+                finalStepSessionId: getExecutionRuntime(wf.finalStep)
+                  ?.sessionId as string | undefined,
               });
               return {
                 sessionId: result.probedSessionId ?? result.resolvedSessionId,
@@ -261,12 +306,12 @@ export class RunImportPreviewService {
           ) {
             const executedStepIndices = [
               ...steps.flatMap((candidate, index) =>
-                candidate._runtime?.sessionId === session.sessionId &&
-                session.sessionId
+                getExecutionRuntime(candidate)?.sessionId ===
+                  session.sessionId && session.sessionId
                   ? [index]
                   : []
               ),
-              ...(workflow.finalStep?._runtime?.sessionId ===
+              ...(getExecutionRuntime(workflow.finalStep)?.sessionId ===
                 session.sessionId && session.sessionId
                 ? [steps.length]
                 : []),
@@ -290,20 +335,12 @@ export class RunImportPreviewService {
         return {
           stepIndex: actualIndex,
           ...(step.name ? { name: step.name } : {}),
-          kind: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
-          ...(!isScript
-            ? { promptPreview: (step as PromptStep).prompt }
-            : {
-                script: {
-                  script: step.script,
-                  env: step.env,
-                  shell: step.shell,
-                },
-              }),
-          ...(!isScript && resolved?.preCondition
+          kind: stepType,
+          ...stepContent,
+          ...(isPromptStep(step) && resolved?.preCondition
             ? { preCondition: resolved.preCondition }
             : {}),
-          ...(!isScript && resolved?.endCondition
+          ...(isPromptStep(step) && resolved?.endCondition
             ? { endCondition: resolved.endCondition }
             : {}),
           ...(resolved?.additionalArgs
@@ -378,7 +415,7 @@ export class RunImportPreviewService {
       )
     );
     for (const { step, index } of entries) {
-      const text = "prompt" in step ? step.prompt : step.script;
+      const text = getWorkflowStepText(step);
       for (const reference of parseAtReferences(text)) {
         const normalized = reference.path.replace(/\\/g, "/");
         const storeMatch = normalized.match(

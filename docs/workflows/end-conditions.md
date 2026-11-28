@@ -137,7 +137,7 @@ become environment variables and are not inserted into the script; preset script
 must quote them, for example `"$BUG_FILE"`. A parameter name cannot collide
 with a key set by the preset's own `env`.
 
-See [MCP tools](/reference/mcp-tools#append_step) for the `append_step` and
+See [MCP tools](/reference/mcp-tools#append-step) for the `append_step` and
 `edit_step` fields.
 
 ## Comparing output {#comparing-output}

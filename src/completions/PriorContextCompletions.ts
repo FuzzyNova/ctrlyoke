@@ -6,11 +6,22 @@ import {
 import { fuzzyMatches } from "./FuzzyRanking";
 import type { PlainCompletionItem } from "./CompletionCore";
 
+export interface PriorContextCompletionOptions {
+  /**
+   * Offer the step-output selectors (`$previous`, `$step:`, `$all`,
+   * `$finalStep`, ...). Off inside an inline sub-workflow definition, whose
+   * prompt runs as the first step of a new child run (D13); the script-output
+   * placeholders are still offered there.
+   */
+  readonly stepOutputs?: boolean;
+}
+
 /** Shared prior-context completion list used by hosts and contextual editors. */
 export function getPriorContextCompletionItems(
-  filterText: string
+  filterText: string,
+  options: PriorContextCompletionOptions = {}
 ): PlainCompletionItem[] {
-  const keywords = [
+  const stepOutputKeywords = [
     { label: "previous", detail: "Output of the previous step", icon: "book" },
     {
       label: "previous:",
@@ -37,6 +48,9 @@ export function getPriorContextCompletionItems(
       detail: `Summary form, e.g. ${example} — deterministic excerpt: head of prompt, files changed, tail of text; no AI call`,
       icon: "book",
     })),
+  ];
+  const keywords = [
+    ...(options.stepOutputs === false ? [] : stepOutputKeywords),
     ...[
       SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
       SCRIPT_OUTPUT_SOURCES.END_CONDITION,

@@ -15,6 +15,7 @@ import { StepEditor, type PromptFileAction } from "../editor/StepEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { StepColorSwatch } from "./StepColorSwatch";
 import { PanelBar, IconToggleButton } from "../shared";
+import { ModeSwitch, type ModeSwitchOption } from "../shared/ModeSwitch";
 import { HARNESS_DISPLAY_NAMES } from "../shared/HarnessDropdown";
 import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
 import { PromptTokenCount } from "../shared/PromptTokenCount";
@@ -30,6 +31,8 @@ import {
   EDITOR_PLACEHOLDER_TEXT,
   PROMPT_PROPERTIES,
   BULK_EDIT_DISABLED_REASONS,
+  STEP_EDITOR_MODE_LABELS,
+  SUB_WORKFLOW_EDITOR_LABELS,
 } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
@@ -37,6 +40,14 @@ import { formatSessionIdPreview } from "@utils/stepOverrideChips";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { Icon } from "../shared/Icon";
 import { WorkflowVariableValue } from "../shared/WorkflowVariableValue";
+import { isPromptStep, type WorkflowStepType } from "@root/types/CtrlYokeTypes";
+import {
+  getEditorContentKind,
+  isPromptEditorStepType,
+  isScriptEditorStepType,
+  isSubWorkflowEditorStepType,
+} from "@utils/stepDraftContent";
+import { getStepKindIconClass } from "@utils/status";
 
 /** Width tiers for the editor header row, from the section's own content width. */
 const EDITOR_HEADER_TIERS = {
@@ -51,6 +62,18 @@ const EDITOR_HEADER_NARROW_THRESHOLD = 600;
 // Below this, the name + token count no longer fit on one line without the
 // token count truncating away — stack them into two lines instead.
 const EDITOR_HEADER_COMPACT_THRESHOLD = 460;
+
+/** The step-type toggle's options, in display order. */
+const STEP_TYPE_OPTIONS: ReadonlyArray<ModeSwitchOption<WorkflowStepType>> = [
+  STEP_TYPES.PROMPT,
+  STEP_TYPES.SCRIPT,
+  STEP_TYPES.WORKFLOW,
+].map((type) => ({
+  value: type,
+  icon: getStepKindIconClass(type),
+  ...STEP_EDITOR_MODE_LABELS[type],
+  ariaLabel: `${STEP_EDITOR_MODE_LABELS[type].label} step`,
+}));
 
 function resolveEditorHeaderTier(width: number): EditorHeaderTier {
   if (width < EDITOR_HEADER_COMPACT_THRESHOLD)
@@ -78,6 +101,7 @@ const EditorSectionInner: React.FC = () => {
     replyContext,
     cancelReplyToStep,
     stepType,
+    subWorkflowInline,
     stepEnabled,
     setStepType,
     setStepEnabled,
@@ -126,7 +150,10 @@ const EditorSectionInner: React.FC = () => {
     bulkGates.harnessScopedDisabledReason !== undefined;
   const promptsSelected =
     isBulkMode &&
-    selectedIndices.every((index) => steps[index]?.type !== STEP_TYPES.SCRIPT);
+    selectedIndices.every((index) => {
+      const step = steps[index];
+      return step === undefined || isPromptStep(step);
+    });
   const bulkPlaceholder = !isBulkMode
     ? undefined
     : bulkHasLocked
@@ -212,7 +239,13 @@ const EditorSectionInner: React.FC = () => {
     else if (e.key === KEYBOARD_KEYS.ESCAPE) cancelNameEdit();
   };
 
-  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  const isScriptMode = isScriptEditorStepType(stepType);
+  const isSubWorkflowMode = isSubWorkflowEditorStepType(stepType);
+  const isPromptMode = isPromptEditorStepType(stepType);
+  // An inline workflow step's prompt is edited, and estimated, as a prompt.
+  const isPromptContent = isPromptEditorStepType(
+    getEditorContentKind({ stepType, subWorkflowInline })
+  );
 
   // Below EDITOR_HEADER_COMPACT_THRESHOLD the name + token count no longer
   // fit on one line without the token count truncating away, so stack them.
@@ -222,7 +255,7 @@ const EditorSectionInner: React.FC = () => {
     !isEditingName &&
     !isBulkMode &&
     stepEnabled &&
-    !isScriptMode;
+    isPromptContent;
 
   // Generate mode indicator text (includes name when set)
   const getModeText = () => {
@@ -231,12 +264,15 @@ const EditorSectionInner: React.FC = () => {
     if (isEditMode) {
       if (promptName) return `Editing: ${promptName}`;
       if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+        if (isSubWorkflowMode) return SUB_WORKFLOW_EDITOR_LABELS.editingFinal;
         return isScriptMode ? "Editing: Final Script" : "Editing: Final Step";
       }
       if (isScriptMode) return "Editing: Script";
+      if (isSubWorkflowMode) return SUB_WORKFLOW_EDITOR_LABELS.editing;
       return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;
     }
     if (promptName) return `New: ${promptName}`;
+    if (isSubWorkflowMode) return SUB_WORKFLOW_EDITOR_LABELS.newStep;
     return isScriptMode ? "New Script" : "New Prompt";
   };
 
@@ -292,45 +328,15 @@ const EditorSectionInner: React.FC = () => {
           )}
         </button>
 
-        <div
-          className="cy-mode-switch mx-2"
-          role="group"
-          aria-label="Step type"
-        >
-          <button
-            type="button"
-            disabled={isExternallyManaged}
-            className={`cy-mode-switch-btn ${!isScriptMode ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
-            onClick={() => setStepType(STEP_TYPES.PROMPT)}
-            title="Prompt step — sends text to an AI harness"
-            aria-label="Prompt step"
-            aria-pressed={!isScriptMode}
-          >
-            <Icon
-              name="comment"
-              className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
-            />
-            {!isNarrow && <span>Prompt</span>}
-          </button>
-          <div className="cy-mode-switch-divider">
-            <div className="w-px h-full bg-current opacity-40" />
-          </div>
-          <button
-            type="button"
-            disabled={isExternallyManaged}
-            className={`cy-mode-switch-btn ${isScriptMode ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
-            onClick={() => setStepType(STEP_TYPES.SCRIPT)}
-            title="Script step — runs a shell command with no AI interaction"
-            aria-label="Script step"
-            aria-pressed={isScriptMode}
-          >
-            <Icon
-              name="terminal-powershell"
-              className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
-            />
-            {!isNarrow && <span>Script</span>}
-          </button>
-        </div>
+        <ModeSwitch
+          className="mx-2"
+          ariaLabel="Step type"
+          options={STEP_TYPE_OPTIONS}
+          value={stepType}
+          onChange={setStepType}
+          disabled={isExternallyManaged}
+          compact={isNarrow}
+        />
 
         {/* Center: Enable toggle + Mode text (clickable to edit name) + token count */}
         <div className="flex items-center justify-center flex-1 gap-1 min-w-0">
@@ -431,7 +437,7 @@ const EditorSectionInner: React.FC = () => {
                   {" — "}
                   <span className="italic text-warning-fg">disabled</span>
                 </>
-              ) : !isScriptMode ? (
+              ) : isPromptContent ? (
                 <>
                   {!showStackedTokens && " — "}
                   <PromptTokenCount
@@ -444,7 +450,7 @@ const EditorSectionInner: React.FC = () => {
         </div>
 
         {/* Right: prompt-file action, step overrides, and Git ignore toggle */}
-        {!isExternallyManaged && !isScriptMode && promptFileAction && (
+        {!isExternallyManaged && isPromptMode && promptFileAction && (
           <button
             type="button"
             onClick={promptFileAction.onClick}
@@ -456,7 +462,13 @@ const EditorSectionInner: React.FC = () => {
             <Icon name={promptFileAction.icon} className="codicon-lg" />
           </button>
         )}
-        {!isExternallyManaged && <ExecutionModeQuickPicker />}
+        {/* A workflow step has no execution mode of its own: a file child
+            runs with the mode its own file resolves, so the picker is hidden.
+            An inline prompt is the step it wraps and keeps its own
+            `executionMode`, which this picker edits. */}
+        {!isExternallyManaged && (!isSubWorkflowMode || isPromptContent) && (
+          <ExecutionModeQuickPicker />
+        )}
         {!isExternallyManaged && (
           <IconToggleButton
             active={globalSettings.respectGitignore}
@@ -471,7 +483,7 @@ const EditorSectionInner: React.FC = () => {
       </div>
 
       {selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT &&
-        !isScriptMode &&
+        isPromptMode &&
         replyContext && (
           <StatusBanner
             tone={STATUS_BANNER_TONES.INFO}

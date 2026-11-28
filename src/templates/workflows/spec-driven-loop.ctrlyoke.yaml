@@ -34,6 +34,10 @@ _templateMeta:
       harness: implementerHarness
       default: sonnet
       description: Each queued step gets a self-contained chunk of the spec, so a faster, cheaper model is often enough.
+    laneSetup:
+      type: text
+      default: npm ci
+      description: Installs dependencies in each parallel lane's fresh worktree. A blank field uses the default; for no setup, set the lane preset's setup to "" in the created workflow.
 
 # Every queued step is its own island: a fresh, headless session that gets all
 # the context it needs from its own prompt and the repo. Chaining them into one
@@ -108,11 +112,23 @@ model: "{implementerModel}"
 
 # The plan step's clean-tree gate, offered to the orchestrator as the
 # `committed` preset. It attaches the preset (`endCondition: { use:
-# "committed" }`) to each queued step that runs on its own. This is not a
-# workflow-level endCondition: parallel steps share one working tree, so a
-# member would fail it on a sibling's unfinished edits.
+# "committed" }`) to each queued step that runs on its own and to each lane.
+# This is not a workflow-level endCondition only because parallel members
+# queued without a worktree preset share one working tree, so such a member
+# would fail it on a sibling's unfinished edits.
 conditions:
   committed: *committed
+
+# Parallel work the orchestrator queues as lanes (`worktree: { use: "lane" }`)
+# runs in its own fresh managed worktree and branch, so each lane can run the
+# full test command and commit freely. A finished lane merges back into this
+# run's checkout; the integration step after the group resolves any merge that
+# ended in conflict.
+worktreePresets:
+  lane:
+    mode: managed
+    merge: true
+    setup: "{laneSetup}"
 
 finalStep:
   name: review

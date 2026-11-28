@@ -20,6 +20,7 @@ import {
   type StepType,
   type WorkflowExecutionControlAction,
 } from "@root/types/DashboardConstants";
+import { assertNever } from "@root/types/CtrlYokeTypes";
 
 /**
  * Codicon class names for status icons
@@ -60,16 +61,40 @@ export function getStatusIconClass(status: StepStatus): string {
 export const STEP_KIND_ICONS: Record<StepType, string> = {
   [STEP_TYPES.PROMPT]: "codicon-comment",
   [STEP_TYPES.SCRIPT]: "codicon-terminal-powershell",
+  [STEP_TYPES.WORKFLOW]: "codicon-list-tree",
 };
 
 /**
- * Get the codicon class for a step's kind. Anything that is not explicitly a
- * script step is a prompt step, matching the core `isScriptStep` guard.
+ * Get the codicon class for a step's authored kind. Missing legacy kinds are
+ * treated as prompts by the caller's defaulting rule.
  */
 export function getStepKindIconClass(stepType: StepType | undefined): string {
-  return stepType === STEP_TYPES.SCRIPT
-    ? STEP_KIND_ICONS[STEP_TYPES.SCRIPT]
-    : STEP_KIND_ICONS[STEP_TYPES.PROMPT];
+  const resolvedStepType = stepType ?? STEP_TYPES.PROMPT;
+  switch (resolvedStepType) {
+    case STEP_TYPES.PROMPT:
+      return STEP_KIND_ICONS[STEP_TYPES.PROMPT];
+    case STEP_TYPES.SCRIPT:
+      return STEP_KIND_ICONS[STEP_TYPES.SCRIPT];
+    case STEP_TYPES.WORKFLOW:
+      return STEP_KIND_ICONS[STEP_TYPES.WORKFLOW];
+    default:
+      return assertNever(resolvedStepType);
+  }
+}
+
+/** Get the visible step-kind label with exhaustive handling of authored kinds. */
+export function getStepKindLabel(stepType: StepType | undefined): string {
+  const resolvedStepType = stepType ?? STEP_TYPES.PROMPT;
+  switch (resolvedStepType) {
+    case STEP_TYPES.PROMPT:
+      return "Prompt";
+    case STEP_TYPES.SCRIPT:
+      return "Script";
+    case STEP_TYPES.WORKFLOW:
+      return "Workflow";
+    default:
+      return assertNever(resolvedStepType);
+  }
 }
 
 /**

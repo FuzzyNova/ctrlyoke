@@ -1,3 +1,4 @@
+import { promises as fs } from "fs";
 import * as path from "path";
 import {
   PlatformAdapter,
@@ -8,8 +9,16 @@ import type { UserFeedbackSink } from "./UserFeedbackSink";
 import {
   PromptStep,
   ScriptStep,
+  SubWorkflowStep,
   WorkflowStep,
   isScriptStep,
+  isPromptStep,
+  isExecutionStep,
+  isSubWorkflowStep,
+  getExecutionRuntime,
+  getStepType,
+  getSubWorkflowDisplayName,
+  assertNever,
   DynamicQueueConfig,
   FinalStepRuntimeState,
   EXECUTION_STATES,
@@ -61,6 +70,7 @@ import {
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
   PROMPT_TERMINAL_STATUS,
+  SUB_WORKFLOW_CANCELLATION_SOURCES,
   STEP_CLAIM_OUTCOMES,
   getEffectiveParallelGroupWidth,
   SNAPSHOT_STRATEGIES,
@@ -68,6 +78,7 @@ import {
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
   type ExecutionMode,
+  type SubWorkflowCancellationSource,
 } from "../types/DashboardConstants";
 import { outputTargetKey } from "../utils/OutputTargetKeys";
 import { PromptQueue } from "./PromptQueue";
@@ -84,6 +95,12 @@ import {
   type EvaluationResult,
 } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
+import type { WorkflowRunManifest } from "../types/WorkflowTimelineTypes";
+import type {
+  RunRef,
+  SubWorkflowOutput,
+  WorkflowKey,
+} from "../types/CtrlYokeTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import {
   SettingsPropertyResolver,
@@ -130,7 +147,26 @@ import {
   secretGrantsTrustStore,
   type SecretGrantsTrustStore,
 } from "../config/SecretGrantsTrustStore";
-import { PromptFileResolver } from "./PromptFileResolver";
+import {
+  buildPromptFileResolutionOptions,
+  type PromptFileResolutionInput,
+  type PromptFileResolutionOptions,
+} from "./PromptFileResolutionOptions";
+import type {
+  PreparedSubWorkflowLaunch,
+  SubWorkflowControl,
+  SubWorkflowHandle,
+  SubWorkflowHost,
+  SubWorkflowParentLink,
+  SubWorkflowResult,
+  SubWorkflowWorktreePlan,
+} from "../types/SubWorkflowTypes";
+import { PromptFileParser } from "./PromptFileParser";
+import {
+  isSameSubWorkflowParentLink,
+  SUB_WORKFLOW_SOURCE_KINDS,
+} from "../types/SubWorkflowTypes";
+import { SubWorkflowControlRelay } from "./orchestration/SubWorkflowControlRelay";
 import {
   resolvePromptFileTextWithVariables,
   resolvePromptTextWithVariables,
@@ -157,8 +193,15 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { RunSecretRedactor } from "../utils/SecretRedactionService";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
-import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootResolver";
+import {
+  mapExecutionPathToSourceCheckout,
+  mapSourceDefinitionPathToExecution,
+} from "../platform/WorkspaceRootResolver";
 import { pathsEqual } from "../utils/PathCasing";
+import {
+  classifySubWorkflowWorktree,
+  subWorkflowCreatesWorktree,
+} from "../utils/WorktreeConfigShape";
 import { summarizeCompactionEvents } from "../utils/TokenUsage";
 import { calculateAttemptCost } from "../utils/ModelPricing";
 import { HARNESS_TOKEN_SEMANTICS } from "../utils/TokenSemantics";
@@ -184,16 +227,24 @@ import {
 import {
   preflightParallelGroup,
   preflightParallelGroupMember,
+  runsInMainCheckout,
   throwIfParallelGroupPreflightFailed,
   type ParallelGroupMemberPreflightResult,
   type ParallelGroupPreflightMember,
   type ParallelGroupPreflightOptions,
+  type ParallelGroupPreflightResult,
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
 import { formatParallelStepsLabel } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
+import { resolveSubWorkflowReference } from "./SubWorkflowReferenceStep";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import {
+  getInlineSubWorkflowPosition,
+  materializeInlineSubWorkflow,
+  substituteInlineStepName,
+} from "../utils/InlineSubWorkflowMaterializer";
 
 /** Live harness output of one attempt, with the target that produced it. */
 interface TargetStreamingOutput {
@@ -214,7 +265,7 @@ export interface TargetStreamingChunkData extends TargetStreamingOutput {
   chunk: string;
 }
 
-export interface WorkflowExecutionContext {
+export interface WorkflowExecutionContext extends PromptFileResolutionInput {
   /** Immutable state/execution roots for this workflow run. */
   executionWorkspace: ExecutionWorkspace;
   /**
@@ -239,6 +290,18 @@ export interface WorkflowExecutionContext {
   currentPromptFilePath: string | undefined;
   /** Authored workflow definition used as the semantic base for prompt-file refs. */
   sourceDefinitionPath?: string;
+  /**
+   * The identity workflow-scoped trust approvals are keyed by
+   * (`WorkflowInstance.getWorkflowTrustSourcePath`). Never a reference base.
+   */
+  workflowTrustSourcePath?: string;
+  /** Host port for launching nested workflow runs. */
+  subWorkflowHost?: SubWorkflowHost;
+  prepareSubWorkflowWorktreeChild?: () => Promise<void>;
+  /** Resolved active workflow chain, root first. */
+  ancestorPaths?: readonly string[];
+  delegationChain?: readonly string[];
+  getExecutionLeaseOwnerToken?(): string | undefined;
   statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
@@ -248,7 +311,11 @@ export interface WorkflowExecutionContext {
   dynamicQueueConfig: DynamicQueueConfig;
   /** Allows coordinator tests to exercise fan-out while the production gate is closed. */
   parallelGroupFanOutEnabled?: boolean;
-  /** Group-scoped cancellation signal for target leaves. */
+  /**
+   * Cancellation signal for target leaves: a parallel group's or a
+   * sequential step's own, and at the top level the instance's, which only a
+   * stop of a disposed instance aborts.
+   */
   abortSignal?: AbortSignal;
   getIntegrationForPrompt: (
     prompt: PromptStep,
@@ -265,13 +332,20 @@ export interface WorkflowExecutionContext {
   targetKeyedExecution?: boolean;
   registerActiveTarget?: (
     target: ExecutionTarget,
-    attemptIndex: number
+    attemptIndex: number,
+    subWorkflow?: SubWorkflowControl | null
   ) => void;
   registerTargetPtySession?: (
     target: ExecutionTarget,
     sessionId: string
   ) => void;
   clearTargetPtySession?: (target: ExecutionTarget) => void;
+  /**
+   * Drop the harness integration recorded for a target that dispatches no
+   * prompt (script and workflow steps). Startup records the run's initial
+   * integration on the first target before its step kind is known.
+   */
+  clearTargetIntegration?: (target: ExecutionTarget) => void;
   unregisterActiveTarget?: (target: ExecutionTarget) => void;
   /** Mark the target's interactive context unavailable for later terminal reuse. */
   markTargetIntegrationNotReusable?: (target: ExecutionTarget) => void;
@@ -578,6 +652,26 @@ interface VariableCheckField {
   fencedCodeProtected?: boolean;
 }
 
+/** The child file content a sub-workflow preparation parsed. */
+interface ParsedSubWorkflowFile {
+  readonly path: string;
+  readonly content: string;
+}
+
+/** A sub-workflow preparation, with the file content a parse read. */
+interface SubWorkflowPreparation {
+  readonly launch: PreparedSubWorkflowLaunch;
+  readonly parsedFile?: ParsedSubWorkflowFile;
+}
+
+/** One parallel sub-workflow member's preparation, shared by its preflights. */
+interface PreparedSubWorkflowMemberEntry {
+  /** The authored `workflow` value the entry was prepared from. */
+  readonly fingerprint: string;
+  launch: PreparedSubWorkflowLaunch;
+  readonly parsedFile?: ParsedSubWorkflowFile;
+}
+
 /**
  * Drives the sequential execution loop for a ctrlyoke workflow.
  *
@@ -597,6 +691,23 @@ export class WorkflowExecutor {
   private fallbackRunStartView: RunStartView | undefined;
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly targetRunStopReasons = new Map<string, WorkflowStopReason>();
+  /**
+   * Parallel members whose child was stopped directly (D9), by run key. A
+   * mark lives only until its member's outcome is handed to the group, the
+   * member is claimed again, or a new execution cycle finds the member no
+   * longer settled CANCELLED (see `pruneStaleJoinMarks`).
+   */
+  private readonly membersStoppingWorkflowAtJoin = new Map<
+    string,
+    ExecutionTarget
+  >();
+  /**
+   * Abort controllers of the sequential steps in flight, by run key. An
+   * ad-hoc promotion adopts such a step as a group member, and a group's
+   * fail-fast cancels it through this signal as it does a dispatched member
+   * through the group's.
+   */
+  private readonly sequentialStepAborts = new Map<string, AbortController>();
   private readonly noTurnStartedTargets = new Set<string>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
@@ -604,6 +715,24 @@ export class WorkflowExecutor {
   private activeParallelGroupPreflightMembers:
     Map<number, ParallelGroupPreflightMember> | undefined;
   private parallelGroupJoinQueue: Promise<void> = Promise.resolve();
+  /**
+   * Sub-workflow members prepared by the active group's preflight, by
+   * `stepId`. Group preflight and each member's dispatch preflight share one
+   * entry, so a child file is parsed once and the D4c result recorded for the
+   * group reaches that member's launch. Keyed with the authored `workflow`
+   * value, so an edit between the two preflights prepares again, and a child
+   * file whose content changed since its parse is parsed again too.
+   *
+   * Scoped to one group dispatch: cleared on every exit from it, including a
+   * group preflight that throws before the group run exists, so a Continue
+   * after the author fixed a child never reuses the earlier parse or failure.
+   */
+  private readonly preparedSubWorkflowMembers = new Map<
+    string,
+    PreparedSubWorkflowMemberEntry
+  >();
+  /** Parses sub-workflow members' child files for group preflight. */
+  private subWorkflowParser: PromptFileParser | undefined;
   /**
    * The context and snapshot strategy of the execution currently draining the
    * queue. An ad-hoc promotion arrives from outside the loop and needs both to
@@ -636,6 +765,16 @@ export class WorkflowExecutor {
     string,
     RawWorkspaceState
   >();
+  /**
+   * Whether the current (or last) execution ended on a pause `execute()`
+   * confirmed. Settlement reads this instead of the run's status: a Continue
+   * pressed once the pause is confirmed makes the run RUNNING before the
+   * settlement starts, and the run still ended on that pause. Cleared when
+   * the queue loop carries on in place after such a Continue, and when a
+   * new execution begins (`beginExecution`): a start that fails before
+   * `execute()` must not settle on an earlier execution's pause.
+   */
+  private pauseConfirmed = false;
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -757,6 +896,8 @@ export class WorkflowExecutor {
   ): Promise<void> {
     this.clearResponseWaitState();
     this.fallbackRunStartView = undefined;
+    this.pruneStaleJoinMarks();
+    this.pauseConfirmed = false;
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -846,6 +987,16 @@ export class WorkflowExecutor {
                 snapshotStrategy
               );
               if (
+                groupOutcome.paused &&
+                this.getRuntime().status === EXECUTION_STATES.CANCELLING
+              ) {
+                // A stop that reached the paused run while this loop unwound
+                // deferred to a coordinator that has already returned.
+                if (this.getRuntime().confirmStopped()) {
+                  await this.promptQueue.commitRuntimeTransition();
+                }
+              }
+              if (
                 groupOutcome.paused ||
                 groupOutcome.stopped ||
                 groupOutcome.terminalFailure
@@ -866,7 +1017,7 @@ export class WorkflowExecutor {
                 `Cannot dispatch queue step ${state.currentIndex}: missing stepId`
               );
             }
-            const claim = await this.promptQueue.claimStepById(
+            const claim = await this.claimStepById(
               stepId,
               Date.now(),
               context.executionWorkspace.stateRoot
@@ -879,7 +1030,7 @@ export class WorkflowExecutor {
                 `Cannot dispatch step ${stepId}: claim ${claim.status}`
               );
             }
-            const outcome = await this.executeWithSnapshot(
+            const outcome = await this.executeSequentialStep(
               { ...target, stepIndex: claim.stepIndex },
               claim.step,
               context,
@@ -905,6 +1056,8 @@ export class WorkflowExecutor {
           statusAfterQueue === EXECUTION_STATES.RUNNING &&
           this.promptQueue.hasNext()
         ) {
+          // The pause it confirmed no longer ends this execution.
+          this.pauseConfirmed = false;
           continue;
         }
         if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
@@ -1117,16 +1270,16 @@ export class WorkflowExecutor {
         memberStep,
         effectivePromptText
       ) =>
-        isScriptStep(memberStep)
-          ? properties
-          : (
+        isPromptStep(memberStep)
+          ? (
               await McpServerNormalizer.applyFromRegistryWithDiagnostics(
                 properties,
                 context.workspaceFolderPath ??
                   context.executionWorkspace.executionRoot,
                 effectivePromptText ?? ""
               )
-            ).properties,
+            ).properties
+          : properties,
       checkHarnessReady: context.ensureHarnessReady,
       ensureIsolatedIntegration: (member) =>
         context.getIntegrationForPrompt(
@@ -1137,9 +1290,17 @@ export class WorkflowExecutor {
             stepIndex: member.stepIndex,
           }
         ),
-      finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
+      finalStepSessionId: getExecutionRuntime(workflow.finalStep)?.sessionId as
         string | undefined,
       workflowSessionIdFromOverride: context.workflowSessionIdFromOverride,
+      // A `worktree: false` child runs in the workspace's main checkout,
+      // which is this parent's checkout only when the parent runs there.
+      parentRunsInMainCheckout: runsInMainCheckout(
+        context.executionWorkspace.executionRoot,
+        context.executionWorkspace.stateRoot
+      ),
+      prepareSubWorkflowMember: (memberStep, stepIndex) =>
+        this.prepareParallelSubWorkflowMember(memberStep, stepIndex, context),
     };
   }
 
@@ -1160,6 +1321,113 @@ export class WorkflowExecutor {
     return result;
   }
 
+  /**
+   * Claim a queue step for dispatch. A claimed step starts a fresh
+   * execution, so a join mark left by an earlier execution of it is stale.
+   */
+  private async claimStepById(
+    stepId: string,
+    startedAt: number,
+    stateRoot: string
+  ): ReturnType<PromptQueue["claimStepById"]> {
+    const claim = await this.promptQueue.claimStepById(
+      stepId,
+      startedAt,
+      stateRoot
+    );
+    if (
+      claim.status === STEP_CLAIM_OUTCOMES.CLAIMED &&
+      claim.stepIndex !== undefined
+    ) {
+      this.membersStoppingWorkflowAtJoin.delete(
+        getExecutionTargetRunKey({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex: claim.stepIndex,
+        })
+      );
+    }
+    return claim;
+  }
+
+  /**
+   * At the start of an execution cycle, keep only the join marks a group
+   * will still consume: those of members still settled CANCELLED (a promoted
+   * anchor whose run had not started, recovered by the group the loop starts
+   * next). A member reset since (a continue's rewind, a retry) re-runs, and
+   * its earlier direct stop no longer applies.
+   */
+  private pruneStaleJoinMarks(): void {
+    const steps = this.promptQueue.getState().steps;
+    for (const [key, target] of this.membersStoppingWorkflowAtJoin) {
+      const runtime =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? steps[target.stepIndex]?._runtime
+          : undefined;
+      if (
+        runtime?.completedAt === undefined ||
+        runtime.terminalStatus !== PROMPT_TERMINAL_STATUS.CANCELLED
+      ) {
+        this.membersStoppingWorkflowAtJoin.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Run one sequential step under its own abort signal, chained to the
+   * context's, so a group that adopts it (an ad-hoc promotion) can cancel it.
+   */
+  private async executeSequentialStep(
+    target: ExecutionTarget,
+    step: WorkflowStep,
+    context: WorkflowExecutionContext,
+    snapshotStrategy: "git" | "filesystem" | undefined
+  ): Promise<StepExecutionOutcome> {
+    const runKey = getExecutionTargetRunKey(target);
+    const controller = new AbortController();
+    const forward = () => controller.abort();
+    if (context.abortSignal?.aborted) controller.abort();
+    context.abortSignal?.addEventListener("abort", forward, { once: true });
+    this.sequentialStepAborts.set(runKey, controller);
+    try {
+      return await this.executeWithSnapshot(
+        target,
+        step,
+        withAbortSignal(context, controller.signal),
+        snapshotStrategy
+      );
+    } finally {
+      this.sequentialStepAborts.delete(runKey);
+      context.abortSignal?.removeEventListener("abort", forward);
+    }
+  }
+
+  /** Whether `target` is a queue step inside a parallel group right now. */
+  private isParallelGroupMemberTarget(target: ExecutionTarget): boolean {
+    if (target.kind !== FINAL_STEP_PHASES.QUEUE) return false;
+    return this.promptQueue
+      .getState()
+      .parallelGroups.some(
+        (group) =>
+          target.stepIndex >= group.startIndex &&
+          target.stepIndex <= group.endIndex
+      );
+  }
+
+  /**
+   * Consume the record that `outcome`'s member had its child stopped
+   * directly, marking a CANCELLED outcome to stop the workflow at the join.
+   */
+  private withStopsWorkflowAtJoin(
+    outcome: StepExecutionOutcome
+  ): StepExecutionOutcome {
+    const stopsAtJoin = this.membersStoppingWorkflowAtJoin.delete(
+      getExecutionTargetRunKey(outcome.target)
+    );
+    return stopsAtJoin && outcome.status === PROMPT_TERMINAL_STATUS.CANCELLED
+      ? { ...outcome, stopsWorkflowAtJoin: true }
+      : outcome;
+  }
+
   private getRecoveredGroupOutcome(
     stepIndex: number
   ): StepExecutionOutcome | undefined {
@@ -1167,7 +1435,10 @@ export class WorkflowExecutor {
     if (step?._runtime?.completedAt === undefined) {
       return undefined;
     }
-    return {
+    // A promoted anchor that settled before any group run existed (width 1,
+    // or no live context) hands its direct stop to the group the queue loop
+    // starts next. Across a restart the continue rewind reattaches it instead.
+    return this.withStopsWorkflowAtJoin({
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
       status: step._runtime.terminalStatus ?? PROMPT_TERMINAL_STATUS.COMPLETED,
       ...(step._runtime.failureMessage
@@ -1176,7 +1447,7 @@ export class WorkflowExecutor {
       ...(step._runtime.terminalFailure === false
         ? { terminalFailure: false }
         : {}),
-    };
+    });
   }
 
   private async executeParallelGroup(
@@ -1195,7 +1466,24 @@ export class WorkflowExecutor {
         context
       );
     }
+    try {
+      return await this.dispatchParallelGroup(group, context, snapshotStrategy);
+    } finally {
+      // The prepared members belong to this dispatch alone, whichever way it
+      // ends: a preflight that throws leaves no group run whose `finally`
+      // would clear them, and a Continue must prepare the children afresh.
+      this.preparedSubWorkflowMembers.clear();
+    }
+  }
+
+  /** `executeParallelGroup` for a group no promotion has started. */
+  private async dispatchParallelGroup(
+    group: ParallelGroupDefinition,
+    context: WorkflowExecutionContext,
+    snapshotStrategy: "git" | "filesystem" | undefined
+  ): Promise<ParallelGroupOutcome> {
     const preflight = await this.preflightGroup(group, context);
+    await this.prepareParentCheckoutForGroup(preflight, context);
     let groupBeforeState: RawWorkspaceState | undefined;
     const state = this.promptQueue.getState();
     if (preflight.effectiveWidth > 1 && snapshotStrategy) {
@@ -1352,7 +1640,7 @@ export class WorkflowExecutor {
         });
       },
       claimStepById: (stepId, startedAt, groupContext) =>
-        this.promptQueue.claimStepById(
+        this.claimStepById(
           stepId,
           startedAt,
           groupContext.executionWorkspace.stateRoot
@@ -1374,6 +1662,21 @@ export class WorkflowExecutor {
           ...runningMembers,
         ]);
       },
+      // A sub-workflow member failing its dispatch preflight (a late joiner's
+      // WORKTREE_COLLISION or MERGE_INTO_SHARED_ROOT) fails through the same
+      // prepared-launch failure a group-preflight failure produces, so its
+      // own `onFail` settles it. Prompt and script members have no such
+      // policy and settle FAILED.
+      failedPreflightMember: (preflight) =>
+        isSubWorkflowStep(preflight.member.step)
+          ? {
+              ...preflight.member,
+              subWorkflowLaunch: {
+                ok: false,
+                failureMessage: preflight.failureMessage,
+              },
+            }
+          : undefined,
       executeMember: async (
         target,
         step,
@@ -1381,16 +1684,22 @@ export class WorkflowExecutor {
         memberSnapshotStrategy,
         member
       ) => {
+        const runKey = getExecutionTargetRunKey(target);
         try {
-          return await this.executeWithSnapshot(
+          const outcome = await this.executeWithSnapshot(
             target,
             step,
             groupContext,
             memberSnapshotStrategy,
-            member
+            member && {
+              ...member,
+              groupEffectiveWidth: options.effectiveWidth,
+            }
           );
+          return this.withStopsWorkflowAtJoin(outcome);
         } finally {
-          this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
+          this.targetExecutionErrors.delete(runKey);
+          this.membersStoppingWorkflowAtJoin.delete(runKey);
         }
       },
       persistSettlement: (outcome, settlementContext) =>
@@ -1417,7 +1726,15 @@ export class WorkflowExecutor {
           );
         }
       },
-      cancelTarget: context.cancelTarget,
+      cancelTarget: async (target) => {
+        // An adopted member runs on the sequential path, outside the group's
+        // abort signal: abort its own first, so a response its cancel then
+        // completes reads as a cancellation rather than a finished turn.
+        this.sequentialStepAborts
+          .get(getExecutionTargetRunKey(target))
+          ?.abort();
+        await context.cancelTarget?.(target);
+      },
       releaseTargetResources: context.releaseTargetResources,
       getRuntimeStatus: () => this.getRuntime().status,
       subscribeToStop: (onStop) => this.subscribeToRuntimeStop(onStop),
@@ -1480,12 +1797,22 @@ export class WorkflowExecutor {
           );
         }
         this.broadcastProgress(context);
-        if (
-          groupOutcome.stopped &&
-          this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
-          this.getRuntime().confirmStopped()
-        ) {
-          await this.promptQueue.commitRuntimeTransition();
+        if (groupOutcome.stopped) {
+          // A lane stopped directly asked for no stop while its siblings
+          // ran; the joined group requests it now, and a stop already
+          // requested is confirmed here exactly once either way.
+          if (
+            this.getRuntime().status !== EXECUTION_STATES.CANCELLING &&
+            this.getRuntime().status !== EXECUTION_STATES.STOPPED
+          ) {
+            this.getRuntime().requestStop();
+          }
+          if (
+            this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
+            this.getRuntime().confirmStopped()
+          ) {
+            await this.promptQueue.commitRuntimeTransition();
+          }
         }
         // Drain every member's reason so a non-terminal failure leaves none behind.
         const stopReason = groupOutcome.outcomes
@@ -1501,6 +1828,8 @@ export class WorkflowExecutor {
       if (this.activeParallelGroupRun === groupRun) {
         this.activeParallelGroupRun = undefined;
         this.activeParallelGroupPreflightMembers = undefined;
+        // A group re-entered after a pause prepares (and checks) again.
+        this.preparedSubWorkflowMembers.clear();
       }
       if (this.promotedParallelGroupRun?.run === groupRun) {
         this.promotedParallelGroupRun = undefined;
@@ -1582,6 +1911,7 @@ export class WorkflowExecutor {
         })
       ).member;
     } catch (error: unknown) {
+      this.preparedSubWorkflowMembers.clear();
       return {
         accepted: false,
         diagnostic: `Parallel-group promotion failed to resolve the running step: ${getErrorMessage(
@@ -1589,7 +1919,7 @@ export class WorkflowExecutor {
         )}`,
       };
     }
-    const liveAnchorSessionId = anchor._runtime?.sessionId;
+    const liveAnchorSessionId = getExecutionRuntime(anchor)?.sessionId;
     if (typeof liveAnchorSessionId === "string") {
       anchorReservation = {
         ...anchorReservation,
@@ -1607,6 +1937,8 @@ export class WorkflowExecutor {
         [anchorReservation]
       );
     } catch (error: unknown) {
+      // No group run exists to own the preparations this promotion made.
+      this.preparedSubWorkflowMembers.clear();
       await this.releaseRejectedParallelGroupMemberResources(
         active.context,
         memberIndex
@@ -1619,6 +1951,7 @@ export class WorkflowExecutor {
       };
     }
     if (preflight.issues.length > 0) {
+      this.preparedSubWorkflowMembers.clear();
       await this.releaseRejectedParallelGroupMemberResources(
         active.context,
         memberIndex
@@ -2010,7 +2343,10 @@ export class WorkflowExecutor {
         settlement.promotedGroup.id
       );
       if (promoted && stepId) {
-        await promoted.run.settleAdoptedMember(stepId, outcome);
+        await promoted.run.settleAdoptedMember(
+          stepId,
+          this.withStopsWorkflowAtJoin(outcome)
+        );
         const groupOutcome = await this.finishParallelGroupRun(
           promoted.run,
           promoted.outcome,
@@ -2028,6 +2364,18 @@ export class WorkflowExecutor {
       }
       if (stepId) {
         this.activeParallelGroupRun?.reconcileMembers([stepId]);
+      }
+      // No group run exists to confirm a stop that reached this anchor (a
+      // promotion at width 1, or with no live context), and the loop will not
+      // start one while the run is stopping: confirm it here, as the
+      // sequential path does for a cancelled step.
+      if (
+        !promoted &&
+        this.getRuntime().status === EXECUTION_STATES.CANCELLING
+      ) {
+        this.getRuntime().confirmStopped();
+        await this.promptQueue.commitRuntimeTransition();
+        return false;
       }
       if (
         await this.confirmPauseAndStop("[WorkflowExecutor] Workflow paused")
@@ -2093,11 +2441,7 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? this.promptQueue.getState().steps[target.stepIndex]
         : undefined;
-    if (
-      target.kind === FINAL_STEP_PHASES.QUEUE &&
-      step &&
-      !isScriptStep(step)
-    ) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE && step && isPromptStep(step)) {
       const resolved = SettingsPropertyResolver.resolve(
         step,
         this.promptQueue.getWorkflowFile(),
@@ -2179,7 +2523,8 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : steps.length,
       steps,
       resolvedProperties,
-      workflowFile.finalStep?._runtime?.sessionId as string | undefined,
+      getExecutionRuntime(workflowFile.finalStep)?.sessionId as
+        string | undefined,
       undefined,
       false
     );
@@ -2379,8 +2724,32 @@ export class WorkflowExecutor {
     }
 
     // Route script steps directly — no AI harness interaction needed
-    if (isScriptStep(authoredStep)) {
-      return this.executeScriptStep(authoredStep, viewIndex, context, target);
+    const authoredStepType = getStepType(authoredStep);
+    if (authoredStepType !== STEP_TYPES.PROMPT) {
+      // Otherwise stop() waits on an idle integration's response for its
+      // 10 s fallback instead of cancelling the step's own resource.
+      context.clearTargetIntegration?.(target);
+    }
+    switch (authoredStepType) {
+      case STEP_TYPES.SCRIPT:
+        return this.executeScriptStep(
+          authoredStep as ScriptStep,
+          viewIndex,
+          context,
+          target
+        );
+      case STEP_TYPES.PROMPT:
+        break;
+      case STEP_TYPES.WORKFLOW:
+        return this.executeSubWorkflowStep(
+          authoredStep as SubWorkflowStep,
+          viewIndex,
+          context,
+          target,
+          preflightMember
+        );
+      default:
+        return assertNever(authoredStepType);
     }
 
     let prompt: PromptStep = authoredStep as PromptStep;
@@ -2756,6 +3125,7 @@ export class WorkflowExecutor {
           allPrompts: state.steps,
           filePath: context.currentPromptFilePath,
           sourceDefinitionPath: context.sourceDefinitionPath,
+          workflowTrustSourcePath: context.workflowTrustSourcePath,
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
@@ -2796,8 +3166,8 @@ export class WorkflowExecutor {
               }
             : {}),
           secretEnvironment: resolvedSecrets.values,
-          finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-            string | undefined,
+          finalStepSessionId: getExecutionRuntime(workflowFile.finalStep)
+            ?.sessionId as string | undefined,
         },
         async () => {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -3014,12 +3384,21 @@ export class WorkflowExecutor {
     reason: string = "Skipped by pre-condition",
     logPrefix: string = "[Pre-condition]"
   ): Promise<boolean> {
-    const stepLabel =
-      !isScriptStep(step) && (step as PromptStep).name
-        ? (step as PromptStep).name!
-        : step.type === STEP_TYPES.SCRIPT
-          ? (step as ScriptStep).script.split(/\s+/)[0]
-          : "prompt";
+    const stepLabel = (() => {
+      const stepType = getStepType(step);
+      switch (stepType) {
+        case STEP_TYPES.PROMPT:
+          return (step as PromptStep).name || "prompt";
+        case STEP_TYPES.SCRIPT:
+          return (step as ScriptStep).script.split(/\s+/)[0];
+        case STEP_TYPES.WORKFLOW:
+          return isSubWorkflowStep(step)
+            ? getSubWorkflowDisplayName(step)
+            : "workflow";
+        default:
+          return assertNever(stepType);
+      }
+    })();
 
     Log.info(`${logPrefix} Step skipped — ${stepLabel}`);
     await this.trackStatusMessage(
@@ -3052,6 +3431,845 @@ export class WorkflowExecutor {
     });
 
     return false;
+  }
+
+  private async executeSubWorkflowStep(
+    authoredStep: SubWorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    preflightMember?: ParallelGroupPreflightMember
+  ): Promise<boolean> {
+    if (context.dashboardProvider && stepIndex >= 0) {
+      context.dashboardProvider.updateStepStatus(stepIndex, {
+        state: STEP_STATUS.RUNNING,
+      });
+    }
+    const attemptIndex = 0;
+    this.getRuntime().beginAttempt(target, attemptIndex, Date.now());
+    const resolvedStep = VarSubstitutor.substituteStepView(
+      authoredStep,
+      this.getRunStartView(context).vars,
+      VAR_SUBSTITUTION_PHASES.DISPATCH,
+      stepIndex
+    ) as SubWorkflowStep;
+    const onFail = resolvedStep.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+
+    const settleFailure = async (
+      message: string,
+      childSettlementRecorded = false
+    ): Promise<boolean> => {
+      // A failure before any child run exists still has output (D12a): the
+      // settled event is written without a child identity, so a later
+      // `$previous` sees the failure even under `onFail: continue`. A failure
+      // after the child settled already wrote its own event.
+      if (!childSettlementRecorded) {
+        await this.recordSubWorkflowSettlement(
+          context,
+          target,
+          attemptIndex,
+          authoredStep._runtime?.stepId,
+          {
+            outcome: {
+              status: PROMPT_TERMINAL_STATUS.FAILED,
+              failedToStart: true,
+              failureMessage: message,
+            },
+          }
+        );
+      }
+      const shouldContinue = onFail === CONDITION_ACTIONS.CONTINUE;
+      if (shouldContinue) {
+        Log.warn(
+          `[WorkflowExecutor] Sub-workflow step failed but onFail=continue, continuing: ${message}`
+        );
+      }
+      const status = shouldContinue
+        ? STEP_STATUS.COMPLETED
+        : STEP_STATUS.FAILED;
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        shouldContinue,
+        attemptCompleted: false,
+        terminalStatus: status,
+        attemptFailureMessage: message,
+        queueFailureMessage: message,
+        runtimeFailureMessage: message,
+        continueResolvesFailure: true,
+      });
+    };
+
+    const host = context.subWorkflowHost;
+    if (!host) {
+      return settleFailure("Sub-workflow steps are not supported in this host");
+    }
+    // A sequential step's cancelled child always stops the parent (D9). A
+    // parallel member's never requests it itself: a cancel from the group or
+    // the parent (fail-fast, a parent stop) is a sibling cancellation the
+    // group already handles, and a lane whose child was stopped directly
+    // stops the parent only once its siblings settle and the group joins.
+    // Membership is read from the step's group when it settles, not from
+    // `preflightMember`: an ad-hoc promotion's adopted anchor runs on the
+    // sequential path with no preflight, yet is a member like any other.
+    const settleCancelled = (
+      cancelledBy: SubWorkflowCancellationSource = SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT
+    ) => {
+      const groupMember = this.isParallelGroupMemberTarget(target);
+      if (
+        groupMember &&
+        cancelledBy === SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
+      ) {
+        this.membersStoppingWorkflowAtJoin.set(
+          getExecutionTargetRunKey(target),
+          target
+        );
+      }
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        cancelled: true,
+        stopWorkflowOnCancel: !groupMember,
+      });
+    };
+    // Registered before anything awaits, so a stop or pause that arrives
+    // while the child is still being resolved or loaded reaches it once its
+    // handle exists, and a stop before the launch skips it.
+    const control = new SubWorkflowControlRelay();
+    context.registerActiveTarget?.(target, attemptIndex, control);
+    try {
+      return await this.runSubWorkflowStep(authoredStep, stepIndex, context, {
+        target,
+        attemptIndex,
+        host,
+        control,
+        settleFailure,
+        settleCancelled,
+        preflightMember,
+      });
+    } finally {
+      context.registerActiveTarget?.(target, attemptIndex, null);
+    }
+  }
+
+  /** `executeSubWorkflowStep` once its control is registered. */
+  private async runSubWorkflowStep(
+    authoredStep: SubWorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext,
+    run: {
+      readonly target: ExecutionTarget;
+      readonly attemptIndex: number;
+      readonly host: SubWorkflowHost;
+      readonly control: SubWorkflowControlRelay;
+      readonly settleFailure: (
+        message: string,
+        childSettlementRecorded?: boolean
+      ) => Promise<boolean>;
+      readonly settleCancelled: (
+        cancelledBy?: SubWorkflowCancellationSource
+      ) => Promise<boolean>;
+      readonly preflightMember: ParallelGroupPreflightMember | undefined;
+    }
+  ): Promise<boolean> {
+    const {
+      target,
+      attemptIndex,
+      host,
+      control,
+      settleFailure,
+      settleCancelled,
+      preflightMember,
+    } = run;
+    // A parallel member arrives prepared by its group's preflight, which
+    // already parsed (or materialized) the child once.
+    const prepared =
+      this.takePreparedSubWorkflowMember(authoredStep, preflightMember) ??
+      (await this.prepareSubWorkflowLaunch(
+        authoredStep,
+        stepIndex,
+        target,
+        context
+      ));
+    if (control.wasStopRequested) return settleCancelled();
+    if (!prepared.ok) return settleFailure(prepared.failureMessage);
+    const { source } = prepared;
+    // An inline child has no file, so it records no resolved path.
+    const filePath = prepared.resolvedPath;
+
+    const queueState = this.promptQueue.getState();
+    const stepId = authoredStep._runtime?.stepId;
+    if (
+      !queueState.workflowKey ||
+      !queueState.runRef ||
+      (target.kind === FINAL_STEP_PHASES.QUEUE && !stepId)
+    ) {
+      return settleFailure("Sub-workflow parent run identity is unavailable");
+    }
+
+    let handle: SubWorkflowHandle | undefined;
+    let completedChild = false;
+    let childSettlementRecorded = false;
+    try {
+      try {
+        const parent = {
+          workflowKey: queueState.workflowKey,
+          runRef: queueState.runRef,
+          ...(target.kind === FINAL_STEP_PHASES.QUEUE
+            ? { phase: FINAL_STEP_PHASES.QUEUE, stepId: stepId! }
+            : {
+                phase: FINAL_STEP_PHASES.FINAL_STEP,
+                loopIndex: target.loopIndex,
+              }),
+        } as const;
+        const recorded = await this.resolveRecordedChildRun(
+          authoredStep,
+          parent,
+          context,
+          filePath
+        );
+        completedChild = recorded?.completed === true;
+        const resumeChildRun =
+          recorded && !recorded.completed ? recorded.run : undefined;
+        if (recorded?.completed) {
+          // Settles from the child's run file like a launched child does, so
+          // its worktree and ran-with metadata survive the reattach.
+          const completedResult: Promise<SubWorkflowResult> =
+            host.readCompletedChild
+              ? host.readCompletedChild({
+                  stateRoot: context.executionWorkspace.stateRoot,
+                  workflowKey: recorded.run.workflowKey,
+                  runRef: recorded.run.runRef,
+                })
+              : Promise.resolve({ status: PROMPT_TERMINAL_STATUS.COMPLETED });
+          handle = {
+            workflowKey: recorded.run.workflowKey,
+            runRef: recorded.run.runRef,
+            done: completedResult,
+            pause: async () => undefined,
+            cancelPause: async () => undefined,
+            stop: async () => undefined,
+          };
+        } else if (control.wasStopRequested) {
+          return settleCancelled();
+        } else
+          handle = await host.launch({
+            source,
+            parent,
+            ...(resumeChildRun ? { resumeChildRun } : {}),
+            stateRoot: context.executionWorkspace.stateRoot,
+            parentExecution: {
+              executionRoot: context.executionWorkspace.executionRoot,
+              executionCheckoutRoot:
+                context.executionWorkspace.executionCheckoutRoot ??
+                context.executionWorkspace.executionRoot,
+              // A group that checked the parent's checkout once before
+              // fan-out (D4c) does not check it again per member.
+              ...(prepared.parentCheckoutPrepared
+                ? {}
+                : {
+                    prepareWorktreeChild:
+                      context.prepareSubWorkflowWorktreeChild,
+                  }),
+            },
+            delegationChain: [
+              ...(context.delegationChain ?? []),
+              ...(context.getExecutionLeaseOwnerToken?.()
+                ? [context.getExecutionLeaseOwnerToken()!]
+                : []),
+            ],
+            ancestorPaths: this.ancestorPathsForChild(
+              context,
+              filePath,
+              prepared.worktreePlan
+            ),
+            // Siblings run beside each other only when the group fans out,
+            // at the width its run was preflighted with: lowering the
+            // setting mid-group must not hand this child the TTY beside a
+            // sibling that is still running.
+            concurrent: (preflightMember?.groupEffectiveWidth ?? 1) > 1,
+          });
+      } catch (error) {
+        if (control.wasStopRequested) return settleCancelled();
+        // No child run exists yet (e.g. the file failed to load before the
+        // child allocated its identity), so this is a start failure.
+        return settleFailure(
+          `Sub-workflow could not start: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+      await control.attach(handle);
+      const runtimeIndex =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : queueState.steps.length;
+      await this.promptQueue.persistRuntimeMetadata(runtimeIndex, {
+        childWorkflowKey: handle.workflowKey,
+        childRunRef: handle.runRef,
+        // Runtime metadata merges, so an inline launch clears the file an
+        // earlier file launch of this step recorded (D6 matches on it).
+        resolvedWorkflowPath: filePath,
+      });
+      const result = this.asStepOutcome(await handle.done, control);
+      const settlementAlreadyRecorded =
+        completedChild && context.historyFilePath
+          ? await context.outputHistoryManager?.hasSubWorkflowSettlement(
+              context.historyFilePath,
+              handle.workflowKey,
+              handle.runRef
+            )
+          : false;
+      if (!settlementAlreadyRecorded) {
+        await this.recordSubWorkflowSettlement(
+          context,
+          target,
+          attemptIndex,
+          stepId,
+          {
+            ...(filePath !== undefined
+              ? { resolvedWorkflowPath: filePath }
+              : {}),
+            childWorkflowKey: handle.workflowKey,
+            childRunRef: handle.runRef,
+            outcome: {
+              status: result.status,
+              ...(result.failedToStart !== undefined
+                ? { failedToStart: result.failedToStart }
+                : {}),
+              ...(result.cancelledBy
+                ? { cancelledBy: result.cancelledBy }
+                : {}),
+              ...(result.failureMessage
+                ? { failureMessage: result.failureMessage }
+                : {}),
+            },
+            ...(result.worktree ? { worktree: result.worktree } : {}),
+            ...(result.ranWith ? { ranWith: result.ranWith } : {}),
+          }
+        );
+      }
+      childSettlementRecorded = true;
+      if (result.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
+        return settleCancelled(
+          result.cancelledBy ?? SUB_WORKFLOW_CANCELLATION_SOURCES.CHILD
+        );
+      }
+      if (result.status === PROMPT_TERMINAL_STATUS.FAILED) {
+        const prefix = result.failedToStart
+          ? "Sub-workflow could not start: "
+          : "";
+        return settleFailure(
+          `${prefix}${result.failureMessage ?? "Sub-workflow failed"}`,
+          true
+        );
+      }
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        shouldContinue: true,
+        terminalStatus: STEP_STATUS.COMPLETED,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // A child that exists but never settled (its run threw) still gives
+      // the step output, addressed to that child (D12a).
+      if (handle !== undefined && !childSettlementRecorded) {
+        await this.recordSubWorkflowSettlement(
+          context,
+          target,
+          attemptIndex,
+          stepId,
+          {
+            ...(filePath !== undefined
+              ? { resolvedWorkflowPath: filePath }
+              : {}),
+            childWorkflowKey: handle.workflowKey,
+            childRunRef: handle.runRef,
+            outcome: {
+              status: PROMPT_TERMINAL_STATUS.FAILED,
+              failureMessage: message,
+            },
+          }
+        );
+      }
+      return settleFailure(message, handle !== undefined);
+    }
+  }
+
+  /**
+   * Record a workflow step's `subWorkflowSettled` event and push it to the
+   * dashboard. A history failure never fails the step: the event is the
+   * step's prior-context output, not its outcome.
+   */
+  private async recordSubWorkflowSettlement(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    attemptIndex: number,
+    stepId: string | undefined,
+    settledOutput: SubWorkflowOutput
+  ): Promise<void> {
+    if (!context.historyFilePath || !context.outputHistoryManager) return;
+    try {
+      const eventAddress =
+        await context.outputHistoryManager.recordSubWorkflowSettled(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          this.getRunIndexForTarget(context, target),
+          attemptIndex,
+          settledOutput,
+          context.getDefinitionRevisionContext?.(),
+          undefined,
+          target.kind === FINAL_STEP_PHASES.QUEUE ? stepId : undefined
+        );
+      if (eventAddress) {
+        context.dashboardProvider?.updateSubWorkflowSettled?.({
+          target: this.toOutputExecutionTarget(target),
+          runIndex: this.getRunIndexForTarget(context, target),
+          attemptIndex,
+          ...eventAddress,
+          output: settledOutput,
+          workflowId: context.instanceId,
+        });
+      }
+    } catch (error) {
+      Log.warn(
+        `[WorkflowExecutor] Could not record sub-workflow settlement: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * The child outcome the step settles on, and the one its
+   * `subWorkflowSettled` event records. A child stopped while still loading
+   * never started, by the parent's request: that is a cancellation (D9),
+   * not a start failure.
+   */
+  private asStepOutcome(
+    result: SubWorkflowResult,
+    control: SubWorkflowControlRelay
+  ): SubWorkflowResult {
+    if (!(result.failedToStart && control.wasStopRequested)) return result;
+    return {
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT,
+      ...(result.worktree ? { worktree: result.worktree } : {}),
+    };
+  }
+
+  /**
+   * Resolve a sub-workflow step's child before launch: materialize an inline
+   * definition (D13), or resolve a file reference (D5) and check it against
+   * the active chain (D10). A file child stays unparsed here; a parallel
+   * member parses it through `parseSubWorkflowChild`. Never throws: a failure
+   * is the step's start failure.
+   */
+  private async prepareSubWorkflowLaunch(
+    authoredStep: SubWorkflowStep,
+    stepIndex: number,
+    target: ExecutionTarget,
+    context: WorkflowExecutionContext
+  ): Promise<PreparedSubWorkflowLaunch> {
+    try {
+      if (typeof authoredStep.workflow !== "string") {
+        // Materialize from the authored definition: the child substitutes its
+        // own fields with the copied effective vars, exactly once.
+        const materialized = materializeInlineSubWorkflow(
+          this.promptQueue.getWorkflowFile(),
+          this.getRunStartView(context).vars,
+          authoredStep,
+          getInlineSubWorkflowPosition(
+            target.kind === FINAL_STEP_PHASES.FINAL_STEP
+              ? { isFinalStep: true, passNumber: target.loopIndex + 1 }
+              : { isFinalStep: false, stepIndex }
+          ),
+          this.promptQueue.getState().workflowName,
+          substituteInlineStepName(
+            authoredStep,
+            this.getRunStartView(context).vars,
+            target.kind === FINAL_STEP_PHASES.FINAL_STEP ? -1 : stepIndex
+          )
+        );
+        const worktreePlan = classifySubWorkflowWorktree(
+          materialized.definition.worktree
+        );
+        return {
+          ok: true,
+          source: {
+            kind: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+            ...materialized,
+            // The inline step was authored in, and validated against, the
+            // parent's file: the child resolves references and trust from it.
+            parentDefinition: {
+              ...this.inlineParentReferenceBase(
+                context,
+                subWorkflowCreatesWorktree(worktreePlan)
+              ),
+              trustIdentityPath: context.workflowTrustSourcePath,
+            },
+          },
+          worktreePlan,
+        };
+      }
+      // A workflow path is never variable-substituted (D11).
+      const workflowPath = authoredStep.workflow;
+      const { promptFileResolver, sourceDefinitionPath } =
+        this.getPromptFileResolutionOptions(context);
+      const resolution = await resolveSubWorkflowReference(
+        workflowPath,
+        promptFileResolver,
+        sourceDefinitionPath
+      );
+      if (!resolution.ok) {
+        return { ok: false, failureMessage: resolution.message };
+      }
+      const resolvedPath = path.resolve(resolution.path);
+      // The ancestors are in this workflow's source checkout (the root's
+      // authored file); the resolved path is in its execution checkout.
+      const comparable = this.toSourceCheckoutFrame(context, resolvedPath);
+      const ancestors = context.ancestorPaths ?? [];
+      if (
+        ancestors.some((ancestor) =>
+          pathsEqual(path.resolve(ancestor), comparable)
+        )
+      ) {
+        const chain = [...ancestors, comparable]
+          .map((candidate) => path.basename(candidate))
+          .join(" → ");
+        return {
+          ok: false,
+          failureMessage: `Sub-workflow cycle detected: ${chain}`,
+        };
+      }
+      // Unparsed: the launcher parses the file and runs the D4c check itself,
+      // unless `parseSubWorkflowChild` parses it first.
+      return {
+        ok: true,
+        source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath },
+        resolvedPath,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        failureMessage: `Sub-workflow could not start: ${getErrorMessage(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Parse and validate a prepared file child, so a parallel member fails alone
+   * in preflight and its launch reuses the parse. The content is read before
+   * the parse, so comparing it later can only over-detect an edit, never miss
+   * one. Never throws: a failure is the step's start failure.
+   */
+  private async parseSubWorkflowChild(
+    launch: PreparedSubWorkflowLaunch
+  ): Promise<SubWorkflowPreparation> {
+    if (!launch.ok || launch.source.kind !== SUB_WORKFLOW_SOURCE_KINDS.FILE) {
+      return { launch };
+    }
+    const resolvedPath = launch.source.resolvedPath;
+    let parsedFile: ParsedSubWorkflowFile | undefined;
+    try {
+      parsedFile = {
+        path: resolvedPath,
+        content: await fs.readFile(resolvedPath, "utf8"),
+      };
+    } catch {
+      // Unreadable: the parse below reports it.
+    }
+    const withFile = (
+      prepared: PreparedSubWorkflowLaunch
+    ): SubWorkflowPreparation => ({
+      launch: prepared,
+      ...(parsedFile ? { parsedFile } : {}),
+    });
+    try {
+      this.subWorkflowParser ??= new PromptFileParser(this.platform);
+      const parser = this.subWorkflowParser;
+      const parsed = await parser.parsePromptFile(resolvedPath);
+      const invalid = (detail: string) =>
+        withFile({
+          ok: false,
+          failureMessage: `Sub-workflow could not start: ${path.basename(resolvedPath)} is invalid: ${detail}`,
+        });
+      if (!parsed?.steps) {
+        return invalid(
+          parser.lastNewerSchemaError?.message ??
+            parser.lastParseError?.message ??
+            "it could not be parsed"
+        );
+      }
+      const validation = parser.validateWorkflowSteps(parsed.steps, {
+        finalStep: parsed.finalStep,
+        parallelGroups: parsed.parallelGroups,
+        workflowProperties: parsed,
+      });
+      if (!validation.valid) return invalid(validation.errors.join("; "));
+      return withFile({
+        ok: true,
+        source: { kind: SUB_WORKFLOW_SOURCE_KINDS.FILE, resolvedPath, parsed },
+        resolvedPath,
+        worktreePlan: classifySubWorkflowWorktree(parsed.worktree),
+      });
+    } catch (error) {
+      return withFile({
+        ok: false,
+        failureMessage: `Sub-workflow could not start: ${getErrorMessage(error)}`,
+      });
+    }
+  }
+
+  /** Whether a parsed child file's content changed since it was parsed. */
+  private async hasSubWorkflowChildChanged(
+    parsedFile: ParsedSubWorkflowFile | undefined
+  ): Promise<boolean> {
+    if (!parsedFile) return false;
+    try {
+      return (
+        (await fs.readFile(parsedFile.path, "utf8")) !== parsedFile.content
+      );
+    } catch {
+      // Gone or unreadable since: prepare again so the launch reports it.
+      return true;
+    }
+  }
+
+  /**
+   * The preparation a group shares between its preflight and each member's
+   * dispatch preflight (`preparedSubWorkflowMembers`).
+   *
+   * A member's dispatch preflight runs when it is claimed, which for a member
+   * waiting behind `queue.maxParallelSteps` can be long after the group
+   * preflight. A child file edited in between is parsed again, so a member
+   * launches what its file says when it starts, as a sequential step does.
+   * The new preparation carries no group D4c result: its launch runs the
+   * launcher's own check, as a late joiner's does.
+   */
+  private async prepareParallelSubWorkflowMember(
+    step: SubWorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext
+  ): Promise<PreparedSubWorkflowLaunch> {
+    const stepId = step._runtime?.stepId;
+    const fingerprint = JSON.stringify(step.workflow);
+    const cached = stepId
+      ? this.preparedSubWorkflowMembers.get(stepId)
+      : undefined;
+    if (cached && cached.fingerprint === fingerprint) {
+      if (!(await this.hasSubWorkflowChildChanged(cached.parsedFile))) {
+        return cached.launch;
+      }
+      Log.info(
+        `[WorkflowExecutor] Parallel step ${stepIndex + 1}: ${path.basename(
+          cached.parsedFile?.path ?? ""
+        )} changed since group preflight; parsing it again`
+      );
+    }
+    const { launch, parsedFile } = await this.parseSubWorkflowChild(
+      await this.prepareSubWorkflowLaunch(
+        step,
+        stepIndex,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+        context
+      )
+    );
+    if (stepId) {
+      this.preparedSubWorkflowMembers.set(stepId, {
+        fingerprint,
+        launch,
+        ...(parsedFile ? { parsedFile } : {}),
+      });
+    }
+    return launch;
+  }
+
+  /**
+   * A member's prepared launch, consumed: a parsed child definition is loaded
+   * by exactly one launch.
+   */
+  private takePreparedSubWorkflowMember(
+    step: SubWorkflowStep,
+    preflightMember: ParallelGroupPreflightMember | undefined
+  ): PreparedSubWorkflowLaunch | undefined {
+    const launch = preflightMember?.subWorkflowLaunch;
+    const stepId = step._runtime?.stepId;
+    if (launch && stepId) this.preparedSubWorkflowMembers.delete(stepId);
+    return launch;
+  }
+
+  /**
+   * D4c once for a group (P6): when the parent's checkout is dirty and any
+   * member's child creates a worktree, apply the rule before any member
+   * starts, so every lane branches from one commit. Those members then skip
+   * the launcher's own check. A refusal fails each of them under its own
+   * `onFail`; members without a worktree are unaffected.
+   *
+   * Only a group that fans out checks once. At width 1 the members run one
+   * after another, so an earlier member can dirty the tree before a later
+   * lane branches; each worktree member keeps the launcher's per-child check.
+   */
+  private async prepareParentCheckoutForGroup(
+    preflight: ParallelGroupPreflightResult,
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    if (preflight.effectiveWidth <= 1) return;
+    const entries = preflight.members.flatMap((member) => {
+      const stepId = member.step._runtime?.stepId;
+      const entry = stepId
+        ? this.preparedSubWorkflowMembers.get(stepId)
+        : undefined;
+      return entry?.launch.ok &&
+        subWorkflowCreatesWorktree(entry.launch.worktreePlan)
+        ? [entry]
+        : [];
+    });
+    if (entries.length === 0) return;
+    let refusal: string | undefined;
+    try {
+      await context.prepareSubWorkflowWorktreeChild?.();
+    } catch (error) {
+      refusal = `Sub-workflow could not start: ${getErrorMessage(error)}`;
+    }
+    for (const entry of entries) {
+      const launch = entry.launch;
+      if (!launch.ok) continue;
+      entry.launch =
+        refusal !== undefined
+          ? { ok: false, failureMessage: refusal }
+          : { ...launch, parentCheckoutPrepared: true };
+    }
+  }
+
+  /**
+   * D10/D6: a path as this workflow's source checkout names it. A file in a
+   * linked worktree and the same repo-relative file in the checkout it
+   * branched from are one workflow, so every comparison goes through here.
+   */
+  private toSourceCheckoutFrame(
+    context: WorkflowExecutionContext,
+    filePath: string
+  ): string {
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      context.executionWorkspace;
+    return mapExecutionPathToSourceCheckout(
+      filePath,
+      sourceCheckoutRoot,
+      executionCheckoutRoot
+    );
+  }
+
+  /** Whether two paths name one workflow file, in one checkout frame. */
+  private isSameSubWorkflowFile(
+    context: WorkflowExecutionContext,
+    recordedPath: string | undefined,
+    currentPath: string
+  ): boolean {
+    return (
+      recordedPath !== undefined &&
+      pathsEqual(
+        path.resolve(this.toSourceCheckoutFrame(context, recordedPath)),
+        path.resolve(this.toSourceCheckoutFrame(context, currentPath))
+      )
+    );
+  }
+
+  /**
+   * The ancestor chain a child receives, in the frame of the child's own
+   * source checkout: that is this run's execution checkout for a file child
+   * and for an inline child with its own worktree (D4b), and this run's source
+   * checkout for an inline child that inherits it. `ancestorPaths` arrives in
+   * this run's source checkout, so the first case maps it onward; the file
+   * child's own path is already in the execution checkout.
+   */
+  private ancestorPathsForChild(
+    context: WorkflowExecutionContext,
+    filePath: string | undefined,
+    worktreePlan: SubWorkflowWorktreePlan | undefined
+  ): readonly string[] {
+    const ancestors = context.ancestorPaths ?? [];
+    const childSourceIsExecutionCheckout =
+      filePath !== undefined ||
+      (worktreePlan !== undefined && subWorkflowCreatesWorktree(worktreePlan));
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      context.executionWorkspace;
+    const inChildFrame = childSourceIsExecutionCheckout
+      ? ancestors.map(
+          (ancestor) =>
+            mapSourceDefinitionPathToExecution(
+              ancestor,
+              sourceCheckoutRoot,
+              executionCheckoutRoot
+            ).executionPath ?? ancestor
+        )
+      : ancestors;
+    return filePath === undefined ? inChildFrame : [...inChildFrame, filePath];
+  }
+
+  /**
+   * D6: the child run this step recorded on an earlier attempt, when it still
+   * belongs to this exact parent step (run, phase and step or pass). A
+   * completed child settles the step without a launch; any other state is
+   * continued. A missing, unreadable or foreign child launches fresh, and so
+   * does a file child recorded for a different file than the step now names
+   * (its `workflow` path was edited since the stop), or for a file when the
+   * step is now an inline definition.
+   */
+  private async resolveRecordedChildRun(
+    authoredStep: SubWorkflowStep,
+    parent: SubWorkflowParentLink,
+    context: WorkflowExecutionContext,
+    currentResolvedPath: string | undefined
+  ): Promise<
+    | { completed: boolean; run: { workflowKey: WorkflowKey; runRef: RunRef } }
+    | undefined
+  > {
+    const workflowKey = authoredStep._runtime?.childWorkflowKey;
+    const runRef = authoredStep._runtime?.childRunRef;
+    const history = context.outputHistoryManager;
+    if (!workflowKey || !runRef || !history) return undefined;
+    const recordedPath = authoredStep._runtime?.resolvedWorkflowPath;
+    // An inline launch records no file, so a recorded file under a step that
+    // is now inline means the step was edited from a file into an inline one.
+    if (
+      currentResolvedPath === undefined
+        ? recordedPath !== undefined
+        : !this.isSameSubWorkflowFile(
+            context,
+            recordedPath,
+            currentResolvedPath
+          )
+    ) {
+      Log.warn(
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} ran ${recordedPath ?? "no recorded file"}, not ${currentResolvedPath ?? "an inline definition"}; launching fresh`
+      );
+      return undefined;
+    }
+    let manifest: WorkflowRunManifest;
+    try {
+      manifest = await history.readRunManifest(workflowKey, runRef);
+    } catch {
+      Log.warn(
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} is missing or unreadable; launching fresh`
+      );
+      return undefined;
+    }
+    if (!isSameSubWorkflowParentLink(manifest.parentRun, parent)) {
+      Log.warn(
+        `[WorkflowExecutor] Recorded sub-workflow ${workflowKey}/${runRef} has a different parent link; launching fresh`
+      );
+      return undefined;
+    }
+    return {
+      completed: manifest.executionState === EXECUTION_STATES.COMPLETED,
+      run: { workflowKey, runRef },
+    };
   }
 
   /**
@@ -3372,17 +4590,13 @@ export class WorkflowExecutor {
       const evalResult = report.evaluationResult;
 
       if (evalResult.cancelled) {
-        runtime.cancelAttempt(target, attemptIndex);
-        await this.recordAttemptTerminal(
+        return this.settleNonHarnessStep({
           context,
           target,
+          stepIndex,
           attemptIndex,
-          TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
-        );
-        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-          await this.promptQueue.cancelStep(target.stepIndex);
-        }
-        return false;
+          cancelled: true,
+        });
       }
 
       if (evalResult.errored) {
@@ -3443,51 +4657,114 @@ export class WorkflowExecutor {
         );
       }
 
-      // Complete or fail the attempt in the state machine
-      if (shouldContinue && !evalResult.errored) {
-        runtime.completeAttempt(target, attemptIndex);
-      } else {
-        runtime.failAttempt(
-          target,
-          attemptIndex,
-          `Script exited with code ${evalResult.exitCode}`
-        );
-      }
+      return this.settleNonHarnessStep({
+        context,
+        target,
+        stepIndex,
+        attemptIndex,
+        shouldContinue,
+        attemptCompleted: shouldContinue && !evalResult.errored,
+        terminalStatus,
+        durationSeconds: evalResult.duration / 1000,
+        attemptFailureMessage: `Script exited with code ${evalResult.exitCode}`,
+        queueFailureMessage: evalResult.errored
+          ? (evalResult.error ?? "Script could not run")
+          : `Script exited with code ${evalResult.exitCode}`,
+      });
+    }
+  }
+
+  private async settleNonHarnessStep(options: {
+    context: WorkflowExecutionContext;
+    target: ExecutionTarget;
+    stepIndex: number;
+    attemptIndex: number;
+    shouldContinue?: boolean;
+    attemptCompleted?: boolean;
+    cancelled?: boolean;
+    stopWorkflowOnCancel?: boolean;
+    terminalStatus?: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
+    durationSeconds?: number;
+    attemptFailureMessage?: string;
+    queueFailureMessage?: string;
+    runtimeFailureMessage?: string;
+    /** `onFail: continue` resolved the failure, so the queue step is not failed. */
+    continueResolvesFailure?: boolean;
+  }): Promise<boolean> {
+    const {
+      context,
+      target,
+      stepIndex,
+      attemptIndex,
+      cancelled = false,
+      shouldContinue = false,
+    } = options;
+    const attemptCompleted = options.attemptCompleted ?? shouldContinue;
+    const runtime = this.getRuntime();
+    if (cancelled) {
+      runtime.cancelAttempt(target, attemptIndex);
       await this.recordAttemptTerminal(
         context,
         target,
         attemptIndex,
-        shouldContinue && !evalResult.errored
-          ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
-          : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
-        shouldContinue && !evalResult.errored
-          ? undefined
-          : `Script exited with code ${evalResult.exitCode}`
+        TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
       );
-
-      // Update dashboard step status
-      if (context.dashboardProvider && stepIndex >= 0) {
-        context.dashboardProvider.updateStepStatus(stepIndex, {
-          state: terminalStatus,
-          duration: evalResult.duration / 1000,
-        });
-      }
-
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        if (shouldContinue && !evalResult.errored) {
-          // The coordinator commits the target outcome and advances at join.
-        } else {
-          await this.promptQueue.failStep(
-            target.stepIndex,
-            evalResult.errored
-              ? (evalResult.error ?? "Script could not run")
-              : `Script exited with code ${evalResult.exitCode}`
-          );
-        }
+        await this.promptQueue.cancelStep(target.stepIndex);
       }
-
-      return shouldContinue;
+      if (options.stopWorkflowOnCancel) {
+        // CANCELLING only: the outcome coordinator confirms STOPPED and
+        // commits the transition, as it does for a user stop.
+        runtime.requestStop();
+      }
+      return false;
     }
+
+    const failureMessage = options.attemptFailureMessage;
+    if (attemptCompleted) runtime.completeAttempt(target, attemptIndex);
+    else
+      runtime.failAttempt(
+        target,
+        attemptIndex,
+        failureMessage ?? "Step failed"
+      );
+    await this.recordAttemptTerminal(
+      context,
+      target,
+      attemptIndex,
+      attemptCompleted
+        ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+        : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+      attemptCompleted ? undefined : failureMessage
+    );
+    if (options.runtimeFailureMessage) {
+      const runtimeIndex =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : this.promptQueue.getState().steps.length;
+      await this.promptQueue.persistRuntimeMetadata(runtimeIndex, {
+        failureMessage: options.runtimeFailureMessage,
+      });
+    }
+    if (context.dashboardProvider && stepIndex >= 0 && options.terminalStatus) {
+      context.dashboardProvider.updateStepStatus(stepIndex, {
+        state: options.terminalStatus,
+        ...(options.durationSeconds === undefined
+          ? {}
+          : { duration: options.durationSeconds }),
+      });
+    }
+    if (!attemptCompleted && target.kind === FINAL_STEP_PHASES.QUEUE) {
+      const reason =
+        options.queueFailureMessage ?? failureMessage ?? "Step failed";
+      // A script that errored under `onError: continue` still fails its queue
+      // step (long-standing script behaviour); an `onFail: continue` that
+      // resolves the failure leaves the outcome to the coordinator.
+      if (!(shouldContinue && options.continueResolvesFailure)) {
+        await this.promptQueue.failStep(target.stepIndex, reason);
+      }
+    }
+    return shouldContinue;
   }
 
   /**
@@ -3814,6 +5091,7 @@ export class WorkflowExecutor {
         runtime.confirmPaused();
         await this.promptQueue.commitRuntimeTransition();
       }
+      this.pauseConfirmed = true;
       Log.info(logMessage);
       return true;
     }
@@ -4461,7 +5739,7 @@ export class WorkflowExecutor {
     vars: Readonly<Record<string, string>>
   ): ErrorBehavior | undefined {
     const levels = [
-      step.errorBehavior,
+      isExecutionStep(step) ? step.errorBehavior : undefined,
       this.getRunStartWorkflow(context).errorBehavior,
       SettingsPropertyResolver.createContext({
         hostCanProvidePty: context.hostCanProvidePty,
@@ -5342,8 +6620,8 @@ export class WorkflowExecutor {
       let result: { duration: number } | null;
       const resumedSessionId =
         target.kind === FINAL_STEP_PHASES.QUEUE
-          ? state.steps[target.stepIndex]?._runtime?.sessionId
-          : workflowFile.finalStep?._runtime?.sessionId;
+          ? getExecutionRuntime(state.steps[target.stepIndex])?.sessionId
+          : getExecutionRuntime(workflowFile.finalStep)?.sessionId;
       while (true) {
         const retryAttemptProperties =
           sendAttemptIndex === retryAttemptIndex
@@ -5374,6 +6652,7 @@ export class WorkflowExecutor {
             allPrompts: state.steps,
             filePath: context.currentPromptFilePath,
             sourceDefinitionPath: context.sourceDefinitionPath,
+            workflowTrustSourcePath: context.workflowTrustSourcePath,
             workflowName: this.promptQueue.getState().workflowName,
             instanceId: context.instanceId,
             workingFilePath: context.workingFilePath,
@@ -5407,8 +6686,8 @@ export class WorkflowExecutor {
                 }
               : {}),
             secretEnvironment: retrySecrets.values,
-            finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-              string | undefined,
+            finalStepSessionId: getExecutionRuntime(workflowFile.finalStep)
+              ?.sessionId as string | undefined,
           },
           undefined,
           TIMELINE_ATTEMPT_START_REASONS.RETRY
@@ -5644,46 +6923,44 @@ export class WorkflowExecutor {
     );
   }
 
-  private getPromptFileResolutionOptions(context: WorkflowExecutionContext): {
-    promptFileResolver: PromptFileResolver;
-    sourceDefinitionPath?: string;
-  } {
-    const executionWorkspace = context.executionWorkspace;
-    const usesLegacyNoWorktreeContext =
-      !executionWorkspace.sourceCheckoutRoot &&
-      !executionWorkspace.executionCheckoutRoot &&
-      context.workspaceFolderPath !== undefined &&
-      !pathsEqual(
-        path.resolve(context.workspaceFolderPath),
-        path.resolve(executionWorkspace.executionRoot)
-      );
-    const executionRoot = usesLegacyNoWorktreeContext
-      ? context.workspaceFolderPath!
-      : executionWorkspace.executionRoot;
-    const workspaceRoots = usesLegacyNoWorktreeContext
-      ? [executionRoot]
-      : executionWorkspace.workspaceRoots;
-    const namedRoots = usesLegacyNoWorktreeContext
-      ? (context.namedWorkspaceRoots ?? this.platform.getNamedWorkspaceRoots())
-      : executionWorkspace.namedWorkspaceRoots;
-    const definitionPath = mapSourceDefinitionPathToExecution(
-      context.sourceDefinitionPath,
-      executionWorkspace.sourceCheckoutRoot,
-      executionWorkspace.executionCheckoutRoot
+  /**
+   * Where an inline child (D13) resolves definition-relative references. An
+   * inheriting child maps the parent's authored file from the parent's source
+   * checkout, as the parent does. A child with its own worktree branches from
+   * the parent's execution checkout (D4b), so it gets the file as the parent
+   * maps it into that checkout, and maps it on into its own worktree from
+   * there. A file the parent cannot map stays as authored.
+   */
+  private inlineParentReferenceBase(
+    context: WorkflowExecutionContext,
+    createsWorktree: boolean
+  ): { sourceDefinitionPath?: string; sourceCheckoutRoot?: string } {
+    const { sourceCheckoutRoot, executionCheckoutRoot } =
+      context.executionWorkspace;
+    const mapped = createsWorktree
+      ? mapSourceDefinitionPathToExecution(
+          context.sourceDefinitionPath,
+          sourceCheckoutRoot,
+          executionCheckoutRoot
+        ).executionPath
+      : undefined;
+    return mapped !== undefined && executionCheckoutRoot
+      ? {
+          sourceDefinitionPath: mapped,
+          sourceCheckoutRoot: executionCheckoutRoot,
+        }
+      : {
+          sourceDefinitionPath: context.sourceDefinitionPath,
+          sourceCheckoutRoot,
+        };
+  }
+
+  private getPromptFileResolutionOptions(
+    context: WorkflowExecutionContext
+  ): PromptFileResolutionOptions {
+    return buildPromptFileResolutionOptions(context, () =>
+      this.platform.getNamedWorkspaceRoots()
     );
-    const resolver = new PromptFileResolver({
-      workspaceRoot: executionRoot,
-      namedRoots,
-      trustedRoots: workspaceRoots,
-      sourceCheckoutRoot: executionWorkspace.sourceCheckoutRoot,
-      approvedExternalRoots: executionWorkspace.approvedExternalRoots,
-      allowWorkflowRelativeReferences:
-        definitionPath.allowWorkflowRelativeReferences,
-    });
-    return {
-      promptFileResolver: resolver,
-      sourceDefinitionPath: definitionPath.executionPath,
-    };
   }
 
   private getParallelGroupStartBoundary(stepIndex: number): number {
@@ -5720,6 +6997,37 @@ export class WorkflowExecutor {
 
   isAwaitingResponse(): boolean {
     return this.waitingResponseTargets.size > 0;
+  }
+
+  /**
+   * Whether the last `execute()` ended on a pause it confirmed, whatever the
+   * run's status has become since (see `pauseConfirmed`).
+   */
+  endedOnPause(): boolean {
+    return this.pauseConfirmed;
+  }
+
+  /**
+   * A new execution cycle has begun (the startup lifecycle's
+   * `beginExecution`), ahead of the runner lock, lease and integration
+   * restore that precede `execute()`: it has not ended on any pause yet.
+   */
+  beginExecution(): void {
+    this.pauseConfirmed = false;
+  }
+
+  /**
+   * Whether this executor is still draining the queue, or a group run it
+   * started is still live. While it is, a stop is confirmed by the queue loop
+   * or the group's coordinator; once it is not (a paused group returned and
+   * `execute()` ended), nothing here will ever confirm one.
+   */
+  hasLiveExecution(): boolean {
+    return (
+      this.activeExecution !== undefined ||
+      this.activeParallelGroupRun !== undefined ||
+      this.promotedParallelGroupRun !== undefined
+    );
   }
 
   private logWorkflowStart(
@@ -5760,6 +7068,9 @@ export class WorkflowExecutor {
     }
     if (isScriptStep(nextStep)) {
       return "next target: script";
+    }
+    if (isSubWorkflowStep(nextStep)) {
+      return "next target: workflow";
     }
 
     // `harness` is a run-start field, so the run-start view alone resolves
@@ -6408,4 +7719,26 @@ export class WorkflowExecutor {
       ...patch,
     });
   }
+}
+
+/**
+ * `context` with its own `abortSignal`. Property descriptors are copied, not
+ * values, so a getter (`dashboardProvider`) keeps reading the live value.
+ */
+function withAbortSignal(
+  context: WorkflowExecutionContext,
+  abortSignal: AbortSignal
+): WorkflowExecutionContext {
+  return Object.defineProperties(
+    {},
+    {
+      ...Object.getOwnPropertyDescriptors(context),
+      abortSignal: {
+        value: abortSignal,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      },
+    }
+  ) as WorkflowExecutionContext;
 }

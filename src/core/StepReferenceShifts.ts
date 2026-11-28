@@ -1,10 +1,13 @@
 import {
-  isScriptStep,
+  isPromptStep,
   type PromptFile,
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import { hasStarted } from "../utils/StepStatusDerivation";
-import { parseInlinePriorContextRefs } from "../utils/FileReferenceParser";
+import {
+  getPromptReferenceTexts,
+  parseInlinePriorContextRefs,
+} from "../utils/FileReferenceParser";
 import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 
 type WorkflowReferenceDefaults = Pick<PromptFile, "priorContext" | "sessionId">;
@@ -44,7 +47,7 @@ export function findShiftedStepReferences(
 
   const affected: string[] = [];
   newSteps.forEach((step, index) => {
-    if (isScriptStep(step) || hasStarted(step)) return;
+    if (!isPromptStep(step) || hasStarted(step)) return;
     if (!oldKeys.has(stepKey(step)) || moved.has(stepKey(step))) return;
     if (stepPositionalReferences(step).some(shifted)) {
       affected.push(describeStep(step, index));
@@ -53,7 +56,7 @@ export function findShiftedStepReferences(
   const { finalStep, workflowDefaults } = options;
   if (
     finalStep &&
-    !isScriptStep(finalStep) &&
+    isPromptStep(finalStep) &&
     stepPositionalReferences(finalStep).some(shifted)
   ) {
     affected.push("Final step");
@@ -107,23 +110,17 @@ export function describeStepRemoval(removedIndices: readonly number[]): string {
 }
 
 function stepPositionalReferences(step: WorkflowStep): number[] {
-  if (isScriptStep(step)) return [];
-  const texts = [
-    step.prompt,
-    step.endCondition?.retryPrompt,
-    step.endCondition?.passRetryPrompt,
-  ];
+  if (!isPromptStep(step)) return [];
+  const texts = getPromptReferenceTexts(step);
   return [
     ...numericReferences(step.sessionId),
     ...numericReferences(step.priorContext),
     ...texts.flatMap((text) =>
-      typeof text === "string"
-        ? parseInlinePriorContextRefs(text).flatMap((match) =>
-            match.ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
-              ? match.ref.indices
-              : []
-          )
-        : []
+      parseInlinePriorContextRefs(text).flatMap((match) =>
+        match.ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+          ? match.ref.indices
+          : []
+      )
     ),
   ];
 }

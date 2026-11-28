@@ -14,6 +14,8 @@ import type {
   WorkflowOutputHistory,
 } from "../../types/OutputHistoryTypes";
 import type { OrderedCliHistoryEntry } from "../../types/OutputHistoryTypes";
+import type { SubWorkflowOutput } from "../../types/CtrlYokeTypes";
+import { readSubWorkflowRanWith } from "../../types/SubWorkflowTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import { outputAttemptKey } from "../../utils/OutputTargetKeys";
@@ -204,6 +206,7 @@ export class OutputHistoryTimelineAdapter {
       startedAt: manifest.startedAt,
       completedAt: manifest.completedAt,
       executionState: manifest.executionState,
+      parentRun: manifest.parentRun,
       promptOutputs: {},
       orderedEntries: [],
       activityEntries: [],
@@ -370,6 +373,15 @@ export class OutputHistoryTimelineAdapter {
             event.payload
           );
           break;
+        case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
+          orderedEntries.push({
+            kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+            target: event.target,
+            subWorkflowOutput: withValidatedRanWith(event.payload),
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+          });
+          break;
         // SCRIPT_EXECUTION_RECORDED carries display output on read but is not
         // projected into activityEntries: the same text was already streamed
         // as chunk deltas, which would duplicate it on every history reload.
@@ -471,4 +483,15 @@ function compareActivityEntries(
   right: OutputActivityEntry
 ): number {
   return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
+}
+
+/**
+ * A persisted settlement with its untrusted `ranWith` validated: an unknown
+ * harness id is dropped (see `readSubWorkflowRanWith`).
+ */
+function withValidatedRanWith(output: SubWorkflowOutput): SubWorkflowOutput {
+  if (output.ranWith === undefined) return output;
+  const { ranWith: persisted, ...rest } = output;
+  const ranWith = readSubWorkflowRanWith(persisted);
+  return ranWith ? { ...rest, ranWith } : rest;
 }

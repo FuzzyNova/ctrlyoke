@@ -1,10 +1,5 @@
 import { useMemo } from "react";
-import {
-  EDITOR_TARGET_KINDS,
-  EXECUTION_STATES,
-  FINAL_STEP_PHASES,
-  STEP_TYPES,
-} from "@root/types/DashboardConstants";
+import { EDITOR_TARGET_KINDS } from "@root/types/DashboardConstants";
 import { useSteerTargets } from "@hooks/useSteerTargets";
 import {
   NO_LIVE_HARNESS,
@@ -19,11 +14,9 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { getStepDraftContent } from "@utils/stepDraftContent";
+import { getParallelDispatchRefusal } from "@utils/parallelDispatch";
 
-const NO_STEP_RUNNING = "No step is running";
-const FINAL_STEP_UNSUPPORTED = "The final step can't run in parallel";
-const WIDTH_ONE = "Parallel width is 1 — raise `queue.maxParallelSteps`";
-const WORKFLOW_PAUSING = "Workflow is pausing";
 const NEW_WORKFLOW_TITLE =
   "Starts a separate workflow with default settings and this prompt";
 const SEND_STEER_LABEL = "Send Steer Message";
@@ -64,6 +57,8 @@ export function useRunDispatchTargets(
   const selectionTarget = useEditorStore((state) => state.selectionTarget);
   const promptText = useEditorStore((state) => state.promptText);
   const scriptCommand = useEditorStore((state) => state.scriptCommand);
+  const subWorkflowPath = useEditorStore((state) => state.subWorkflowPath);
+  const subWorkflowInline = useEditorStore((state) => state.subWorkflowInline);
   const stepType = useEditorStore((state) => state.stepType);
   const executionState = useWorkflowStore((state) => state.executionState);
   const activeStepIndices = useWorkflowStore(
@@ -80,9 +75,13 @@ export function useRunDispatchTargets(
   return useMemo(() => {
     const isNewPrompt = selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT;
     const hasContent =
-      stepType === STEP_TYPES.SCRIPT
-        ? scriptCommand.trim().length > 0
-        : promptText.trim().length > 0;
+      getStepDraftContent({
+        stepType,
+        promptText,
+        scriptCommand,
+        subWorkflowPath,
+        subWorkflowInline,
+      }).trim().length > 0;
     const isExternallyManaged = loadedWorkflows.some(
       (workflow) => workflow.id === workflowId && workflow.externalOwner
     );
@@ -132,33 +131,14 @@ export function useRunDispatchTargets(
     const runningStepNumber = runningStepIndex + 1;
     const enabledTitle = `Runs beside step ${runningStepNumber}; prior context resolves from before step ${runningStepNumber}`;
 
-    let parallelDisabledReason = parallelBaseReason;
-    if (
-      parallelDisabledReason === undefined &&
-      executionState === EXECUTION_STATES.PAUSING
-    ) {
-      parallelDisabledReason = WORKFLOW_PAUSING;
-    } else if (
-      parallelDisabledReason === undefined &&
-      executionState !== EXECUTION_STATES.RUNNING
-    ) {
-      parallelDisabledReason = NO_STEP_RUNNING;
-    } else if (
-      parallelDisabledReason === undefined &&
-      finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      parallelDisabledReason = FINAL_STEP_UNSUPPORTED;
-    } else if (
-      parallelDisabledReason === undefined &&
-      activeStepIndices.length === 0
-    ) {
-      parallelDisabledReason = NO_STEP_RUNNING;
-    } else if (
-      parallelDisabledReason === undefined &&
-      effectiveParallelGroupWidth <= 1
-    ) {
-      parallelDisabledReason = WIDTH_ONE;
-    }
+    const parallelDisabledReason =
+      parallelBaseReason ??
+      getParallelDispatchRefusal({
+        executionState,
+        finalStepPhase,
+        activeStepIndices,
+        effectiveParallelGroupWidth,
+      });
 
     return {
       parallel: {
@@ -188,6 +168,8 @@ export function useRunDispatchTargets(
     selectionTarget,
     steerTargets,
     stepType,
+    subWorkflowInline,
+    subWorkflowPath,
     workflowId,
   ]);
 }

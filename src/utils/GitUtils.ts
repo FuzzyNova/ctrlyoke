@@ -10,6 +10,7 @@ import {
   NODE_ERROR_CODES,
 } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
+import { normalizeBranchName } from "./BranchName";
 import { sanitizeTerminalOutput } from "./TerminalOutputSanitizer";
 import { isSubprocessTimeoutError } from "./SubprocessUtils";
 import { Log } from "./Log";
@@ -2120,11 +2121,7 @@ export interface AddWorktreeOptions {
   detached?: boolean;
 }
 
-export function normalizeBranchName(branchName: string): string {
-  return branchName.startsWith("refs/heads/")
-    ? branchName.slice("refs/heads/".length)
-    : branchName;
-}
+export { normalizeBranchName };
 
 /** Validate a local branch name using Git's own ref rules. */
 export async function validateBranchName(branchName: string): Promise<void> {
@@ -2478,6 +2475,19 @@ export async function getWorkingTreeCounts(
     "-z",
   ]);
   return countGitWorkingTreeChanges(parseGitPorcelainV1Z(stdout));
+}
+
+/** Count distinct paths reported by Git status, including conflicted paths. */
+export async function getWorkingTreeFileCount(dir: string): Promise<number> {
+  const { stdout } = await execGit([
+    "-C",
+    dir,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "-z",
+  ]);
+  return new Set(parseGitPorcelainV1Z(stdout).map((entry) => entry.path)).size;
 }
 
 /** Merge a ref into the current branch only when Git can fast-forward it. */

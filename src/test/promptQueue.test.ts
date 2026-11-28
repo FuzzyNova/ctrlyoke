@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { executionRuntime } from "./helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -60,6 +61,73 @@ async function startQueueExecution(queue: PromptQueue): Promise<void> {
   if (queue.getRuntimeStateMachine().startExecution()) {
     await queue.commitRuntimeTransition();
   }
+}
+
+/** Steps for the group-rewind tests: `before`, a group of two lanes and a prompt member, `after`. */
+function laneGroupQueue(): PromptQueue {
+  const lane = (childRunRef: string) =>
+    ({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "child.ctrlyoke.yaml",
+      _runtime: { childWorkflowKey: "child-key", childRunRef },
+    }) as unknown as NonNullable<PromptFile["steps"]>[number];
+  const queue = new PromptQueue();
+  queue.loadPrompts({
+    steps: [
+      { prompt: "before" },
+      lane("run-2026-11-27T10-00-00-000Z"),
+      lane("run-2026-11-27T10-00-01-000Z"),
+      { prompt: "cancelled prompt member" },
+      { prompt: "after" },
+    ],
+    parallelGroups: [
+      { id: "lanes", startIndex: 1, endIndex: 3, failFast: false },
+    ],
+  });
+  return queue;
+}
+
+const queueTarget = (stepIndex: number) =>
+  ({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex }) as const;
+
+/** The group-rewind queue stopped with `before` done and the head at the group. */
+async function stopLaneGroupQueue(
+  settleGroup: (queue: PromptQueue) => Promise<void>
+): Promise<PromptQueue> {
+  const queue = laneGroupQueue();
+  await startQueueExecution(queue);
+  await queue.commitStepOutcomeAndAdvance({
+    target: queueTarget(0),
+    status: PROMPT_TERMINAL_STATUS.COMPLETED,
+  });
+  queue.getRuntimeStateMachine().requestStop();
+  await settleGroup(queue);
+  queue.getRuntimeStateMachine().confirmStopped();
+  await queue.commitRuntimeTransition({ persist: false });
+  return queue;
+}
+
+/** Stopped at the group's join: lane 1 completed, the rest cancelled. */
+function stoppedAtGroupJoin(): Promise<PromptQueue> {
+  return stopLaneGroupQueue(async (queue) => {
+    await queue.commitParallelGroupJoin(queue.getState().parallelGroups[0], [
+      { target: queueTarget(1), status: PROMPT_TERMINAL_STATUS.COMPLETED },
+      { target: queueTarget(2), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+      { target: queueTarget(3), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+    ]);
+  });
+}
+
+/** Stopped inside the group, every member cancelled and the group unjoined. */
+function stoppedInsideGroup(): Promise<PromptQueue> {
+  return stopLaneGroupQueue(async (queue) => {
+    for (const stepIndex of [1, 2, 3]) {
+      await queue.persistStepOutcome({
+        target: queueTarget(stepIndex),
+        status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      });
+    }
+  });
 }
 
 async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
@@ -1792,6 +1860,272 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("a stopped run rewinds its cancelled workflow step for continuation, and a cancelled prompt only for a continued child", async () => {
+      const workflowStep = {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: "child.ctrlyoke.yaml",
+        _runtime: {
+          childWorkflowKey: "child-key",
+          childRunRef: "run-2026-11-26T12-00-00-000Z",
+        },
+      } as unknown as NonNullable<PromptFile["steps"]>[number];
+      const stopAtFirstStep = async (
+        steps: NonNullable<PromptFile["steps"]>
+      ) => {
+        const stopped = new PromptQueue();
+        stopped.loadPrompts({ steps });
+        await startQueueExecution(stopped);
+        stopped.getRuntimeStateMachine().requestStop();
+        await stopped.commitStepOutcomeAndAdvance({
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+        });
+        stopped.getRuntimeStateMachine().confirmStopped();
+        await stopped.commitRuntimeTransition({ persist: false });
+        return stopped;
+      };
+
+      const subWorkflow = await stopAtFirstStep([
+        workflowStep,
+        { prompt: "after" },
+      ]);
+      // The cancellation is recorded on the workflow step itself, or a reload
+      // reads it back as PENDING behind an advanced head.
+      assert.strictEqual(
+        subWorkflow.getState().steps[0]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.CANCELLED
+      );
+      assert.strictEqual(subWorkflow.getState().currentIndex, 1);
+      assert.strictEqual(
+        await subWorkflow.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = subWorkflow.getState();
+      assert.strictEqual(rewound.currentIndex, 0);
+      assert.strictEqual(rewound.results[0].status, STEP_STATUS.PENDING);
+      assert.strictEqual(rewound.steps[0]._runtime?.terminalStatus, undefined);
+      assert.strictEqual(rewound.steps[0]._runtime?.rewoundFailure, undefined);
+      assert.strictEqual(
+        (rewound.steps[0]._runtime as { childRunRef?: string })?.childRunRef,
+        "run-2026-11-26T12-00-00-000Z"
+      );
+
+      const prompt = await stopAtFirstStep([
+        { prompt: "stopped" },
+        { prompt: "after" },
+      ]);
+      assert.strictEqual(
+        await prompt.rewindCancelledStepForContinuation(),
+        false
+      );
+      assert.strictEqual(prompt.getState().currentIndex, 1);
+      assert.strictEqual(
+        prompt.getState().results[0].status,
+        STEP_STATUS.CANCELLED
+      );
+
+      // A child continued by its parent's step re-runs its interrupted step.
+      assert.strictEqual(
+        await prompt.rewindCancelledStepForContinuation({ anyStepKind: true }),
+        true
+      );
+      assert.strictEqual(prompt.getState().currentIndex, 0);
+      assert.strictEqual(
+        prompt.getState().results[0].status,
+        STEP_STATUS.PENDING
+      );
+    });
+
+    test("a stopped run re-enters its joined group to rewind the group's cancelled workflow members only", async () => {
+      const stopped = await stoppedAtGroupJoin();
+      assert.strictEqual(stopped.getState().currentIndex, 4);
+
+      assert.strictEqual(
+        await stopped.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = stopped.getState();
+      assert.strictEqual(rewound.currentIndex, 1, "re-enters the group");
+      assert.deepStrictEqual(
+        rewound.results.slice(0, 5).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.CANCELLED,
+          STEP_STATUS.PENDING,
+        ]
+      );
+      assert.strictEqual(
+        (rewound.steps[2]._runtime as { childRunRef?: string })?.childRunRef,
+        "run-2026-11-27T10-00-01-000Z"
+      );
+      assert.strictEqual(rewound.steps[2]._runtime?.terminalStatus, undefined);
+      assert.strictEqual(
+        rewound.steps[1]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.COMPLETED
+      );
+    });
+
+    test("a run stopped inside its group re-enters it to rewind the cancelled workflow members only", async () => {
+      // The shape a host restart leaves: a lane stopped directly while its
+      // siblings still ran, then every in-flight member settled CANCELLED
+      // with the head still inside the group, which never joined.
+      const queue = await stoppedInsideGroup();
+      assert.strictEqual(queue.getState().currentIndex, 1);
+
+      assert.strictEqual(
+        await queue.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = queue.getState();
+      assert.strictEqual(rewound.currentIndex, 1, "re-enters the group");
+      assert.deepStrictEqual(
+        rewound.results.slice(0, 5).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.CANCELLED,
+          STEP_STATUS.PENDING,
+        ]
+      );
+      for (const [index, childRunRef] of [
+        [1, "run-2026-11-27T10-00-00-000Z"],
+        [2, "run-2026-11-27T10-00-01-000Z"],
+      ] as const) {
+        assert.strictEqual(
+          rewound.steps[index]._runtime?.completedAt,
+          undefined
+        );
+        assert.strictEqual(
+          (rewound.steps[index]._runtime as { childRunRef?: string })
+            ?.childRunRef,
+          childRunRef
+        );
+      }
+    });
+
+    test("a run stopped inside a group that starts right after a joined group re-enters the open one", async () => {
+      const lane = (childRunRef: string) =>
+        ({
+          type: STEP_TYPES.WORKFLOW,
+          workflow: "child.ctrlyoke.yaml",
+          _runtime: { childWorkflowKey: "child-key", childRunRef },
+        }) as unknown as NonNullable<PromptFile["steps"]>[number];
+      const queue = new PromptQueue();
+      queue.loadPrompts({
+        steps: [
+          { prompt: "before" },
+          lane("run-2026-11-27T10-00-00-000Z"),
+          lane("run-2026-11-27T10-00-01-000Z"),
+          lane("run-2026-11-27T10-00-02-000Z"),
+          lane("run-2026-11-27T10-00-03-000Z"),
+          { prompt: "after" },
+        ],
+        parallelGroups: [
+          { id: "first", startIndex: 1, endIndex: 2, failFast: false },
+          { id: "second", startIndex: 3, endIndex: 4, failFast: false },
+        ],
+      });
+      await startQueueExecution(queue);
+      await queue.commitStepOutcomeAndAdvance({
+        target: queueTarget(0),
+        status: PROMPT_TERMINAL_STATUS.COMPLETED,
+      });
+      // The first group joined (with a cancelled lane it accepted) and the
+      // run moved into the second, whose lanes a restart then cancelled.
+      await queue.commitParallelGroupJoin(queue.getState().parallelGroups[0], [
+        { target: queueTarget(1), status: PROMPT_TERMINAL_STATUS.COMPLETED },
+        { target: queueTarget(2), status: PROMPT_TERMINAL_STATUS.CANCELLED },
+      ]);
+      assert.strictEqual(queue.getState().currentIndex, 3);
+      queue.getRuntimeStateMachine().requestStop();
+      for (const stepIndex of [3, 4]) {
+        await queue.persistStepOutcome({
+          target: queueTarget(stepIndex),
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+        });
+      }
+      queue.getRuntimeStateMachine().confirmStopped();
+      await queue.commitRuntimeTransition({ persist: false });
+
+      assert.strictEqual(
+        await queue.rewindCancelledStepForContinuation(),
+        true
+      );
+      const rewound = queue.getState();
+      assert.strictEqual(rewound.currentIndex, 3, "re-enters the open group");
+      assert.deepStrictEqual(
+        rewound.results.slice(0, 6).map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.CANCELLED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+        ]
+      );
+    });
+
+    test("a child continued by its parent rewinds every cancelled member of its group, prompt members included", async () => {
+      // Joined: the child stopped at its group's join.
+      const joined = await stoppedAtGroupJoin();
+      assert.strictEqual(
+        await joined.rewindCancelledStepForContinuation({ anyStepKind: true }),
+        true
+      );
+      assert.strictEqual(joined.getState().currentIndex, 1);
+      assert.deepStrictEqual(
+        joined
+          .getState()
+          .results.slice(0, 5)
+          .map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+        ]
+      );
+      assert.strictEqual(
+        joined.getState().steps[3]._runtime?.terminalStatus,
+        undefined
+      );
+
+      // Still inside the group, as a restart leaves it.
+      const open = await stoppedInsideGroup();
+      assert.strictEqual(
+        await open.rewindCancelledStepForContinuation({ anyStepKind: true }),
+        true
+      );
+      assert.strictEqual(open.getState().currentIndex, 1);
+      assert.deepStrictEqual(
+        open
+          .getState()
+          .results.slice(1, 4)
+          .map((result) => result.status),
+        [STEP_STATUS.PENDING, STEP_STATUS.PENDING, STEP_STATUS.PENDING]
+      );
+
+      // A top-level continue of the same joined shape keeps the prompt
+      // member cancelled and rewinds only the workflow member.
+      const topLevel = await stoppedAtGroupJoin();
+      assert.strictEqual(
+        await topLevel.rewindCancelledStepForContinuation(),
+        true
+      );
+      assert.deepStrictEqual(
+        topLevel
+          .getState()
+          .results.slice(1, 4)
+          .map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.PENDING, STEP_STATUS.CANCELLED]
+      );
+    });
+
     test("reordering only the steps after a terminal failure keeps the failure in place", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);
@@ -1872,7 +2206,7 @@ suite("PromptQueue State Machine Tests", () => {
         "edited failed prompt"
       );
       assert.strictEqual(
-        queue.getState().steps[0]._runtime?.rewoundFailure,
+        executionRuntime(queue.getState().steps[0])?.rewoundFailure,
         true
       );
     });
@@ -1884,7 +2218,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       await assert.rejects(() => queue.deletePrompts([0]), /recorded history/i);
       assert.strictEqual(
-        queue.getState().steps[0]._runtime?.rewoundFailure,
+        executionRuntime(queue.getState().steps[0])?.rewoundFailure,
         true
       );
     });
@@ -2448,7 +2782,7 @@ suite("PromptQueue State Machine Tests", () => {
         baseDefinitionRevision: 4,
       });
       assert.strictEqual(
-        queue.getState().steps[0]._runtime?.sessionId,
+        executionRuntime(queue.getState().steps[0])?.sessionId,
         "prefix-session"
       );
       assert.ok(queue.getState().steps[1]._runtime?.stepId);
@@ -3166,7 +3500,7 @@ suite("PromptQueue State Machine Tests", () => {
         "should have 2 prompts after merge"
       );
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "b52bceab-9c03-49b3-8324-4220292e9acb",
         "session ID must be preserved from memory, not lost to disk replacement"
       );
@@ -3203,7 +3537,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.steps[0].enabled, false);
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(executionRuntime(state.steps[0])?.sessionId, "s0");
       assert.strictEqual((state.steps[1] as PromptStep).prompt, "prompt-1-mcp");
     });
 
@@ -3234,14 +3568,17 @@ suite("PromptQueue State Machine Tests", () => {
         state.steps.map((step) => (step as PromptStep).prompt),
         ["repeat", "repeat", "repeat"]
       );
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "first-session");
+      assert.strictEqual(
+        executionRuntime(state.steps[0])?.sessionId,
+        "first-session"
+      );
       assert.strictEqual(
         state.steps[0]._runtime?.completedAt,
         2000,
         "runtime must stay attached to the first index"
       );
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "second-session",
         "identical prompts must not share a session ID"
       );
@@ -3302,11 +3639,11 @@ suite("PromptQueue State Machine Tests", () => {
 
       let state = queue.getState();
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "member-0-session"
       );
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "member-1-session"
       );
       assert.strictEqual(state.results[0].preCondition?.stdout, "gate-0");
@@ -3322,11 +3659,11 @@ suite("PromptQueue State Machine Tests", () => {
       state = queue.getState();
       assert.strictEqual(state.steps.length, 3);
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "member-0-session"
       );
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "member-1-session"
       );
       assert.strictEqual(state.results[0].preCondition?.stdout, "gate-0");
@@ -3358,8 +3695,14 @@ suite("PromptQueue State Machine Tests", () => {
       ]);
 
       const state = queue.getState();
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "second-session");
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "first-session");
+      assert.strictEqual(
+        executionRuntime(state.steps[0])?.sessionId,
+        "second-session"
+      );
+      assert.strictEqual(
+        executionRuntime(state.steps[1])?.sessionId,
+        "first-session"
+      );
     });
 
     test("should use the shorter disk/memory immutable boundary", () => {
@@ -3386,7 +3729,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(
-        state.steps[0]._runtime?.sessionId,
+        executionRuntime(state.steps[0])?.sessionId,
         "completed-session"
       );
       assert.ok(
@@ -3432,7 +3775,7 @@ suite("PromptQueue State Machine Tests", () => {
       const state = queue.getState();
       assert.strictEqual(newSteps.length, 1, "the append must be detected");
       assert.strictEqual(
-        state.steps[1]._runtime?.sessionId,
+        executionRuntime(state.steps[1])?.sessionId,
         "running-session",
         "a mid-run merge must not drop the running step's session ID"
       );
@@ -3681,7 +4024,7 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual((state.steps[0] as any).status, undefined);
       assert.strictEqual((state.steps[1] as any).status, undefined);
       assert.strictEqual((state.steps[1] as any).details, undefined);
-      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
+      assert.strictEqual(executionRuntime(state.steps[1])?.sessionId, "s1");
       assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
     });
 
@@ -3740,7 +4083,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.steps.length, 2);
-      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(executionRuntime(state.steps[0])?.sessionId, "s0");
       assert.strictEqual(state.currentIndex, 1);
       await queue.deletePrompts([1]);
       assert.strictEqual(queue.getState().steps.length, 1);
@@ -3849,8 +4192,14 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[1]._runtime?.startedAt, undefined);
       assert.strictEqual(state.steps[1]._runtime?.completedAt, undefined);
       assert.strictEqual(state.steps[1]._runtime?.elapsed, undefined);
-      assert.strictEqual(state.steps[1]._runtime?.contextWindowUsed, undefined);
-      assert.strictEqual(state.steps[1]._runtime?.contextWindowSize, undefined);
+      assert.strictEqual(
+        executionRuntime(state.steps[1])?.contextWindowUsed,
+        undefined
+      );
+      assert.strictEqual(
+        executionRuntime(state.steps[1])?.contextWindowSize,
+        undefined
+      );
       assert.strictEqual(state.currentIndex, 0);
       assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
     });

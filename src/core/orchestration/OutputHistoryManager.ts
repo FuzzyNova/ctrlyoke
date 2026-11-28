@@ -6,6 +6,7 @@ import { foldPathForCompare } from "../../utils/PathCasing";
 import {
   frozenActiveExecutionMs,
   projectWorktreeRuntime,
+  isPromptStep,
 } from "../../types/CtrlYokeTypes";
 import { resolveStepHarnessAndModel } from "../../types/ExecutionPropertyResolver";
 import type {
@@ -34,7 +35,6 @@ import {
   HARNESS_IDS,
   HISTORY_TRASH_ENTRY_KINDS,
   OUTPUT_ACTIVITY_KINDS,
-  STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
@@ -50,6 +50,7 @@ import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
+import type { SubWorkflowParentLink } from "../../types/SubWorkflowTypes";
 import { RunOutputResolver } from "./RunOutputResolver";
 import { RunMetadataScanner } from "./RunMetadataScanner";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
@@ -69,6 +70,7 @@ import {
   type WorkflowTimelineEventDraft,
   type WorkflowDefinitionSnapshot,
   type RunSummary,
+  type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { WorkingFileManager } from "../WorkingFileManager";
@@ -370,6 +372,30 @@ export class OutputHistoryManager {
     );
   }
 
+  /** Read the manifest of an already-known run; throws when it is missing. */
+  async readRunManifest(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<WorkflowRunManifest> {
+    return this.timelineRecorder.readManifest(
+      this.getHistoryFilePath(workflowKey, runRef)
+    );
+  }
+
+  /** Whether `historyFilePath` already records the settlement of this child run. */
+  async hasSubWorkflowSettlement(
+    historyFilePath: string,
+    childWorkflowKey: WorkflowKey,
+    childRunRef: RunRef
+  ): Promise<boolean> {
+    if (!historyFilePath) return false;
+    return this.runMetadataScanner.hasSubWorkflowSettlement(
+      historyFilePath,
+      childWorkflowKey,
+      childRunRef
+    );
+  }
+
   /** Streaming response reader shared by active execution and read-output clients. */
   getRunOutputResolver(): RunOutputResolver {
     return this.runOutputResolver;
@@ -389,7 +415,8 @@ export class OutputHistoryManager {
     runId: number,
     startedAt: number,
     retentionProtectedRunRefs: readonly RunRef[] = [],
-    initialDefinition?: WorkflowDefinitionSnapshot
+    initialDefinition?: WorkflowDefinitionSnapshot,
+    parentRun?: SubWorkflowParentLink
   ): Promise<{ filePath: string; runCount: number }> {
     Log.debug(
       `[OutputHistoryManager] initializeRunAt: ${workflowKey}/${runRef} (runId=${runId})`
@@ -402,7 +429,8 @@ export class OutputHistoryManager {
         startedAt,
         EXECUTION_STATES.RUNNING,
         1,
-        initialDefinition
+        initialDefinition,
+        parentRun
       );
 
       // Prune old runs if needed (disk-only operation)
@@ -701,6 +729,36 @@ export class OutputHistoryManager {
         payload: scriptOutput,
       },
     ]);
+  }
+
+  /** Persist a settled child workflow projection on its parent step. */
+  async recordSubWorkflowSettled(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    output: import("../../types/CtrlYokeTypes").SubWorkflowOutput,
+    definitionContext?: DefinitionRevisionContext,
+    phase?: ExecutionPhase,
+    stepId?: string
+  ): Promise<{ timestampMs: number; sequence: number } | undefined> {
+    if (!historyFilePath) return undefined;
+    const [event] = await this.timelineRecorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED,
+        timestampMs: Date.now(),
+        target,
+        runIndex,
+        attemptIndex,
+        phase,
+        definitionRevision: definitionContext?.definitionRevision ?? 1,
+        ...(stepId !== undefined ? { stepId } : {}),
+        payload: output,
+      },
+    ]);
+    return event
+      ? { timestampMs: event.timestampMs, sequence: event.sequence }
+      : undefined;
   }
 
   /** Persist the exact retry input before the retry attempt is sent. */
@@ -1472,6 +1530,7 @@ export class OutputHistoryManager {
         summary: {
           workflowKey,
           runRef,
+          ...(manifest.parentRun ? { parentRun: manifest.parentRun } : {}),
           runDirectory: runDirectoryPath,
           runId: manifest.runId,
           startedAt: manifest.startedAt,
@@ -1584,7 +1643,7 @@ export class OutputHistoryManager {
       const models = new Map<string, number>();
       const defaultHarness = ConfigurationUtils.getIntegrationMode();
       for (const step of workingFile.steps ?? []) {
-        if (step.type === STEP_TYPES.SCRIPT) {
+        if (!isPromptStep(step)) {
           continue;
         }
         const { harness, model } = resolveStepHarnessAndModel(

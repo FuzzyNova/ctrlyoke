@@ -1,10 +1,15 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   computeActiveExecutionMs,
+  assertNever,
   frozenActiveExecutionMs,
+  getStepType,
   hasWorkflowStepProgress,
   isScriptStep,
+  isPromptStep,
   workflowDisplayStep,
   workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
@@ -25,6 +30,61 @@ suite("CtrlYokeTypes isScriptStep", () => {
     );
     const promptWithoutType: { prompt: string } = { prompt: "hello" };
     assert.strictEqual(isScriptStep(promptWithoutType), false);
+  });
+});
+
+suite("CtrlYokeTypes step kind helpers", () => {
+  test("gets explicit kinds and defaults omitted kinds to prompt", () => {
+    assert.strictEqual(
+      getStepType({ type: "script", script: "echo hi" }),
+      "script"
+    );
+    assert.strictEqual(
+      getStepType({ type: "prompt", prompt: "hello" }),
+      "prompt"
+    );
+    assert.strictEqual(getStepType({ prompt: "legacy" }), "prompt");
+  });
+
+  test("recognizes prompt steps with and without a discriminator", () => {
+    assert.strictEqual(isPromptStep({ type: "prompt", prompt: "hello" }), true);
+    assert.strictEqual(isPromptStep({ prompt: "legacy" }), true);
+    assert.strictEqual(
+      isPromptStep({ type: "script", script: "echo hi" }),
+      false
+    );
+  });
+
+  test("assertNever reports the unexpected value and context", () => {
+    assert.throws(
+      () => assertNever("workflow" as never, "step kind"),
+      /step kind.*workflow/
+    );
+  });
+});
+
+suite("step kind branching policy", () => {
+  test("does not add bare isScriptStep ternaries in core or type modules", () => {
+    const root = path.resolve(__dirname, "../../..");
+    const sourceDirs = ["src/core", "src/types"];
+    const allowList = new Set<string>();
+    const findings: string[] = [];
+
+    for (const directory of sourceDirs) {
+      for (const filename of fs.readdirSync(path.join(root, directory))) {
+        if (!filename.endsWith(".ts")) continue;
+        const sourcePath = path.join(root, directory, filename);
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const pattern = /isScriptStep\s*\([^)]*\)\s*\?/g;
+        for (const match of source.matchAll(pattern)) {
+          const line = source.slice(0, match.index).split("\n").length;
+          const site = `${directory}/${filename}:${line}`;
+          if (!allowList.has(site)) findings.push(site);
+        }
+      }
+    }
+
+    assert.deepStrictEqual(findings, []);
   });
 });
 

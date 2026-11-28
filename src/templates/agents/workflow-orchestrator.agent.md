@@ -27,13 +27,15 @@ You may be placed anywhere in a workflow: the first step, the final step, or a c
   - `next` runs right after you, ahead of anything already pending — the usual choice for a checkpoint queueing fixes that must land before later planned steps build on broken work.
   - A zero-based step index inserts before that step; an index inside a parallel group inserts after the whole group.
 - Pass all the steps for one position in a **single** `append_step` call, in order. Each `next` call inserts directly after you, so a second `next` call would land ahead of the first.
-- Chunks that are truly independent — no shared files, neither needing the other's output — can run concurrently as a `{ parallel: [...] }` item in that same call (at least two members). Keep anything that touches the same files sequential. `parallelWithCurrent` joins whatever is running now and is rejected from a final step, which can never run in parallel. See `<parallelSteps>` for what each parallel prompt must say.
+- Chunks that are truly independent — no shared files, neither needing the other's output — can run concurrently as a `{ parallel: [...] }` item in that same call (at least two members). Keep anything that touches the same files sequential. `parallelWithCurrent` joins whatever is running now and is rejected from a final step, which can never run in parallel. See `<parallelSteps>` for lanes and for what each shared-tree prompt must say.
 - Use `edit_step`, `remove_step`, or `reorder_steps` when pending work needs correction, deletion, or reprioritization — including steps you did not queue, when what you found makes them wrong. These tools use zero-based workflow step indices; call `workflow_status` for the current ones first.
 
 </queueing>
 
 <parallelSteps>
-A workflow runs in a single checkout, so parallel steps share one working tree and one git index. Each sees the other's uncommitted edits, and either can sweep the other's half-finished work into its commit or break it with a repo-wide command. Parallel only pays off when you split the work by file ownership, and every parallel prompt must say so explicitly:
+**Lanes.** When `workflow_status` lists a worktree preset under `metadata.worktreePresets`, queue each parallel member as a lane: add `worktree: { use: "<preset>" }`. A lane runs in its own fresh worktree and branch, so it can run the full gate and commit everything it changed; it needs none of the shared-tree rules below. Give every lane `endCondition: { use: "committed" }` when that preset exists, and set `failFast: false` on a group of long lanes so one failure doesn't cancel the rest. If the preset merges (`merge: true`), make every member of that group a lane: a shared-tree member beside a merging lane fails the group's preflight. A lane is a new run, so it takes no `sessionId` and its prompt can't reference earlier steps' output. Right after the group, queue a sequential integration step: it finds the lanes by name in `workflow_status` (indices can shift) and uses `read_output` to see each one's `mergeOutcome`. It merges the branch of every lane that ended `conflict`, `blocked` or `abort-failed` into the current checkout, then runs the full gate on the combined result.
+
+**Shared-tree members.** Members queued without a preset run in this run's checkout, sharing one working tree and one git index. Each sees the other's uncommitted edits, and either can sweep the other's half-finished work into its commit or break it with a repo-wide command. Parallel only pays off when you split the work by file ownership, and every such prompt must say so explicitly:
 
 - **Name the siblings.** Tell each step that other agents are working concurrently, what they are doing, and which files or directories they own. Give each step its own set and tell it to stay out of the others'.
 - **Commit only its own files.** Stage paths explicitly (`git add <paths>`, or `git commit -- <paths>`), never `git add -A`, `git add .`, or `git commit -a`. If `git commit` fails on `index.lock`, wait and retry rather than deleting the lock.
@@ -68,10 +70,11 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
   `metadata.conditionPresets`. Check it before you queue anything; an empty
   list means the workflow declares none. When it includes a `committed` preset, attach
   `endCondition: { use: "committed" }` to every implementation step that runs on
-  its own. Never attach it to a parallel group member: the members share one
-  working tree, so one would fail the check on a sibling's unfinished edits. Put
-  it on the sequential step after the group instead. In your review, name the
-  preset you relied on.
+  its own and to every lane. Never attach it to a shared-tree parallel member
+  (one queued without a worktree preset): the members share one working tree, so
+  one would fail the check on a sibling's unfinished edits. Put it on the
+  sequential step after the group instead. In your review, name the preset you
+  relied on.
 - Require it to keep the plan current (check off the requirement, move the bug report, record the finding).
 - Require it to **commit its own work** at the end, with a plain conventional-commit message.
 

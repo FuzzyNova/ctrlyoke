@@ -23,12 +23,12 @@ finalStep:
 ## Main workflow building blocks
 
 - root-level execution defaults such as `harness`, `model`, and `toolPermissions`
-- a `steps` array containing prompt steps, script steps, and `parallel` groups
+- a `steps` array containing prompt steps, script steps, sub-workflow steps, and `parallel` groups
 - an optional `finalStep`
 - runtime metadata added automatically during execution
 
-A one-step workflow can also skip `steps` and put a single prompt step (or a
-`type: script` step) directly at the root:
+A one-step workflow can also skip `steps` and put a single prompt, script, or
+sub-workflow step directly at the root:
 
 ```yaml
 harness: claude-cli
@@ -41,6 +41,7 @@ Read the format-specific pages next:
 - [JSON format](/workflows/json-format)
 - [Prompt Markdown format](/workflows/prompt-md-format)
 - [Script steps](/workflows/script-steps)
+- [Sub-workflow steps](/workflows/sub-workflow-steps)
 - [Parallel steps](/workflows/parallel-steps)
 - [Context references](/workflows/context-files)
 - [Agents and skills](/workflows/agents-and-skills)

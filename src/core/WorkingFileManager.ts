@@ -15,6 +15,7 @@ import type {
   ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "../types/SubWorkflowTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
@@ -922,7 +923,8 @@ export class WorkingFileManager {
   public async promoteToNewRun(
     workspaceFolderPath: string,
     workflowKey: WorkflowKey,
-    startedAt: number
+    startedAt: number,
+    parentRun?: SubWorkflowParentLink
   ): Promise<{
     workingFilePath: string;
     runRef: RunRef;
@@ -997,7 +999,8 @@ export class WorkingFileManager {
         workingFile.finalStep,
         workingFile.worktree,
         workingFile.parallelGroups
-      )
+      ),
+      parentRun
     );
     await WorkingFileManager.publishAnchoredRun(
       workspaceFolderPath,

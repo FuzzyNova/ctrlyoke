@@ -10,7 +10,8 @@
  * Environment Variables:
  *   CTRLYOKE_WORKSPACE - ctrlyoke state root (defaults to cwd; not the checkout)
  *   CTRLYOKE_WORKSPACE_ROOT - ctrlyoke state root used by hook processes
- *   CTRLYOKE_EXECUTION_ROOT - checkout root used by coordination tools
+ *   CTRLYOKE_EXECUTION_ROOT - the run's checkout root, used by coordination
+ *     tools and the merge-lane checks (`--execution-root` in `--tool` mode)
  *   CTRLYOKE_WORKING_FILE - attached run file for run-scoped tools
  *   CTRLYOKE_PARTICIPANT_LABEL - self-chosen label for external participants
  */
@@ -18,6 +19,7 @@
 import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
 import { toError } from "./utils/ErrorUtils";
 import { queueTargetKey } from "./utils/OutputTargetKeys";
+import { getWorkflowStepText } from "./types/CtrlYokeTypes";
 ensureMinFsThreadpoolSize(64);
 
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
@@ -36,12 +38,88 @@ import { isRecord } from "./utils/ctrlyokeToolViews/shared";
 import * as path from "path";
 import type {
   PromptStep,
+  SubWorkflowStep,
   WorkflowStep,
   WorkingFile,
+  WorkingFileWorktreeRuntime,
   CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
-import { isScriptStep } from "./types/CtrlYokeTypes";
+import type { WorkflowRunManifest } from "./types/WorkflowTimelineTypes";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+  isSubWorkflowStep,
+} from "./types/CtrlYokeTypes";
 import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
+
+function stepContentPreview(step: WorkflowStep, preview: string) {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      if (!isScriptStep(step)) return {};
+      return { type: STEP_TYPES.SCRIPT, script: preview };
+    case STEP_TYPES.PROMPT:
+      return isPromptStep(step) ? { prompt: preview } : {};
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step)
+        ? { type: STEP_TYPES.WORKFLOW, workflow: preview }
+        : {};
+    default:
+      return assertNever(stepType);
+  }
+}
+
+function stepOutputContent(step: WorkflowStep) {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      if (!isScriptStep(step)) return {};
+      return { type: STEP_TYPES.SCRIPT, script: step.script };
+    case STEP_TYPES.PROMPT:
+      return isPromptStep(step) ? { prompt: step.prompt } : {};
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step)
+        ? { workflow: getWorkflowStepText(step) }
+        : {};
+    default:
+      return assertNever(stepType);
+  }
+}
+
+function getWorkflowStatusStepText(step: WorkflowStep): string {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      if (!isScriptStep(step)) return "";
+      return step.script;
+    case STEP_TYPES.PROMPT:
+      if (!isPromptStep(step)) return "";
+      return step.prompt;
+    case STEP_TYPES.WORKFLOW:
+      return isSubWorkflowStep(step) ? getWorkflowStepText(step) : "";
+    default:
+      return assertNever(stepType);
+  }
+}
+
+function getWorkflowStatusTruncation(
+  stepType: ReturnType<typeof getStepType>,
+  isTruncated: boolean
+): { scriptTruncated?: true; promptTruncated?: true } {
+  if (!isTruncated) return {};
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return { scriptTruncated: true };
+    case STEP_TYPES.PROMPT:
+      return { promptTruncated: true };
+    case STEP_TYPES.WORKFLOW:
+      return {};
+    default:
+      return assertNever(stepType);
+  }
+}
 import {
   CTRLYOKE_SETTINGS_DEFAULTS,
   type RunHistoryLocation,
@@ -98,6 +176,7 @@ import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import {
   getReorderableStepIndices,
   RunContinuationService,
+  type RunStepChange,
 } from "./core/orchestration/RunContinuationService";
 import { withWarning } from "./core/StepReferenceShifts";
 import {
@@ -105,6 +184,8 @@ import {
   type ResolvedParallelItem,
 } from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
+import { buildPriorContextXmlFromItems } from "./core/HarnessIntegration";
+import type { PriorContextItem } from "./core/HarnessIntegration";
 import { getStepOutputText } from "./utils/StepOutputText";
 import {
   pageOutputText,
@@ -164,6 +245,7 @@ import {
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_STEP_UPDATE_FIELDS,
+  MCP_STEP_WORKTREE_FIELD,
   MCP_TOOL_DEFINITIONS,
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
@@ -172,8 +254,10 @@ import {
   type McpAppendStepResult,
   type McpClaimPathsArguments,
   type McpEditStepArguments,
+  type McpWorktreePresetUse,
   type McpGlobalStatusArguments,
   type McpReadOutputArguments,
+  type McpWorkflowStatusArguments,
   type McpReadNotesArguments,
   type McpRemoveStepArguments,
   type McpReorderStepsArguments,
@@ -188,12 +272,27 @@ import {
   summarizeMcpConditionPresets,
 } from "./utils/McpConditionPresetResolver";
 import {
+  agentLaneParts,
+  type AgentLaneParts,
+  laneOrPromptStep,
+  materializeMcpWorktreePreset,
+  summarizeMcpWorktreePresets,
+  wrapPromptStepAsLane,
+} from "./utils/McpWorktreePresetResolver";
+import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
 } from "./utils/CoordinationAttribution";
 import { CTRLYOKE_VERSION } from "./utils/BuildConfig";
-import { PromptFileParser } from "./core/PromptFileParser";
+import {
+  inlineRunBoundaryErrors,
+  PromptFileParser,
+} from "./core/PromptFileParser";
 import { RunMetadataScanner } from "./core/orchestration/RunMetadataScanner";
+import {
+  selectLatestSubWorkflowSettlements,
+  type SubWorkflowSettlement,
+} from "./core/orchestration/SubWorkflowSettlements";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "./types/OutputHistoryTypes";
 import { getErrorMessage, hasErrnoCode } from "./utils/ErrorUtils";
@@ -452,26 +551,119 @@ function materializeConditionUpdates(
   };
 }
 
-/** Offsets, within the flattened append, of the steps not in a parallel group. */
-function sequentialAppendOffsets(
-  items: readonly (McpAppendStepInput | { parallel: unknown[] })[]
-): number[] {
-  const offsets: number[] = [];
+/**
+ * Offsets, within the flattened append, of the steps the ungated-step warning
+ * considers. Sequential steps and lanes count; a plain member of a parallel
+ * group, or a plain step joining the running group, does not, because it
+ * shares one working tree with its siblings, where a clean-tree preset would
+ * fail on their edits. A lane has its own worktree wherever it runs.
+ */
+function gateableAppendOffsets(
+  items: readonly (McpAppendStepInput | { parallel: McpAppendStepInput[] })[],
+  joinsRunningGroup: boolean
+): { steps: number[]; lanes: number[] } {
+  const steps: number[] = [];
+  const lanes: number[] = [];
   let offset = 0;
   for (const item of items) {
-    if ("parallel" in item) {
-      offset += item.parallel.length;
-    } else {
-      offsets.push(offset);
+    const members = "parallel" in item ? item.parallel : [item];
+    const inGroup = "parallel" in item || joinsRunningGroup;
+    for (const member of members) {
+      if (member.worktree) lanes.push(offset);
+      else if (!inGroup) steps.push(offset);
       offset += 1;
     }
   }
-  return offsets;
+  return { steps, lanes };
 }
 
+/** A running workflow step's child, as `workflow_status` reports it. */
+interface McpLiveChildRun {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  executionState?: ExecutionState;
+  worktree?: Pick<WorkingFileWorktreeRuntime, "mode" | "branchName">;
+}
+
+/**
+ * The edit_step change for a lane, or for a prompt step being wrapped into one
+ * (D14). The lane is taken apart into its prompt step, the updates and clears
+ * apply to that as to any prompt step, and the result is wrapped again with
+ * the new preset's copy when `worktree` names one, otherwise the lane's own
+ * copy, unless `unwrap` leaves it a plain prompt step. The change replaces the
+ * whole step; fields the new step no longer has are cleared so a same-kind
+ * merge cannot keep them.
+ */
+function laneEditChange(
+  workingFile: WorkingFile,
+  existingStep: WorkflowStep,
+  lane: AgentLaneParts | undefined,
+  updates: Omit<McpEditStepArguments["updates"], "worktree">,
+  clearProperties: string[] | undefined,
+  worktree: McpWorktreePresetUse | undefined,
+  unwrap: boolean
+): RunStepChange {
+  const promptStep = mergeWorkflowStepUpdate(
+    lane?.promptStep ?? existingStep,
+    materializeConditionUpdates(workingFile, updates),
+    clearProperties
+  ) as PromptStep;
+  const preset = unwrap
+    ? undefined
+    : worktree
+      ? materializeMcpWorktreePreset(workingFile, worktree)
+      : lane?.worktree;
+  const nextStep = preset
+    ? wrapPromptStepAsLane(promptStep, preset)
+    : promptStep;
+  if (isSubWorkflowStep(nextStep)) {
+    const boundaryErrors = inlineRunBoundaryErrors(nextStep, "worktree");
+    if (boundaryErrors.length > 0) {
+      throw new Error(boundaryErrors.join("; "));
+    }
+  }
+  // A kind change replaces the step outright; a same-kind replace merges.
+  const removed =
+    getStepType(existingStep) === getStepType(nextStep)
+      ? Object.keys(existingStep).filter(
+          (key) =>
+            key !== "_runtime" &&
+            !Object.prototype.hasOwnProperty.call(nextStep, key)
+        )
+      : [];
+  return {
+    replace: nextStep,
+    ...(removed.length > 0 ? { clearProperties: removed } : {}),
+  };
+}
+
+/**
+ * Build the step an `append_step` item queues: a prompt step with its
+ * condition presets resolved, wrapped into a lane (D14) when the item names a
+ * worktree preset. Conditions resolve first, so a lane carries them inside
+ * its inline definition.
+ */
 function materializeAppendStep(
   workingFile: WorkingFile,
   step: McpAppendStepInput
+): PromptStep | SubWorkflowStep {
+  const { worktree, ...promptInput } = step;
+  const promptStep = materializeAppendPromptStep(workingFile, promptInput);
+  if (!worktree) return promptStep;
+  const lane = wrapPromptStepAsLane(
+    promptStep,
+    materializeMcpWorktreePreset(workingFile, worktree)
+  );
+  const boundaryErrors = inlineRunBoundaryErrors(lane, "worktree");
+  if (boundaryErrors.length > 0) {
+    throw new Error(boundaryErrors.join("; "));
+  }
+  return lane;
+}
+
+function materializeAppendPromptStep(
+  workingFile: WorkingFile,
+  step: Omit<McpAppendStepInput, "worktree">
 ): PromptStep {
   const { endCondition, preCondition, ...stepFields } = step;
   return {
@@ -532,7 +724,7 @@ function executionModeWarnings(
   workingFile: WorkingFile
 ): string[] {
   const hasCodexInteractiveStep = steps.some((step) => {
-    if (isScriptStep(step)) return false;
+    if (!isPromptStep(step)) return false;
     return (
       SettingsPropertyResolver.resolveHarnessValue(
         step.harness,
@@ -705,7 +897,7 @@ export class CtrlYokeMCPServer {
     const call = validateMcpToolCall(name, args);
     switch (call.name) {
       case MCP_WORKFLOW_STATUS_TOOL_NAME:
-        return this.handleWorkflowStatus();
+        return this.handleWorkflowStatus(call.args);
       case MCP_APPEND_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleAppendStep(call.args));
       case MCP_EDIT_STEP_TOOL_NAME:
@@ -769,9 +961,23 @@ export class CtrlYokeMCPServer {
     }
   }
 
-  private async resolveExecutionRoot(): Promise<string> {
+  /**
+   * The attached run's execution root as ctrlyoke set it, or undefined when
+   * it did not. ctrlyoke sets `CTRLYOKE_EXECUTION_ROOT` in the stdio server
+   * entry it launches the harness with, and in skill mode from
+   * `--execution-root` only (`runMcpToolCli` drops any other value). Never
+   * guessed from the cwd: without it the merge-lane checks read the run's
+   * root from the run file, and `resolveExecutionRoot` (coordination) falls
+   * back to the run file and then the cwd.
+   */
+  private launchedExecutionRoot(): string | undefined {
     const configuredRoot = process.env.CTRLYOKE_EXECUTION_ROOT?.trim();
-    if (configuredRoot) return path.resolve(configuredRoot);
+    return configuredRoot ? path.resolve(configuredRoot) : undefined;
+  }
+
+  private async resolveExecutionRoot(): Promise<string> {
+    const configuredRoot = this.launchedExecutionRoot();
+    if (configuredRoot) return configuredRoot;
 
     const workingFilePath = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     if (workingFilePath) {
@@ -1258,11 +1464,51 @@ export class CtrlYokeMCPServer {
   }
 
   /**
+   * The identity and live state of a running sub-workflow step's child, read
+   * from the child's own run file. A child whose file cannot be read yet
+   * (still starting) is reported by identity alone.
+   */
+  private async readLiveChildRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<McpLiveChildRun> {
+    const childRun: McpLiveChildRun = { workflowKey, runRef };
+    try {
+      const child = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.runFilePath(this.workspaceRoot, workflowKey, runRef),
+          "utf8"
+        )
+      ) as WorkingFile;
+      const worktree = child._runtime?.worktree;
+      return {
+        ...childRun,
+        ...(child._runtime?.executionState
+          ? { executionState: child._runtime.executionState }
+          : {}),
+        ...(worktree
+          ? {
+              worktree: {
+                mode: worktree.mode,
+                branchName: worktree.branchName,
+              },
+            }
+          : {}),
+      };
+    } catch {
+      return childRun;
+    }
+  }
+
+  /**
    * Handle workflow_status tool invocation
    * Returns queue metadata and a one-row summary per step
    */
-  private async handleWorkflowStatus() {
-    const selected = await this.resolveRun(MCP_WORKFLOW_STATUS_TOOL_NAME);
+  private async handleWorkflowStatus(args: McpWorkflowStatusArguments) {
+    const selected = await this.resolveSelectedRun(
+      MCP_WORKFLOW_STATUS_TOOL_NAME,
+      args.run
+    );
     const workingFile = selected.filePath;
 
     const queueData = await this.readAttachedRun(
@@ -1284,17 +1530,19 @@ export class CtrlYokeMCPServer {
       runtime.finalStep?.phase
     );
     let workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
+    let subWorkflowSettlements: SubWorkflowSettlement[] = [];
     try {
-      workspaceSnapshots =
-        await new RunMetadataScanner().findLatestQueueWorkspaceSnapshots(
+      ({ workspaceSnapshots, subWorkflowSettlements } =
+        await new RunMetadataScanner().scanQueueStatusMetadata(
           WorkflowPaths.manifestPath(
             this.workspaceRoot,
             selected.workflowKey,
             selected.runRef
           )
-        );
+        ));
     } catch {
-      // Git outcome is advisory; status stays available if history is missing.
+      // Git outcomes and child links are advisory; status stays available if
+      // history is missing.
     }
     let schemaWarnings: WorkflowValidationWarning[] = [];
     const workflowDescriptor = await lineageRepository.readDescriptor(
@@ -1327,35 +1575,56 @@ export class CtrlYokeMCPServer {
     const workflowExecutionMode =
       queueData.executionMode ??
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode;
+    const { queue: subWorkflowOutputs, finalStep: finalStepSubWorkflow } =
+      selectLatestSubWorkflowSettlements(subWorkflowSettlements, {
+        steps: allSteps,
+        finalStep: queueData.finalStep,
+        finalStepRuntime: runtime.finalStep,
+      });
+    // A workflow step whose child is still running has no settlement yet;
+    // report the child it launched, with that child's own live state.
+    const liveChildRuns = new Map<number, McpLiveChildRun>();
+    await Promise.all(
+      allSteps.map(async (step, index) => {
+        if (!isSubWorkflowStep(step)) return;
+        const child = step._runtime;
+        if (
+          child?.startedAt === undefined ||
+          child.completedAt !== undefined ||
+          !child.childWorkflowKey ||
+          !child.childRunRef
+        ) {
+          return;
+        }
+        liveChildRuns.set(
+          index,
+          await this.readLiveChildRun(child.childWorkflowKey, child.childRunRef)
+        );
+      })
+    );
     // One row per step, so a long-running orchestrator's status stays small no
     // matter how many steps it has appended. Full prompts and scripts are a
     // read_output call away.
     const steps = allSteps.map((p, index) => {
-      const scriptStep = isScriptStep(p);
-      const effective = isScriptStep(p)
-        ? undefined
-        : resolveEffectiveStepSettings(p, queueData);
-      const prompt = scriptStep ? p.script : p.prompt;
+      const stepType = getStepType(p);
+      const effective = isPromptStep(p)
+        ? resolveEffectiveStepSettings(p, queueData)
+        : undefined;
+      const prompt = getWorkflowStatusStepText(p);
       const preview = promptFirstLinePreview(
         prompt,
         STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
       );
       return {
         index,
-        ...(scriptStep
-          ? { type: STEP_TYPES.SCRIPT, script: preview }
-          : { prompt: preview }),
+        ...stepContentPreview(p, preview),
         ...(p.name?.trim() ? { name: p.name.trim() } : {}),
-        ...(preview !== prompt
-          ? scriptStep
-            ? { scriptTruncated: true }
-            : { promptTruncated: true }
-          : {}),
+        ...getWorkflowStatusTruncation(stepType, preview !== prompt),
         status: stepStatuses[index],
         ...((stepStatuses[index] === STEP_STATUS.COMPLETED ||
           stepStatuses[index] === STEP_STATUS.FAILED ||
           stepStatuses[index] === STEP_STATUS.CANCELLED) &&
-        !scriptStep &&
+        isPromptStep(p) &&
         workspaceSnapshots.get(index)?.gitOutcome
           ? { gitOutcome: workspaceSnapshots.get(index)?.gitOutcome }
           : {}),
@@ -1365,8 +1634,27 @@ export class CtrlYokeMCPServer {
         harness: effective?.harness,
         executionMode: effective?.executionMode,
         model: effective?.model,
-        sessionId: scriptStep ? null : (p.sessionId ?? null),
+        sessionId: isPromptStep(p) ? (p.sessionId ?? null) : null,
         resumeSession: effective?.resumeSession ?? false,
+        ...(liveChildRuns.has(index)
+          ? { childRun: liveChildRuns.get(index) }
+          : getStepType(p) === STEP_TYPES.WORKFLOW &&
+              subWorkflowOutputs.has(index)
+            ? (() => {
+                const output = subWorkflowOutputs.get(index)!;
+                return {
+                  childRun: {
+                    ...(output.childWorkflowKey !== undefined
+                      ? { workflowKey: output.childWorkflowKey }
+                      : {}),
+                    ...(output.childRunRef !== undefined
+                      ? { runRef: output.childRunRef }
+                      : {}),
+                    outcome: output.outcome,
+                  },
+                };
+              })()
+            : {}),
       };
     });
 
@@ -1404,12 +1692,31 @@ export class CtrlYokeMCPServer {
           queueData,
           ConfigurationUtils.getDefaultMaxRetries()
         ),
+        worktreePresets: summarizeMcpWorktreePresets(queueData),
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,
         descriptorRevision: selected.descriptorRevision,
       },
       steps,
+      ...(finalStepSubWorkflow
+        ? {
+            finalStep: {
+              pass: finalStepSubWorkflow.passNumber,
+              childRun: {
+                ...(finalStepSubWorkflow.output.childWorkflowKey !== undefined
+                  ? {
+                      workflowKey: finalStepSubWorkflow.output.childWorkflowKey,
+                    }
+                  : {}),
+                ...(finalStepSubWorkflow.output.childRunRef !== undefined
+                  ? { runRef: finalStepSubWorkflow.output.childRunRef }
+                  : {}),
+                outcome: finalStepSubWorkflow.output.outcome,
+              },
+            },
+          }
+        : {}),
       schemaWarnings,
     };
 
@@ -1514,9 +1821,15 @@ export class CtrlYokeMCPServer {
     const requestedSteps = resolvedItems.flatMap((item) =>
       "parallel" in item ? item.parallel : [item]
     );
+    // A lane's inline prompt step inherits the parent's root (D13), so its
+    // effective harness, model and grants resolve exactly as an unwrapped
+    // step's would.
+    const appendedPromptSteps = flattened.topology.steps.flatMap(
+      (step) => laneOrPromptStep(step) ?? []
+    );
 
     await this.validateStepHarnessAndModelCapabilities(
-      flattened.topology.steps,
+      appendedPromptSteps,
       attachedRun.harness
     );
 
@@ -1535,7 +1848,8 @@ export class CtrlYokeMCPServer {
           globalMaxSteps,
           lineageRepository,
           position,
-          getMaxParallelSteps()
+          getMaxParallelSteps(),
+          this.launchedExecutionRoot()
         );
       updatedWorkingFile = joined.workingFile;
       response = {
@@ -1604,7 +1918,7 @@ export class CtrlYokeMCPServer {
     }
 
     const executionWarnings = executionModeWarnings(
-      flattened.topology.steps,
+      appendedPromptSteps,
       updatedWorkingFile
     );
     if (executionWarnings.length > 0) {
@@ -1614,39 +1928,50 @@ export class CtrlYokeMCPServer {
     response.effectiveSettings = requestedSteps.map((requested, offset) => {
       const index = response!.insertIndex + offset;
       const addedStep = updatedWorkingFile!.steps?.[index];
-      if (!addedStep || isScriptStep(addedStep)) {
+      const promptStep = addedStep ? laneOrPromptStep(addedStep) : undefined;
+      if (!promptStep) {
         throw new Error(
           `Failed to resolve effective settings for appended step at index ${index}`
         );
       }
       return {
         index,
-        ...resolveEffectiveStepSettings(addedStep, updatedWorkingFile!),
+        ...resolveEffectiveStepSettings(promptStep, updatedWorkingFile!),
         ...(requested.endCondition
           ? { endConditionPreset: requested.endCondition.use }
           : {}),
         ...(requested.preCondition
           ? { preConditionPreset: requested.preCondition.use }
           : {}),
+        ...(requested.worktree
+          ? { worktreePreset: requested.worktree.use }
+          : {}),
       };
     });
 
     // A caller that never saw the workflow's presets cannot know it skipped a
-    // gate it was expected to attach. Parallel members are left out: they
-    // share one working tree, so a clean-tree preset would fail on a
-    // sibling's edits, and leaving them ungated is the right default.
+    // gate it was expected to attach. A workflow-level end condition already
+    // gates every appended step, lanes included (D13 inherits it).
+    const isUngated = (offset: number) => {
+      const added = updatedWorkingFile!.steps?.[response!.insertIndex + offset];
+      return (
+        added !== undefined &&
+        laneOrPromptStep(added)?.endCondition === undefined
+      );
+    };
+    const gateable =
+      updatedWorkingFile.endCondition === undefined
+        ? gateableAppendOffsets(
+            resolvedItems,
+            position === QUEUE_POSITION.PARALLEL_WITH_CURRENT
+          )
+        : { steps: [], lanes: [] };
+    const toIndices = (offsets: number[]) =>
+      offsets.filter(isUngated).map((offset) => response!.insertIndex + offset);
     const ungatedPresetWarning = formatUngatedAppendedStepsWarning(
       updatedWorkingFile,
-      position === QUEUE_POSITION.PARALLEL_WITH_CURRENT ||
-        updatedWorkingFile.endCondition !== undefined
-        ? []
-        : sequentialAppendOffsets(resolvedItems)
-            .map((offset) => response!.insertIndex + offset)
-            .filter(
-              (index) =>
-                (updatedWorkingFile!.steps?.[index] as PromptStep | undefined)
-                  ?.endCondition === undefined
-            )
+      toIndices(gateable.steps),
+      toIndices(gateable.lanes)
     );
     if (ungatedPresetWarning) {
       response.warning = [response.warning, ungatedPresetWarning]
@@ -1658,7 +1983,7 @@ export class CtrlYokeMCPServer {
     // tell the appending agent now instead of letting the step fail at
     // dispatch with nobody listening.
     const unapprovedSecretGrants = findUnapprovedStepSecretGrants(
-      flattened.topology.steps,
+      appendedPromptSteps,
       updatedWorkingFile,
       this.workspaceRoot
     );
@@ -1685,6 +2010,17 @@ export class CtrlYokeMCPServer {
   /** Handle edit_step for a zero-based pending step index. */
   private async handleStepEdit(args: McpEditStepArguments) {
     const { index, updates, clearProperties } = args;
+    const { worktree: worktreeUpdate, ...stepUpdates } = updates;
+    const clearsWorktree =
+      clearProperties?.includes(MCP_STEP_WORKTREE_FIELD) ?? false;
+    const otherClears = clearProperties?.filter(
+      (property) => property !== MCP_STEP_WORKTREE_FIELD
+    );
+    if (worktreeUpdate && clearsWorktree) {
+      throw new Error(
+        `${MCP_EDIT_STEP_TOOL_NAME}: set updates.worktree to switch a lane's preset, or clear worktree to unwrap it, not both.`
+      );
+    }
     if (
       Object.prototype.hasOwnProperty.call(updates, "additionalArgs") ||
       clearProperties?.includes("additionalArgs")
@@ -1717,6 +2053,7 @@ export class CtrlYokeMCPServer {
       selected.filePath
     );
     const existingStep = workingFile.steps?.[index];
+    let change: RunStepChange | undefined;
     if (existingStep) {
       if (isScriptStep(existingStep)) {
         const allowedScriptStepFields = new Set<string>([
@@ -1745,13 +2082,42 @@ export class CtrlYokeMCPServer {
           );
         }
       }
+      const lane = agentLaneParts(existingStep);
+      if (isSubWorkflowStep(existingStep) && !lane) {
+        throw new Error(
+          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} is a workflow step without a lane's shape, so it cannot be edited through MCP. ${MCP_EDIT_STEP_TOOL_NAME} edits prompt steps and lanes: a workflow step whose inline prompt step has a managed worktree and no onFail. A file reference, an inline script, a child with onFail or a child without a managed worktree cannot be edited here.`
+        );
+      }
+      if (clearsWorktree && !lane) {
+        throw new Error(
+          `${MCP_EDIT_STEP_TOOL_NAME}: step ${index} is not a lane, so it has no worktree to clear.`
+        );
+      }
+      if (lane || worktreeUpdate) {
+        change = laneEditChange(
+          workingFile,
+          existingStep,
+          lane,
+          stepUpdates,
+          otherClears,
+          worktreeUpdate,
+          clearsWorktree
+        );
+      }
+      change ??= {
+        updates: materializeConditionUpdates(workingFile, stepUpdates),
+        clearProperties,
+      };
       const effectiveStep = mergeWorkflowStepUpdate(
         existingStep,
-        materializeConditionUpdates(workingFile, updates),
-        clearProperties
+        "replace" in change
+          ? change.replace
+          : (change.updates as Partial<WorkflowStep>),
+        change.clearProperties
       );
+      const effectivePromptStep = laneOrPromptStep(effectiveStep);
       await this.validateStepHarnessAndModelCapabilities(
-        [effectiveStep],
+        effectivePromptStep ? [effectivePromptStep] : [effectiveStep],
         workingFile.harness
       );
     }
@@ -1760,17 +2126,21 @@ export class CtrlYokeMCPServer {
       selected.workflowKey,
       selected.runRef,
       index,
-      {
-        updates: materializeConditionUpdates(workingFile, updates),
+      change ?? {
+        updates: materializeConditionUpdates(workingFile, stepUpdates),
         clearProperties,
       },
       target.definitionRevision,
       lineageRepository,
-      target.allowInterruptedRun
+      target.allowInterruptedRun,
+      this.launchedExecutionRoot()
     );
-    const effectiveStep = edited.workingFile.steps?.[index];
-    const warnings = effectiveStep
-      ? executionModeWarnings([effectiveStep], edited.workingFile)
+    const editedStep = edited.workingFile.steps?.[index];
+    const editedPromptStep = editedStep
+      ? laneOrPromptStep(editedStep)
+      : undefined;
+    const warnings = editedPromptStep
+      ? executionModeWarnings([editedPromptStep], edited.workingFile)
       : [];
     return this.mutationResponse(
       MCP_EDIT_STEP_TOOL_NAME,
@@ -1945,7 +2315,7 @@ export class CtrlYokeMCPServer {
     const capabilities = await this.readCapabilities();
 
     for (const step of steps) {
-      if (isScriptStep(step)) continue;
+      if (!isPromptStep(step)) continue;
       const effectiveHarness = SettingsPropertyResolver.resolveHarnessValue(
         (step as PromptStep).harness,
         workflowHarness
@@ -1960,7 +2330,7 @@ export class CtrlYokeMCPServer {
     if (!capabilities) return;
 
     for (const step of steps) {
-      if (isScriptStep(step)) continue;
+      if (!isPromptStep(step)) continue;
       const promptStep = step as PromptStep;
       const effectiveHarness = SettingsPropertyResolver.resolveHarnessValue(
         promptStep.harness,
@@ -2032,6 +2402,10 @@ export class CtrlYokeMCPServer {
   }
 
   /**
+   * Settled child metadata per queue step index for one run, from its timeline.
+   * Missing or unreadable history yields an empty map, so callers just omit it.
+   */
+  /**
    * Handle read_output tool invocation.
    * Returns AI response text from completed prompts.
    */
@@ -2039,7 +2413,10 @@ export class CtrlYokeMCPServer {
     args: McpReadOutputArguments,
     context: McpToolCallingContext
   ) {
-    const selected = await this.resolveRun(MCP_READ_OUTPUT_TOOL_NAME);
+    const selected = await this.resolveSelectedRun(
+      MCP_READ_OUTPUT_TOOL_NAME,
+      args.run
+    );
     const workingFile = selected.filePath;
 
     const queueData = await this.readAttachedRun(
@@ -2060,19 +2437,25 @@ export class CtrlYokeMCPServer {
       runtime.finalStep?.phase
     );
 
+    const attachedAddress = this.requireRunAddress(MCP_READ_OUTPUT_TOOL_NAME);
+    // Parallel sub-workflow members do not exist yet; rounds 6–7 must restrict
+    // a group member to runs its own step started.
+    const groupBoundary =
+      selected.workflowKey === attachedAddress.workflowKey &&
+      selected.runRef === attachedAddress.runRef
+        ? context.groupStartBoundary
+        : undefined;
     const defaultIndices =
-      context.groupStartBoundary === undefined
+      groupBoundary === undefined
         ? allSteps.map((_, i) => i)
-        : allSteps
-            .map((_, i) => i)
-            .filter((index) => index < context.groupStartBoundary!);
+        : allSteps.map((_, i) => i).filter((index) => index < groupBoundary!);
     const requestedIndices: number[] =
       args.indices !== undefined && args.indices.length > 0
         ? args.indices
         : defaultIndices;
     if (
-      context.groupStartBoundary !== undefined &&
-      requestedIndices.some((index) => index >= context.groupStartBoundary!)
+      groupBoundary !== undefined &&
+      requestedIndices.some((index) => index >= groupBoundary)
     ) {
       throw new Error(
         `${MCP_READ_OUTPUT_TOOL_NAME}: group members may only read output before the group's start boundary`
@@ -2105,34 +2488,64 @@ export class CtrlYokeMCPServer {
             .map((stepIndex) => ({ kind: "queue" as const, stepIndex }))
         )
       : new Map();
-    const outputs = requestedIndices
-      .filter((i) => i >= 0 && i < allSteps.length)
-      .map((i) => {
-        const p = allSteps[i];
-        const resolvedOutput = resolved.get(queueTargetKey(i));
-        const fullResponseText = resolvedOutput
-          ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
-          : null;
-        const baseOutput = {
-          index: i,
-          ...(isScriptStep(p)
-            ? { type: STEP_TYPES.SCRIPT, script: p.script }
-            : { prompt: p.prompt }),
-          status: stepStatuses[i],
-          responseText: fullResponseText,
-        };
+    // Settlements only: a streaming scan, not a second output projection.
+    const subWorkflowOutputs = selectLatestSubWorkflowSettlements(
+      selected.runRef
+        ? await new RunMetadataScanner().findSubWorkflowSettlements(
+            WorkflowPaths.manifestPath(
+              this.workspaceRoot,
+              selected.workflowKey,
+              selected.runRef
+            )
+          )
+        : [],
+      { steps: allSteps }
+    ).queue;
+    const outputs = await Promise.all(
+      requestedIndices
+        .filter((i) => i >= 0 && i < allSteps.length)
+        .map(async (i) => {
+          const p = allSteps[i];
+          const resolvedOutput = resolved.get(queueTargetKey(i));
+          let workflowItem: PriorContextItem | undefined;
+          const subWorkflowOutput = subWorkflowOutputs.get(i);
+          if (isSubWorkflowStep(p) && subWorkflowOutput) {
+            workflowItem = await resolver.resolveWorkflowPriorContextItem(
+              WorkflowPaths.manifestPath(
+                this.workspaceRoot,
+                selected.workflowKey,
+                selected.runRef
+              ),
+              i,
+              p,
+              subWorkflowOutput,
+              { workspaceRoot: this.workspaceRoot }
+            );
+          }
+          const fullResponseText = workflowItem
+            ? buildPriorContextXmlFromItems([workflowItem])
+            : resolvedOutput
+              ? getStepOutputText(resolvedOutput, StepOutputTextMode.TRANSCRIPT)
+              : null;
+          const baseOutput = {
+            index: i,
+            ...stepOutputContent(p),
+            status: stepStatuses[i],
+            responseText: fullResponseText,
+          };
 
-        if (!paging || fullResponseText === null) {
-          return baseOutput;
-        }
+          if (!paging || fullResponseText === null) {
+            return baseOutput;
+          }
 
-        const page = pageOutputText(fullResponseText, paging);
-        return {
-          ...baseOutput,
-          responseText: page.text,
-          ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
-        };
-      });
+          const page = pageOutputText(fullResponseText, paging);
+          return {
+            ...baseOutput,
+            responseText: page.text,
+            ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+          };
+        })
+    );
 
     return {
       content: [
@@ -2323,6 +2736,75 @@ export class CtrlYokeMCPServer {
       );
     }
     return { workflowKey: address.workflowKey, runRef: address.runRef };
+  }
+
+  /** Resolve either the attached run or a verified descendant shared by read tools. */
+  private async resolveSelectedRun(
+    operation: string,
+    requestedRun?: { workflowKey: string; runRef: string }
+  ): Promise<Awaited<ReturnType<CtrlYokeMCPServer["resolveRun"]>>> {
+    const attached = await this.resolveRun(operation);
+    if (!requestedRun) return attached;
+
+    const scopeMessage = `${operation}: run must be this workflow or a descendant started by one of its sub-workflow steps`;
+    let workflowKey = requestedRun.workflowKey as WorkflowKey;
+    let runRef = requestedRun.runRef as RunRef;
+    const addressKey = (key: string, ref: string) => `${key}\0${ref}`;
+    const seen = new Set<string>();
+    for (let depth = 0; depth < 128; depth++) {
+      const key = addressKey(workflowKey, runRef);
+      if (seen.has(key)) throw new Error(scopeMessage);
+      seen.add(key);
+      if (workflowKey === attached.workflowKey && runRef === attached.runRef) {
+        if (key === addressKey(requestedRun.workflowKey, requestedRun.runRef)) {
+          return attached;
+        }
+        const filePath = WorkflowPaths.runFilePath(
+          this.workspaceRoot,
+          requestedRun.workflowKey as WorkflowKey,
+          requestedRun.runRef as RunRef
+        );
+        let descriptorRevision: number;
+        try {
+          descriptorRevision = (
+            await lineageRepository.readDescriptor(
+              this.workspaceRoot,
+              requestedRun.workflowKey as WorkflowKey
+            )
+          ).revision;
+          await fs.access(filePath);
+        } catch {
+          throw new Error(scopeMessage);
+        }
+        return {
+          workflowKey: requestedRun.workflowKey as WorkflowKey,
+          runRef: requestedRun.runRef as RunRef,
+          filePath,
+          descriptorRevision,
+        };
+      }
+
+      let manifestPath: string;
+      let manifest: WorkflowRunManifest;
+      try {
+        manifestPath = WorkflowPaths.manifestPath(
+          this.workspaceRoot,
+          workflowKey,
+          runRef
+        );
+        manifest = JSON.parse(
+          await fs.readFile(manifestPath, "utf8")
+        ) as WorkflowRunManifest;
+      } catch {
+        throw new Error(scopeMessage);
+      }
+      if (manifest.workflowId !== workflowKey || !manifest.parentRun) {
+        throw new Error(scopeMessage);
+      }
+      workflowKey = manifest.parentRun.workflowKey;
+      runRef = manifest.parentRun.runRef;
+    }
+    throw new Error(scopeMessage);
   }
 
   private async resolveRun(operation: string): Promise<{
@@ -2600,7 +3082,17 @@ async function runMcpToolCli(argv: readonly string[]): Promise<void> {
     process.env.CTRLYOKE_COMMIT_OUTPUT = options.commitOutput;
   }
   process.env[MCP_CLI_MODE_ENV] = MCP_CLI_MODE_VALUE;
-  process.env.CTRLYOKE_EXECUTION_ROOT = options.executionRoot ?? process.cwd();
+  // Only a root ctrlyoke wrote into this command line is the run's root.
+  // ctrlyoke never puts CTRLYOKE_EXECUTION_ROOT in a harness's environment
+  // (only in the stdio MCP server entry), so a value inherited here was not
+  // set for this run, and the agent's shell directory is not the run's root
+  // either: without the flag, the coordination tools resolve it from the run
+  // file and then the cwd, and the merge-lane checks from the run file.
+  if (options.executionRoot !== undefined) {
+    process.env.CTRLYOKE_EXECUTION_ROOT = options.executionRoot;
+  } else {
+    delete process.env.CTRLYOKE_EXECUTION_ROOT;
+  }
   if (options.stepIndex !== undefined) {
     process.env.CTRLYOKE_PROMPT_INDEX = String(options.stepIndex);
   } else {

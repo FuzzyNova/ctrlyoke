@@ -214,6 +214,7 @@ export class RunBundleImporter {
         currentIndex: (definition.steps as unknown[] | undefined)?.length ?? 0,
         startedAt: header.runManifest.startedAt,
         activeExecutionMs: header.runManifest.activeExecutionMs,
+        parentRun: header.runManifest.parentRun,
         provenance,
         ...(header.manifest.continuation
           ? {

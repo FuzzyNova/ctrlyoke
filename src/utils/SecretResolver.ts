@@ -1,4 +1,5 @@
 import {
+  isExecutionStep,
   isScriptStep,
   type ExecutionProperties,
   type McpServerConfig,
@@ -405,6 +406,7 @@ export function getDeclaredSecretGrants(
   step: WorkflowStep,
   workflow: PromptFile
 ): string[] {
+  if (!isExecutionStep(step)) return [];
   // Mirror `select()` in ExecutionPropertyResolver: a step-level value wins
   // whenever it is present, and an explicit `null` clears the inherited array
   // rather than falling back to it. `??` would treat that `null` as "absent"
@@ -463,6 +465,7 @@ function getProcessMaps(
   step: WorkflowStep,
   workflow: PromptFile
 ): Array<Record<string, string> | undefined> {
+  if (!isExecutionStep(step)) return [];
   // Script steps do not run harness hooks or MCP servers, and their
   // pre/end-conditions are not evaluated. Only their own process environment
   // can contribute process-map secret grants.
@@ -537,6 +540,7 @@ export async function preflightWorkflowSecrets(
   // maps really do interpolate, so an ungranted name there stays an error.
   const missingSecrets: ScopedMissingSecret[] = [];
   for (const { step, position } of stepsAwaitingExecution(workflow)) {
+    if (!isExecutionStep(step)) continue;
     const scope = step.name?.trim() || `step ${position}`;
     const grants = getDeclaredSecretGrants(step, workflow);
     const mapNames = getProcessMaps(step, workflow).flatMap((map) =>

@@ -15,6 +15,7 @@ import {
   getBranchUpstreamStatus,
   getUnmergedPaths,
   getWorkingTreeCounts,
+  getWorkingTreeFileCount,
   deleteLocalBranch,
   GitLocationMemo,
   getGitTrackedAndUntrackedFiles,
@@ -37,6 +38,7 @@ import {
   type GitWorkingTreeCounts,
   type GitWorktreeEntry,
 } from "../../utils/GitUtils";
+import { normalizeNamedWorktreeBranch } from "../../utils/BranchName";
 import {
   createManagedBranchName,
   createWorktreeDirectoryName,
@@ -46,9 +48,17 @@ import {
   withWorktreeMutationLock,
   resolveWorktreeDirectory,
   isMainWorktree,
+  worktreePlacementCheckout,
   type WorktreeRootResolution,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import {
+  FileLockAbortedError,
+  FileLockTimeoutError,
+  FileLockUnavailableError,
+  type FileLockOptions,
+} from "../../utils/FileLockUtils";
+import { waitForRetryDelay } from "../../utils/RetryUtils";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
@@ -68,6 +78,8 @@ import {
   type WorktreeManagementAction,
   NODE_ERROR_CODES,
   WORKTREE_MERGE_OUTCOMES,
+  WORKTREE_MERGE_LEASE_WAIT_MS,
+  EXECUTION_LEASE_PURPOSES,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -84,7 +96,9 @@ import {
   type ScriptProcessResult,
 } from "./ScriptProcessRunner";
 import {
+  ExecutionLeaseConflictError,
   ExecutionRootLeaseManager,
+  isSiblingMergeLeaseConflict,
   type ExecutionLeaseHandle,
   type ExecutionLeaseConflict,
   type ExecutionLeaseRequest,
@@ -170,12 +184,108 @@ const MANAGED_CHECKOUT_IDENTITY_MODES = {
 type ManagedCheckoutIdentityMode =
   (typeof MANAGED_CHECKOUT_IDENTITY_MODES)[keyof typeof MANAGED_CHECKOUT_IDENTITY_MODES];
 
+/**
+ * Whether a `git worktree list` entry is the checkout a managed ownership
+ * record describes: same branch, same path, and not prunable. Git reports
+ * canonical (realpath) worktree paths and records are written from Git's own
+ * repository root, so both sides compare canonically; a caller holding a
+ * user-supplied path must canonicalize it before comparing it to either.
+ * Path equality alone is not ownership: a stale record's path can later hold
+ * a user's worktree on another branch.
+ */
+function gitWorktreeEntryMatchesManagedRecord(
+  entry: GitWorktreeEntry,
+  record: Pick<ManagedWorktreeOwnershipRecord, "branchName" | "worktreePath">
+): boolean {
+  return !entry.prunable && gitWorktreeEntryIsRecordCheckout(entry, record);
+}
+
+/**
+ * Whether a `git worktree list` entry is at a managed record's path on its
+ * branch, prunable or not. For callers that report or repair a managed
+ * checkout whatever state Git lists it in; ownership decisions use
+ * `gitWorktreeEntryMatchesManagedRecord`.
+ */
+function gitWorktreeEntryIsRecordCheckout(
+  entry: GitWorktreeEntry,
+  record: Pick<ManagedWorktreeOwnershipRecord, "branchName" | "worktreePath">
+): boolean {
+  return (
+    entry.branchName === record.branchName &&
+    pathsEqual(entry.worktreePath, record.worktreePath)
+  );
+}
+
 function findGitWorktreeEntryForRecord(
   entries: readonly GitWorktreeEntry[],
   record: Pick<ManagedWorktreeOwnershipRecord, "worktreePath">
 ): GitWorktreeEntry | undefined {
   return entries.find((entry) =>
     pathsEqual(entry.worktreePath, record.worktreePath)
+  );
+}
+
+/**
+ * Whether a managed run belongs to the runs started from `checkoutRoot`, so
+ * that checkout may recover or reclaim it. A record names the checkout it
+ * branched from; a sub-workflow child's is its parent's managed worktree
+ * (D4b), so the chain is followed up to the checkout the root run started
+ * in. A chain that reaches a source checkout Git no longer lists (a removed
+ * parent worktree) has no other owner left: it belongs here when
+ * `includeOrphaned` is set (reclaiming a failed setup), and not otherwise,
+ * since such a run can no longer be resumed. A chain that reaches a user's
+ * own linked checkout belongs to that checkout.
+ */
+function managedRecordDescendsFromCheckout(
+  record: ManagedWorktreeOwnershipRecord,
+  checkoutRoot: string,
+  entries: readonly GitWorktreeEntry[],
+  records: readonly ManagedWorktreeOwnershipRecord[],
+  includeOrphaned: boolean
+): boolean {
+  const visited = new Set<ManagedWorktreeOwnershipRecord>();
+  let current = record;
+  while (!visited.has(current)) {
+    visited.add(current);
+    const source = current.sourceCheckoutRoot;
+    if (pathsEqual(source, checkoutRoot)) return true;
+    const sourceEntry = findLiveSourceCheckoutEntry(entries, source);
+    if (!sourceEntry) return includeOrphaned;
+    const owner = records.find((candidate) =>
+      gitWorktreeEntryMatchesManagedRecord(sourceEntry, candidate)
+    );
+    if (!owner) return false;
+    current = owner;
+  }
+  return false;
+}
+
+/** The listed, non-prunable checkout at a record's source checkout path. */
+function findLiveSourceCheckoutEntry(
+  entries: readonly GitWorktreeEntry[],
+  sourceCheckoutRoot: string
+): GitWorktreeEntry | undefined {
+  return entries.find(
+    (entry) =>
+      !entry.prunable &&
+      entry.prunableReason === undefined &&
+      pathsEqual(entry.worktreePath, sourceCheckoutRoot)
+  );
+}
+
+/**
+ * A resumed managed run branches from and merges into the checkout its
+ * record names. When that checkout is gone (a sub-workflow parent's worktree
+ * was removed), retargeting it at the caller's checkout would merge into the
+ * wrong branch, so the start fails instead.
+ */
+function assertRecordedSourceCheckoutExists(
+  record: ManagedWorktreeOwnershipRecord,
+  entries: readonly GitWorktreeEntry[]
+): void {
+  if (findLiveSourceCheckoutEntry(entries, record.sourceCheckoutRoot)) return;
+  throw new Error(
+    `Managed worktree "${record.branchName}" was branched from "${record.sourceCheckoutRoot}", which is no longer a checkout of this repository. Start a new run, or remove the worktree in Settings → Worktrees.`
   );
 }
 
@@ -249,6 +359,12 @@ export interface WorktreeInfo {
   sourceCheckoutDirty?: boolean;
   /** The exclusive lease held for the lifetime of this resolved run. */
   lease?: ExecutionLeaseHandle;
+  /**
+   * In-memory only: the owner tokens of every blocked ancestor of a
+   * sub-workflow child, root first (D4d). Its merge lease carries them, so a
+   * `merge: true` into the checkout its blocked parent holds is not refused.
+   */
+  delegationChain?: readonly string[];
   /** Process-session trust held while this worktree remains discoverable. */
   runtimeTrust?: RuntimeTrustedRootHandle;
   setupOutcome?: "pending" | "running" | "succeeded" | "failed";
@@ -282,6 +398,58 @@ export interface WorktreeManagerOptions {
   mergeOperations?: Partial<WorktreeMergeOperations>;
   /** Process-level seam for setup; reporters are supplied by workflow owners. */
   worktreeSetupRunner?: WorktreeSetupRunner;
+  /**
+   * Sibling merge wait budget (D4d): the merge-lease backoff and a chained
+   * `merge: true` settlement's mutation-lock wait. Tests shrink it.
+   */
+  mergeLeaseWaitMs?: number;
+  /**
+   * Mutation-lock wait for every other settlement; `undefined` keeps the
+   * `withFileLock` default (5 s). Tests shrink it.
+   */
+  mutationLockTimeoutMs?: number;
+  /**
+   * Backoff sleep for the sibling merge-lease wait; tests may fake it. It
+   * should wake early when `signal` aborts; the loop rechecks it after.
+   */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /**
+   * Lock-file open for a settlement's mutation-lock wait; tests observe when
+   * it first meets a held lock, or make it fail. Production uses `fs.open`.
+   */
+  mutationLockOpen?: FileLockOptions["open"];
+}
+
+/**
+ * A stop ended a settlement's wait for the mutation lock: nothing landed or
+ * merged, and the worktree still holds the lane's work.
+ */
+export const STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE =
+  "Stopped while waiting for another lane's settlement or merge into the same checkout; nothing was landed or merged, and this lane's branch and worktree are kept.";
+
+/**
+ * A stop ended the merge-lease wait after landing: the lane's work is
+ * committed on its branch, and settlement then removes the worktree as for
+ * any blocked merge unless `keep` is set.
+ */
+export const STOPPED_WAITING_FOR_MERGE_MESSAGE =
+  "Stopped while waiting for another lane's merge into the same checkout; this lane's work is committed on its branch, which is kept.";
+
+/** A stop ended the D4d sibling merge-lease wait before the lease was free. */
+class MergeLeaseWaitStoppedError extends Error {
+  constructor() {
+    super(STOPPED_WAITING_FOR_MERGE_MESSAGE);
+    this.name = "MergeLeaseWaitStoppedError";
+  }
+}
+
+/** First backoff delay of the D4d sibling merge-lease wait; it doubles. */
+const MERGE_LEASE_WAIT_INITIAL_DELAY_MS = 250;
+/** Largest backoff delay of the D4d sibling merge-lease wait. */
+const MERGE_LEASE_WAIT_MAX_DELAY_MS = 2_000;
+
+async function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  await waitForRetryDelay(ms, signal);
 }
 
 export interface WorktreeMergeOperations {
@@ -424,6 +592,18 @@ export interface CompleteManagedRunOptions {
   /** The integration cleanup barrier must pass before Git is touched. */
   artifactsClean?: boolean;
   cleanupMessage?: string;
+  /**
+   * Ends a settlement's waits (the repository-wide mutation lock and the
+   * D4d sibling merge-lease backoff), never an operation already under way.
+   * A wait it ends reports `blocked` and keeps the branch and checkout.
+   */
+  signal?: AbortSignal;
+}
+
+/** Options for {@link WorktreeManager.mergeManagedWorktree}. */
+export interface MergeManagedWorktreeOptions {
+  /** Ends the D4d sibling merge-lease wait; the merge reports `blocked`. */
+  signal?: AbortSignal;
 }
 
 export type WorktreeMergeOutcome = Exclude<
@@ -458,6 +638,14 @@ export interface ResolveNamedWorktreeOptions {
   workspaceRoots?: readonly string[];
   /** Open workspace folders as authored, source-side paths. */
   namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
+  /**
+   * The checkout `stateRoot`, `workspaceRoots` and `namedWorkspaceRoots`
+   * are paths in, when it is not `sourceCheckoutRoot`. A sub-workflow child
+   * branches from its parent's checkout (D4b) while its workspace folders are
+   * still the window's; they are mapped into the source checkout by their
+   * path relative to this checkout's repository root.
+   */
+  workspaceCheckoutRoot?: string;
   /** These roots are carried through for trust decisions, but never become workspace roots. */
   approvedExternalRoots?: readonly string[];
   /** CLI --add-dir and equivalent caller-supplied roots. */
@@ -502,6 +690,8 @@ export interface EnsureManagedWorktreeOptions extends Omit<
     runRef: RunRef;
   }) => Promise<void>;
   targetBranch?: string;
+  /** A sub-workflow child's delegation chain; see `WorktreeInfo.delegationChain`. */
+  delegationChain?: readonly string[];
 }
 
 export interface RecoverManagedWorktreeOptions {
@@ -552,9 +742,37 @@ interface ResolvedRepositoryInputs {
  * did not resupply `workflowName`). Newlines are collapsed so the subject
  * always stays a single line.
  */
-function buildManagedAutoCommitMessage(label: string): string {
+export function buildManagedAutoCommitMessage(label: string): string {
   const singleLine = label.replace(/\s*\n\s*/g, " ").trim();
   return `chore(ctrlyoke): auto-commit changes for "${singleLine}"`;
+}
+
+/** D4c start failure for a dirty user-owned parent checkout (spec wording, verbatim). */
+export function dirtyParentWorktreeChildMessage(dirtyCount: number): string {
+  return `Commit or stash the parent's changes before starting worktree sub-workflows (dirty: ${dirtyCount} files)`;
+}
+
+/** Ensure a child worktree starts from a checkout that includes parent changes. */
+export async function prepareParentCheckoutForWorktreeChild(args: {
+  checkoutRoot: string;
+  managed: boolean;
+  managedLabel?: string;
+  operations?: {
+    getFileCount: typeof getWorkingTreeFileCount;
+    commit: typeof commitAll;
+  };
+}): Promise<void> {
+  const dirtyCount = await (
+    args.operations?.getFileCount ?? getWorkingTreeFileCount
+  )(args.checkoutRoot);
+  if (dirtyCount === 0) return;
+  if (!args.managed) {
+    throw new Error(dirtyParentWorktreeChildMessage(dirtyCount));
+  }
+  await (args.operations?.commit ?? commitAll)(
+    args.checkoutRoot,
+    buildManagedAutoCommitMessage(args.managedLabel ?? "workflow")
+  );
 }
 
 function pathsOverlap(left: string, right: string): boolean {
@@ -594,10 +812,19 @@ export class WorktreeManager {
   private readonly now: () => number;
   private readonly mergeOperations: WorktreeMergeOperations;
   private readonly worktreeSetupRunner: WorktreeSetupRunner;
+  private readonly mergeLeaseWaitMs: number;
+  private readonly mutationLockTimeoutMs: number | undefined;
+  private readonly mutationLockOpen: FileLockOptions["open"];
+  private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   public constructor(private readonly options: WorktreeManagerOptions = {}) {
     this.leaseManager = options.leaseManager ?? new ExecutionRootLeaseManager();
     this.now = options.now ?? Date.now;
+    this.mergeLeaseWaitMs =
+      options.mergeLeaseWaitMs ?? WORKTREE_MERGE_LEASE_WAIT_MS;
+    this.mutationLockTimeoutMs = options.mutationLockTimeoutMs;
+    this.mutationLockOpen = options.mutationLockOpen;
+    this.sleep = options.sleep ?? defaultSleep;
     this.mergeOperations = {
       fastForward: mergeFastForward,
       noFastForward: mergeNoFastForward,
@@ -613,26 +840,40 @@ export class WorktreeManager {
   public async resolveWorktreeRoot(
     sourceCheckoutRoot: string
   ): Promise<string> {
-    return this.resolveWorktreeRootFor(
-      await this.requireRepositoryRoot(
-        sourceCheckoutRoot,
-        new GitLocationMemo()
-      )
-    );
+    const { repositoryRoot, commonDirectory } =
+      await this.resolveRepositoryContext(sourceCheckoutRoot);
+    return this.resolveWorktreeRootFor(repositoryRoot, commonDirectory);
   }
 
-  /** {@link resolveWorktreeRoot} for a caller that already holds the repository root. */
-  private async resolveWorktreeRootFor(sourceRoot: string): Promise<string> {
-    return (await this.resolveWorktreeRootResolutionFor(sourceRoot)).root;
+  /** {@link resolveWorktreeRoot} for a caller that already holds the repository context. */
+  private async resolveWorktreeRootFor(
+    sourceRoot: string,
+    commonDirectory: string
+  ): Promise<string> {
+    return (
+      await this.resolveWorktreeRootResolutionFor(sourceRoot, commonDirectory)
+    ).root;
   }
 
-  /** {@link resolveWorktreeRootFor}, keeping which tier the root came from. */
+  /**
+   * {@link resolveWorktreeRootFor}, keeping which tier the root came from.
+   * The root is resolved from the repository's main checkout, not from
+   * `sourceRoot`: a child branching from its parent's worktree (D4b) would
+   * otherwise get a nested `<parent-worktree>.worktrees/`. For a run started
+   * in the main checkout the two are the same.
+   */
   private async resolveWorktreeRootResolutionFor(
-    sourceRoot: string
+    sourceRoot: string,
+    commonDirectory: string
   ): Promise<WorktreeRootResolution> {
     const worktrees = await listGitWorktrees(sourceRoot);
     return resolveConfiguredRoot({
-      sourceCheckoutRoot: sourceRoot,
+      sourceCheckoutRoot: worktreePlacementCheckout(
+        worktrees,
+        commonDirectory,
+        sourceRoot
+      ),
+      commonDirectory,
       explicitRoot:
         this.options.worktreeRoot ?? ConfigurationUtils.getWorktreeRoot(),
       homeDirectory: this.options.homeDirectory,
@@ -740,6 +981,39 @@ export class WorktreeManager {
     return this.tryReadRecord(recordPath);
   }
 
+  /** Find the ctrlyoke ownership record for the checkout at this path. */
+  public async findManagedWorktreeRecordForCheckout(
+    sourceCheckoutRoot: string,
+    checkoutRoot: string
+  ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
+    let records: ManagedWorktreeOwnershipRecord[];
+    let entries: GitWorktreeEntry[];
+    let realCheckoutRoot: string;
+    try {
+      const { repositoryRoot, commonDirectory } =
+        await this.resolveRepositoryContext(sourceCheckoutRoot);
+      [records, entries, realCheckoutRoot] = await Promise.all([
+        this.readRecords(commonDirectory),
+        listGitWorktrees(repositoryRoot),
+        fs.realpath(checkoutRoot),
+      ]);
+    } catch (error) {
+      // Fail closed: an unclassifiable checkout is treated as user-owned, so
+      // the D4c rule refuses a dirty tree instead of committing to it.
+      Log.warn(
+        `[WorktreeManager] Cannot classify ${checkoutRoot} as a managed worktree; treating it as not managed: ${getErrorMessage(error)}`
+      );
+      return undefined;
+    }
+    const entry = entries.find((candidate) =>
+      pathsEqual(candidate.worktreePath, realCheckoutRoot)
+    );
+    if (!entry) return undefined;
+    return records.find((record) =>
+      gitWorktreeEntryMatchesManagedRecord(entry, record)
+    );
+  }
+
   /** Remove a just-created imported worktree after its patch failed to apply. */
   public async removeImportedManagedWorktree(
     info: WorktreeInfo
@@ -815,6 +1089,9 @@ export class WorktreeManager {
       };
     };
 
+    // Whether the mutation lock was taken: a lock error before then means
+    // this settlement never got its turn, so nothing landed or merged.
+    let mutationLockHeld = false;
     try {
       if (
         info.mode !== WORKTREE_MODES.MANAGED ||
@@ -832,164 +1109,211 @@ export class WorktreeManager {
       const { repositoryRoot, commonDirectory } =
         await this.resolveRepositoryContext(info.sourceCheckoutRoot, git);
       const recordPath = this.recordPath(commonDirectory, info.branchName);
+      // D4d: sibling lanes settle under this one repository-wide lock, so a
+      // lane whose `merge: true` lands seconds after another's queues here
+      // behind the whole settlement (landing, merge, removal), not only at
+      // the merge lease. A delegated merging lane waits the same budget as
+      // the merge-lease wait instead of the 5 s default. A stop ends either
+      // wait at once (`options.signal`).
+      const siblingMergeWait = Boolean(
+        options.merge && info.delegationChain?.length
+      );
+      const mutationLockOptions = {
+        timeoutMs: siblingMergeWait
+          ? this.mergeLeaseWaitMs
+          : this.mutationLockTimeoutMs,
+        signal: options.signal,
+        ...(this.mutationLockOpen ? { open: this.mutationLockOpen } : {}),
+      };
 
-      return await withWorktreeMutationLock(commonDirectory, async () => {
-        const record = await this.tryReadRecord(recordPath);
-        if (!record || record.branchName !== info.branchName) {
-          return blocked("Managed ownership record is missing or mismatched.");
-        }
-        assertWritableSchema(
-          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
-          record,
-          recordPath
-        );
-        if (
-          !(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))
-        ) {
-          return blocked(
-            "Managed branch ref is missing; refusing to finalize an unowned checkout.",
-            WORKTREE_BRANCH_STATES.MISSING
+      return await withWorktreeMutationLock(
+        commonDirectory,
+        async () => {
+          mutationLockHeld = true;
+          const record = await this.tryReadRecord(recordPath);
+          if (!record || record.branchName !== info.branchName) {
+            return blocked(
+              "Managed ownership record is missing or mismatched."
+            );
+          }
+          assertWritableSchema(
+            PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+            record,
+            recordPath
           );
-        }
-        const identity = await this.validateManagedCheckoutIdentity(
-          repositoryRoot,
-          info,
-          record,
-          MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
-        );
-        if (!identity.ok) return blocked(identity.message);
+          if (
+            !(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))
+          ) {
+            return blocked(
+              "Managed branch ref is missing; refusing to finalize an unowned checkout.",
+              WORKTREE_BRANCH_STATES.MISSING
+            );
+          }
+          const identity = await this.validateManagedCheckoutIdentity(
+            repositoryRoot,
+            info,
+            record,
+            MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
+          );
+          if (!identity.ok) return blocked(identity.message);
 
-        const [paths, untrackedPaths] = await Promise.all([
-          getGitTrackedAndUntrackedFiles(info.worktreePath),
-          getGitUntrackedFiles(info.worktreePath),
-        ]);
-        const untrackedPathSet = new Set(untrackedPaths);
-        const executionRootRelative = path.relative(
-          info.executionWorkspace.executionCheckoutRoot ?? info.worktreePath,
-          info.executionWorkspace.executionRoot
-        );
-        const blockedRuntimePaths = paths.filter(
-          (repositoryRelativePath) =>
-            (untrackedPathSet.has(repositoryRelativePath) &&
-              isWorkspaceInitializerRuntimePath(
+          const [paths, untrackedPaths] = await Promise.all([
+            getGitTrackedAndUntrackedFiles(info.worktreePath),
+            getGitUntrackedFiles(info.worktreePath),
+          ]);
+          const untrackedPathSet = new Set(untrackedPaths);
+          const executionRootRelative = path.relative(
+            info.executionWorkspace.executionCheckoutRoot ?? info.worktreePath,
+            info.executionWorkspace.executionRoot
+          );
+          const blockedRuntimePaths = paths.filter(
+            (repositoryRelativePath) =>
+              (untrackedPathSet.has(repositoryRelativePath) &&
+                isWorkspaceInitializerRuntimePath(
+                  repositoryRelativePath,
+                  executionRootRelative
+                )) ||
+              isWorkspaceInitializerUnsafePath(
                 repositoryRelativePath,
                 executionRootRelative
-              )) ||
-            isWorkspaceInitializerUnsafePath(
-              repositoryRelativePath,
-              executionRootRelative
-            )
-        );
-        if (blockedRuntimePaths.length > 0) {
-          return blocked(
-            `Managed landing is blocked by unsafe or non-ignored untracked runtime paths: ${blockedRuntimePaths.join(", ")}`
+              )
           );
-        }
+          if (blockedRuntimePaths.length > 0) {
+            return blocked(
+              `Managed landing is blocked by unsafe or non-ignored untracked runtime paths: ${blockedRuntimePaths.join(", ")}`
+            );
+          }
 
-        const changed = await hasUncommittedChanges(info.worktreePath);
-        if (changed) {
-          await commitAll(
-            info.worktreePath,
-            buildManagedAutoCommitMessage(info.workflowName ?? info.branchName)
-          );
-        }
+          const changed = await hasUncommittedChanges(info.worktreePath);
+          if (changed) {
+            await commitAll(
+              info.worktreePath,
+              buildManagedAutoCommitMessage(
+                info.workflowName ?? info.branchName
+              )
+            );
+          }
 
-        const committedHead = await resolveCommit(info.worktreePath, "HEAD");
-        const watermark = getManagedWorktreeWatermark(record);
-        if (committedHead === watermark) {
-          return this.completeManagedNoChange(
-            repositoryRoot,
-            recordPath,
-            record,
-            info,
-            keep
-          );
-        }
-
-        let changedFileCount: number | undefined;
-        try {
-          changedFileCount = (
-            await getDiffFilesBetweenRefs(
+          const committedHead = await resolveCommit(info.worktreePath, "HEAD");
+          const watermark = getManagedWorktreeWatermark(record);
+          if (committedHead === watermark) {
+            return this.completeManagedNoChange(
               repositoryRoot,
-              watermark,
-              committedHead
-            )
-          ).length;
-        } catch {
-          // A missing count must not turn an already-landed commit into a
-          // blocked settlement. The branch and base remain authoritative.
-        }
-        const landedIdentity = await this.validateManagedCheckoutIdentity(
-          repositoryRoot,
-          info,
-          { ...record, lastVerifiedBranchTip: committedHead },
-          MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
-        );
-        if (!landedIdentity.ok) return blocked(landedIdentity.message);
-        const finalTip = landedIdentity.headCommit;
-        const landedRecord: ManagedWorktreeOwnershipRecord = {
-          ...record,
-          lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
-          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-          branchState: WORKTREE_BRANCH_STATES.PRESENT,
-          lastVerifiedBranchTip: finalTip,
-          finalBranchTip: finalTip,
-        };
-        delete landedRecord.recoveryOutcome;
-        await this.writeRecord(recordPath, landedRecord);
-        await this.persistRuntime({
-          lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
-          landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
-          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
-          branchState: WORKTREE_BRANCH_STATES.PRESENT,
-          finalBranchTip: finalTip,
-          ...(changedFileCount !== undefined ? { changedFileCount } : {}),
-          updatedAt: this.now(),
-        });
+              recordPath,
+              record,
+              info,
+              keep
+            );
+          }
 
-        const mergeResult = options.merge
-          ? await this.mergeManagedWorktree(info)
-          : undefined;
-        if (mergeResult) {
+          let changedFileCount: number | undefined;
+          try {
+            changedFileCount = (
+              await getDiffFilesBetweenRefs(
+                repositoryRoot,
+                watermark,
+                committedHead
+              )
+            ).length;
+          } catch {
+            // A missing count must not turn an already-landed commit into a
+            // blocked settlement. The branch and base remain authoritative.
+          }
+          const landedIdentity = await this.validateManagedCheckoutIdentity(
+            repositoryRoot,
+            info,
+            { ...record, lastVerifiedBranchTip: committedHead },
+            MANAGED_CHECKOUT_IDENTITY_MODES.FORWARD_PROGRESS
+          );
+          if (!landedIdentity.ok) return blocked(landedIdentity.message);
+          const finalTip = landedIdentity.headCommit;
+          const landedRecord: ManagedWorktreeOwnershipRecord = {
+            ...record,
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+            branchState: WORKTREE_BRANCH_STATES.PRESENT,
+            lastVerifiedBranchTip: finalTip,
+            finalBranchTip: finalTip,
+          };
+          delete landedRecord.recoveryOutcome;
+          await this.writeRecord(recordPath, landedRecord);
           await this.persistRuntime({
-            mergeOutcome: mergeResult.mergeOutcome,
-            ...(mergeResult.conflictFiles
-              ? { conflictFiles: mergeResult.conflictFiles }
-              : {}),
-            ...(mergeResult.message ? { message: mergeResult.message } : {}),
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
+            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+            branchState: WORKTREE_BRANCH_STATES.PRESENT,
+            finalBranchTip: finalTip,
+            ...(changedFileCount !== undefined ? { changedFileCount } : {}),
             updatedAt: this.now(),
           });
-        }
 
-        if (keep) {
-          return {
-            landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
-            ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
-            directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
-            branchState: WORKTREE_BRANCH_STATES.PRESENT,
-            branchName: info.branchName,
-            ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
-            autoCommitted: changed,
-            ...(changedFileCount !== undefined ? { changedFileCount } : {}),
-            ...(mergeResult?.conflictFiles
-              ? { conflictFiles: mergeResult.conflictFiles }
-              : {}),
-            ...(mergeResult?.message ? { message: mergeResult.message } : {}),
-          };
-        }
+          const mergeResult = options.merge
+            ? await this.mergeManagedWorktree(info, {
+                signal: options.signal,
+              })
+            : undefined;
+          if (mergeResult) {
+            await this.persistRuntime({
+              mergeOutcome: mergeResult.mergeOutcome,
+              ...(mergeResult.conflictFiles
+                ? { conflictFiles: mergeResult.conflictFiles }
+                : {}),
+              ...(mergeResult.message ? { message: mergeResult.message } : {}),
+              updatedAt: this.now(),
+            });
+          }
 
-        return this.removeAfterLanding(
-          repositoryRoot,
-          recordPath,
-          landedRecord,
-          info,
-          WORKTREE_LANDING_OUTCOMES.LANDED,
-          changed,
-          changedFileCount,
-          mergeResult
-        );
-      });
+          if (keep) {
+            return {
+              landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
+              ...(mergeResult
+                ? { mergeOutcome: mergeResult.mergeOutcome }
+                : {}),
+              directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
+              branchState: WORKTREE_BRANCH_STATES.PRESENT,
+              branchName: info.branchName,
+              ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+              autoCommitted: changed,
+              ...(changedFileCount !== undefined ? { changedFileCount } : {}),
+              ...(mergeResult?.conflictFiles
+                ? { conflictFiles: mergeResult.conflictFiles }
+                : {}),
+              ...(mergeResult?.message ? { message: mergeResult.message } : {}),
+            };
+          }
+
+          return this.removeAfterLanding(
+            repositoryRoot,
+            recordPath,
+            landedRecord,
+            info,
+            WORKTREE_LANDING_OUTCOMES.LANDED,
+            changed,
+            changedFileCount,
+            mergeResult
+          );
+        },
+        mutationLockOptions
+      );
     } catch (error) {
+      if (
+        !mutationLockHeld &&
+        (error instanceof FileLockAbortedError ||
+          error instanceof FileLockTimeoutError ||
+          error instanceof FileLockUnavailableError)
+      ) {
+        // Stopped, out of time, or unable to create the lock file at all
+        // while waiting for this settlement's turn: nothing landed, and a
+        // merging lane's merge did not happen either, which D4e records as
+        // data.
+        return blocked(
+          error instanceof FileLockAbortedError
+            ? STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE
+            : getErrorMessage(error),
+          WORKTREE_BRANCH_STATES.PRESENT,
+          options.merge ? WORKTREE_MERGE_OUTCOMES.BLOCKED : undefined
+        );
+      }
       return blocked(getErrorMessage(error));
     } finally {
       await info.lease?.release().catch(() => undefined);
@@ -1002,7 +1326,8 @@ export class WorktreeManager {
    * reuse the same guarded operation once merge actions are exposed.
    */
   public async mergeManagedWorktree(
-    info: WorktreeInfo
+    info: WorktreeInfo,
+    options: MergeManagedWorktreeOptions = {}
   ): Promise<WorktreeMergeResult> {
     const guard = async (): Promise<string | undefined> => {
       if (!info.targetBranch) {
@@ -1021,29 +1346,51 @@ export class WorktreeManager {
       return undefined;
     };
 
-    const initialGuardFailure = await guard();
-    if (initialGuardFailure) {
-      return {
-        mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
-        message: initialGuardFailure,
-      };
+    const delegationChain = info.delegationChain?.length
+      ? [...info.delegationChain]
+      : undefined;
+    // A delegated merge may be about to wait for a sibling lane that is
+    // merging into this checkout right now, so its checkout can look dirty
+    // or mid-merge until that sibling finishes. The guard after the lease is
+    // authoritative; checking first would end the waiter `blocked` on a
+    // state the wait exists to outlast.
+    if (!delegationChain) {
+      const initialGuardFailure = await guard();
+      if (initialGuardFailure) {
+        return {
+          mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
+          message: initialGuardFailure,
+        };
+      }
     }
 
-    let sourceLease: ExecutionLeaseHandle | undefined;
+    let sourceLease: ExecutionLeaseHandle;
     try {
-      sourceLease = await this.leaseManager.acquire({
-        mode: "exclusive-worktree",
-        stateRoot: info.lease?.stateRoot ?? info.executionWorkspace.stateRoot,
-        executionRoot: info.sourceCheckoutRoot,
-        workflowKey: info.workflowKey,
-        runRef: info.runRef,
-        runner: info.lease?.runner ?? "vscode",
-        instanceId: info.lease?.instanceId ?? crypto.randomUUID(),
-      });
+      sourceLease = await this.acquireMergeLease(
+        {
+          mode: "exclusive-worktree",
+          purpose: EXECUTION_LEASE_PURPOSES.MERGE,
+          stateRoot: info.lease?.stateRoot ?? info.executionWorkspace.stateRoot,
+          executionRoot: info.sourceCheckoutRoot,
+          workflowKey: info.workflowKey,
+          runRef: info.runRef,
+          runner: info.lease?.runner ?? "vscode",
+          instanceId: info.lease?.instanceId ?? crypto.randomUUID(),
+          // D4d rule 1: a child's blocked ancestors' leases on the checkout it
+          // merges into (its parent's) do not refuse the merge. Rule 2 does not
+          // apply, so a sibling still editing that checkout does. No chain (a
+          // top-level run) keeps the fail-fast conflict.
+          ...(delegationChain ? { delegationChain } : {}),
+        },
+        options.signal
+      );
     } catch (error) {
       return {
         mergeOutcome: WORKTREE_MERGE_OUTCOMES.BLOCKED,
-        message: `Merge blocked: ${getErrorMessage(error)}`,
+        message:
+          error instanceof MergeLeaseWaitStoppedError
+            ? STOPPED_WAITING_FOR_MERGE_MESSAGE
+            : `Merge blocked: ${getErrorMessage(error)}`,
       };
     }
 
@@ -1061,6 +1408,51 @@ export class WorktreeManager {
       );
     } finally {
       await sourceLease.release().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Acquire a merge lease, waiting out sibling lanes' merges (D4d). Only a
+   * request with a delegation chain waits, and only while every conflicting
+   * live lease is another merge lease with the same immediate delegator; it
+   * retries with backoff (250 ms, doubling, capped at 2 s) for at most
+   * `mergeLeaseWaitMs`, then rethrows the last conflict. Any other conflict
+   * or error is thrown at once, so every other caller stays fail-fast. An
+   * abort of `signal` ends the wait with {@link MergeLeaseWaitStoppedError}.
+   */
+  private async acquireMergeLease(
+    request: ExecutionLeaseRequest,
+    signal: AbortSignal | undefined
+  ): Promise<ExecutionLeaseHandle> {
+    let attempt: () => Promise<ExecutionLeaseHandle> = () =>
+      this.leaseManager.acquire(request);
+    const deadline = this.now() + this.mergeLeaseWaitMs;
+    let delay = MERGE_LEASE_WAIT_INITIAL_DELAY_MS;
+    for (;;) {
+      try {
+        return await attempt();
+      } catch (error) {
+        if (
+          !(error instanceof ExecutionLeaseConflictError) ||
+          !isSiblingMergeLeaseConflict(
+            request.delegationChain,
+            error.conflictingLeases
+          )
+        ) {
+          throw error;
+        }
+        const remaining = deadline - this.now();
+        if (remaining <= 0) {
+          throw new Error(
+            `waited ${this.mergeLeaseWaitMs / 1000}s for a sibling lane's merge. ${error.message}`
+          );
+        }
+        if (signal?.aborted) throw new MergeLeaseWaitStoppedError();
+        await this.sleep(Math.min(delay, remaining), signal);
+        if (signal?.aborted) throw new MergeLeaseWaitStoppedError();
+        delay = Math.min(delay * 2, MERGE_LEASE_WAIT_MAX_DELAY_MS);
+        attempt = error.retry;
+      }
     }
   }
 
@@ -1168,6 +1560,7 @@ export class WorktreeManager {
       sourceLease = await this.leaseManager.acquire(
         {
           mode: "exclusive-worktree",
+          purpose: EXECUTION_LEASE_PURPOSES.MERGE,
           stateRoot: sourceCheckoutRoot,
           executionRoot: sourceCheckoutRoot,
           workflowKey: "worktree-sync" as WorkflowKey,
@@ -1601,9 +1994,12 @@ export class WorktreeManager {
           )
         );
         records = await this.readRecords(commonDirectory);
+        // The record, not the caller, owns the source checkout of a run it
+        // already describes: a sub-workflow child branched from its parent's
+        // worktree (D4b) is found by its identity even when it is continued
+        // directly, with no parent link, from the main checkout.
         const existingRecord = records.find(
           (record) =>
-            pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot) &&
             record.workflowKey === identity.workflowKey &&
             record.runRef === identity.runRef
         );
@@ -1622,12 +2018,20 @@ export class WorktreeManager {
         await validateBranchName(branchName);
 
         const entries = await listGitWorktrees(sourceCheckoutRoot);
+        if (existingRecord) {
+          assertRecordedSourceCheckoutExists(existingRecord, entries);
+        }
         let existingCheckout = entries.find(
           (entry) => entry.branchName === branchName
         );
         if (
           existingCheckout &&
-          pathsEqual(existingCheckout.worktreePath, sourceCheckoutRoot)
+          (pathsEqual(existingCheckout.worktreePath, sourceCheckoutRoot) ||
+            (existingRecord !== undefined &&
+              pathsEqual(
+                existingCheckout.worktreePath,
+                existingRecord.sourceCheckoutRoot
+              )))
         ) {
           throw new Error(
             `Managed branch "${branchName}" is already checked out in the source checkout.`
@@ -1648,7 +2052,10 @@ export class WorktreeManager {
         const sourceCheckoutDirty = existingRecord
           ? undefined
           : await hasUncommittedChanges(sourceCheckoutRoot);
-        const root = await this.resolveWorktreeRootFor(sourceCheckoutRoot);
+        const root = await this.resolveWorktreeRootFor(
+          sourceCheckoutRoot,
+          commonDirectory
+        );
         const worktreePath =
           existingRecord?.worktreePath ??
           path.join(
@@ -1712,13 +2119,7 @@ export class WorktreeManager {
           branchState: WORKTREE_BRANCH_STATES.MISSING,
         };
 
-        if (existingRecord) {
-          this.assertRecordMatchesRequest(existingRecord, {
-            sourceCheckoutRoot,
-            workflowKey: identity.workflowKey,
-            runRef: identity.runRef,
-          });
-        } else {
+        if (!existingRecord) {
           await this.writeRecord(recordPath, record);
         }
 
@@ -1798,7 +2199,17 @@ export class WorktreeManager {
       ) {
         continue;
       }
-      if (!pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot)) continue;
+      if (
+        !managedRecordDescendsFromCheckout(
+          record,
+          sourceCheckoutRoot,
+          entries,
+          records,
+          false
+        )
+      ) {
+        continue;
+      }
       if (
         options.workflowKey !== undefined &&
         record.workflowKey !== options.workflowKey
@@ -1806,10 +2217,8 @@ export class WorktreeManager {
         continue;
       if (options.runRef !== undefined && record.runRef !== options.runRef)
         continue;
-      const entry = entries.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
+      const entry = entries.find((candidate) =>
+        gitWorktreeEntryMatchesManagedRecord(candidate, record)
       );
       if (!entry || !(await this.pathExists(record.worktreePath))) continue;
       const lockInspection = await readWorkflowLockInspection(
@@ -1852,10 +2261,8 @@ export class WorktreeManager {
 
     const worktrees: WorktreeDiscoveryEntry[] = [];
     for (const entry of entries) {
-      const ownership = records.find(
-        (record) =>
-          record.branchName === entry.branchName &&
-          pathsEqual(record.worktreePath, entry.worktreePath)
+      const ownership = records.find((record) =>
+        gitWorktreeEntryIsRecordCheckout(entry, record)
       );
       const inspections = await ExecutionRootLeaseManager.inspectLeases(
         entry.worktreePath
@@ -1877,10 +2284,8 @@ export class WorktreeManager {
     }
 
     const staleManagedWorktrees = records.filter((record) => {
-      const entry = worktrees.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
+      const entry = worktrees.find((candidate) =>
+        gitWorktreeEntryMatchesManagedRecord(candidate, record)
       );
       return !entry || entry.stale;
     });
@@ -1891,8 +2296,7 @@ export class WorktreeManager {
     const currentOwnership = records.find(
       (record) =>
         currentEntry?.managed === true &&
-        pathsEqual(record.worktreePath, sourceCheckoutRoot) &&
-        record.branchName === currentEntry.branchName
+        gitWorktreeEntryIsRecordCheckout(currentEntry, record)
     );
 
     return {
@@ -2136,7 +2540,10 @@ export class WorktreeManager {
     }
 
     return {
-      resolvedRoot: await this.resolveWorktreeRootFor(sourceRoot),
+      resolvedRoot: await this.resolveWorktreeRootFor(
+        sourceRoot,
+        commonDirectory
+      ),
       sourceCheckoutRoot: sourceRoot,
       sourceCheckoutBranch: sourceBranch,
       ...(sourceUpstream ? { sourceCheckoutUpstream: sourceUpstream } : {}),
@@ -2398,7 +2805,7 @@ export class WorktreeManager {
     options: ResolveNamedWorktreeOptions,
     pending: { directoryLease?: ExecutionLeaseHandle }
   ): Promise<ActiveWorktreeInfo> {
-    const branchName = normalizeBranchName(options.branchName.trim());
+    const branchName = normalizeNamedWorktreeBranch(options.branchName);
     if (!branchName) throw new Error("Named worktree mode requires a branch.");
 
     const {
@@ -2428,7 +2835,10 @@ export class WorktreeManager {
     const root =
       initialBranchCheckout && !options.directory
         ? undefined
-        : await this.resolveWorktreeRootResolutionFor(sourceCheckoutRoot);
+        : await this.resolveWorktreeRootResolutionFor(
+            sourceCheckoutRoot,
+            commonDirectory
+          );
     let namedDirectoryPath: string | undefined;
     let previousBranch: string | undefined;
     let directoryLease: ExecutionLeaseHandle | undefined;
@@ -3150,25 +3560,6 @@ export class WorktreeManager {
     await writeFileAtomic(recordPath, `${JSON.stringify(record, null, 2)}\n`);
   }
 
-  private assertRecordMatchesRequest(
-    record: ManagedWorktreeOwnershipRecord,
-    request: {
-      sourceCheckoutRoot: string;
-      workflowKey: WorkflowKey;
-      runRef: RunRef;
-    }
-  ): void {
-    if (
-      !pathsEqual(record.sourceCheckoutRoot, request.sourceCheckoutRoot) ||
-      record.workflowKey !== request.workflowKey ||
-      record.runRef !== request.runRef
-    ) {
-      throw new Error(
-        `Managed ownership record for "${record.branchName}" belongs to another run.`
-      );
-    }
-  }
-
   private async assertManagedPathIsAvailable(
     worktreePath: string,
     expectedPath?: string
@@ -3216,15 +3607,22 @@ export class WorktreeManager {
     return inspections.some((inspection) => !inspection.stale);
   }
 
+  /**
+   * The ensure options a discovered record resolves its execution inputs
+   * with. Inputs come from the discovering checkout: a child's record names
+   * its parent's worktree (D4b), which may be gone, while the caller's
+   * workspace folders are in its own checkout. Every checkout of a
+   * repository has the same layout, so the execution workspace maps the same.
+   */
   private recoveryAsResolveOptions(
     record: ManagedWorktreeOwnershipRecord,
     options: RecoverManagedWorktreeOptions
   ): EnsureManagedWorktreeOptions {
     const namedWorkspaceRoots = options.namedWorkspaceRoots ?? [
-      { name: "repository", fsPath: record.sourceCheckoutRoot },
+      { name: "repository", fsPath: options.sourceCheckoutRoot },
     ];
     return {
-      sourceCheckoutRoot: record.sourceCheckoutRoot,
+      sourceCheckoutRoot: options.sourceCheckoutRoot,
       stateRoot: options.stateRoot ?? record.stateRoot,
       workspaceRoots: options.workspaceRoots,
       namedWorkspaceRoots,
@@ -3253,25 +3651,31 @@ export class WorktreeManager {
     commonDirectory: string,
     records: readonly ManagedWorktreeOwnershipRecord[]
   ): Promise<void> {
-    const candidates = records.filter(
+    const failedSetups = records.filter(
       (record) =>
-        pathsEqual(record.sourceCheckoutRoot, repositoryRoot) &&
         record.lifecycleState === WORKTREE_LIFECYCLE_STATES.BLOCKED &&
         record.setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
     );
-    if (candidates.length === 0) return;
+    if (failedSetups.length === 0) return;
 
     let entries = await listGitWorktrees(repositoryRoot);
+    const candidates = failedSetups.filter((record) =>
+      managedRecordDescendsFromCheckout(
+        record,
+        repositoryRoot,
+        entries,
+        records,
+        true
+      )
+    );
     for (const record of candidates) {
       const liveLease = (
         await ExecutionRootLeaseManager.inspectLeases(record.worktreePath)
       ).some((inspection) => !inspection.stale);
       if (liveLease) continue;
 
-      const entry = entries.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
+      const entry = entries.find((candidate) =>
+        gitWorktreeEntryIsRecordCheckout(candidate, record)
       );
       const unexpectedEntry = entries.find(
         (candidate) => candidate.branchName === record.branchName
@@ -3356,7 +3760,7 @@ export class WorktreeManager {
   ): Promise<WorktreeInfo> {
     const resolvedOptions = this.recoveryAsResolveOptions(record, options);
     const inputs = await this.resolveExecutionInputs(
-      record.sourceCheckoutRoot,
+      resolvedOptions.sourceCheckoutRoot,
       resolvedOptions
     );
     const executionWorkspace = this.buildExecutionWorkspace(
@@ -3558,6 +3962,9 @@ export class WorktreeManager {
         runRef: args.record.runRef,
         ...(args.options.workflowName
           ? { workflowName: args.options.workflowName }
+          : {}),
+        ...(args.options.delegationChain?.length
+          ? { delegationChain: [...args.options.delegationChain] }
           : {}),
         createdAt: args.record.createdAt,
         executionWorkspace,
@@ -3766,6 +4173,7 @@ export class WorktreeManager {
       stateRoot: string;
       namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
       workspaceRoots?: readonly string[];
+      workspaceCheckoutRoot?: string;
       approvedExternalRoots?: readonly string[];
       additionalRoots?: readonly string[];
       additionalTrustedRoots?: readonly string[];
@@ -3773,13 +4181,17 @@ export class WorktreeManager {
   ): Promise<ResolvedRepositoryInputs> {
     const sourceRoot =
       await resolveThroughNearestExistingAncestor(sourceCheckoutRoot);
-    const stateRoot = await resolveThroughNearestExistingAncestor(
-      options.stateRoot
+    const toSourcePath = await this.workspaceToSourcePathMapper(
+      options.workspaceCheckoutRoot,
+      sourceRoot
+    );
+    const stateRoot = toSourcePath(
+      await resolveThroughNearestExistingAncestor(options.stateRoot)
     );
     const namedWorkspaceRoots: ResolverWorkspaceFolder[] = [];
     for (const root of options.namedWorkspaceRoots) {
-      const resolvedRoot = await resolveThroughNearestExistingAncestor(
-        root.fsPath
+      const resolvedRoot = toSourcePath(
+        await resolveThroughNearestExistingAncestor(root.fsPath)
       );
       if (!isPathWithinDirectory(resolvedRoot, sourceRoot)) {
         throw new Error(
@@ -3793,8 +4205,9 @@ export class WorktreeManager {
     for (const workspaceRoot of options.workspaceRoots ?? [
       ...namedWorkspaceRoots.map((root) => root.fsPath),
     ]) {
-      const resolvedRoot =
-        await resolveThroughNearestExistingAncestor(workspaceRoot);
+      const resolvedRoot = toSourcePath(
+        await resolveThroughNearestExistingAncestor(workspaceRoot)
+      );
       if (isPathWithinDirectory(resolvedRoot, sourceRoot)) {
         repositoryWorkspaceRoots.push(resolvedRoot);
       } else if (!pathsEqual(resolvedRoot, stateRoot)) {
@@ -3830,6 +4243,31 @@ export class WorktreeManager {
       approvedExternalRoots: dedupePaths(options.approvedExternalRoots ?? []),
       executionRoot,
     };
+  }
+
+  /**
+   * Map a path in `workspaceCheckoutRoot` to the same repository-relative
+   * path in `sourceRoot` (D4b). Identity when there is no workspace checkout,
+   * when it is the source checkout, or for a path outside it.
+   */
+  private async workspaceToSourcePathMapper(
+    workspaceCheckoutRoot: string | undefined,
+    sourceRoot: string
+  ): Promise<(resolvedPath: string) => string> {
+    if (!workspaceCheckoutRoot) return (resolvedPath) => resolvedPath;
+    const workspaceRoot = await resolveThroughNearestExistingAncestor(
+      await this.requireRepositoryRoot(
+        workspaceCheckoutRoot,
+        new GitLocationMemo()
+      )
+    );
+    if (pathsEqual(workspaceRoot, sourceRoot)) {
+      return (resolvedPath) => resolvedPath;
+    }
+    return (resolvedPath) =>
+      isPathWithinDirectory(resolvedPath, workspaceRoot)
+        ? path.resolve(sourceRoot, path.relative(workspaceRoot, resolvedPath))
+        : resolvedPath;
   }
 
   private buildRuntime(

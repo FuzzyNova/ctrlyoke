@@ -25,7 +25,8 @@ import {
   type WorkflowProperties,
 } from "@store/settingsStore";
 import { useUiStore, type TemplateInfo } from "@store/uiStore";
-import { useEditorStore } from "@store/editorStore";
+import { editorTargetKey, useEditorStore } from "@store/editorStore";
+import { isSubWorkflowEditorStepType } from "@utils/stepDraftContent";
 import { useRunSummaryCacheStore } from "@store/runSummaryCacheStore";
 import { useLanguageServerStore } from "@store/languageServerStore";
 import {
@@ -53,6 +54,7 @@ import {
 } from "@root/types/DashboardConstants";
 import type {
   OrderedCliHistoryEntry,
+  OrderedSubWorkflowHistoryEntry,
   OrderedStatusHistoryEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
@@ -112,6 +114,11 @@ import type {
   BatchedDashboardMessage,
 } from "@root/types/WebviewMessageTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import {
+  getExecutionRuntime,
+  isPromptStep,
+  isScriptStep,
+} from "@root/types/CtrlYokeTypes";
 import { deriveStepStatusesFromRuntime } from "@root/utils/StepStatusDerivation";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
@@ -1621,21 +1628,25 @@ export function createMessageHandlers(
     };
     store.appendLiveEntry(entry);
 
-    if (store.steps[message.stepIndex]) {
+    if (
+      isPromptStep(store.steps[message.stepIndex]) ||
+      isScriptStep(store.steps[message.stepIndex])
+    ) {
+      const runtime = getExecutionRuntime(store.steps[message.stepIndex]);
       useWorkflowStore.temporal.getState().pause();
       store.updatePrompt(message.stepIndex, {
         _runtime: {
-          ...store.steps[message.stepIndex]._runtime,
+          ...runtime,
           sessionId:
             message.output.structured?.metadata?.sessionId ??
-            store.steps[message.stepIndex]._runtime?.sessionId,
+            runtime?.sessionId,
           elapsed: message.output.elapsed,
           contextWindowUsed:
             message.output.tokens?.contextWindowUsed ??
-            store.steps[message.stepIndex]._runtime?.contextWindowUsed,
+            runtime?.contextWindowUsed,
           contextWindowSize:
             message.output.tokens?.contextWindowSize ??
-            store.steps[message.stepIndex]._runtime?.contextWindowSize,
+            runtime?.contextWindowSize,
         },
       });
       useWorkflowStore.temporal.getState().resume();
@@ -1644,6 +1655,18 @@ export function createMessageHandlers(
     if (message.output.tokens?.contextWindowSize) {
       store.clearLiveContextWindow(message.stepIndex);
     }
+  };
+
+  handlers[MESSAGE_TYPES.SUB_WORKFLOW_SETTLED] = (message) => {
+    if (isForInactiveWorkflow(message)) return;
+    const entry: OrderedSubWorkflowHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.SUB_WORKFLOW,
+      target: message.target,
+      timestampMs: message.timestampMs,
+      sequence: message.sequence,
+      subWorkflowOutput: message.output,
+    };
+    useWorkflowStore.getState().appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------
@@ -1755,21 +1778,25 @@ export function createMessageHandlers(
     };
     store.appendLiveEntry(entry);
 
-    if (store.steps[message.stepIndex]) {
+    if (
+      isPromptStep(store.steps[message.stepIndex]) ||
+      isScriptStep(store.steps[message.stepIndex])
+    ) {
+      const runtime = getExecutionRuntime(store.steps[message.stepIndex]);
       useWorkflowStore.temporal.getState().pause();
       store.updatePrompt(message.stepIndex, {
         _runtime: {
-          ...store.steps[message.stepIndex]._runtime,
+          ...runtime,
           sessionId:
             message.output.structured?.metadata?.sessionId ??
-            store.steps[message.stepIndex]._runtime?.sessionId,
+            runtime?.sessionId,
           elapsed: message.output.elapsed,
           contextWindowUsed:
             message.output.tokens?.contextWindowUsed ??
-            store.steps[message.stepIndex]._runtime?.contextWindowUsed,
+            runtime?.contextWindowUsed,
           contextWindowSize:
             message.output.tokens?.contextWindowSize ??
-            store.steps[message.stepIndex]._runtime?.contextWindowSize,
+            runtime?.contextWindowSize,
         },
       });
       useWorkflowStore.temporal.getState().resume();
@@ -1966,6 +1993,30 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.SAVE_LOCATION_SELECTED] = (message) => {
     const uiStore = useUiStore.getState();
     uiStore.setSaveLocationSelection({ path: message.path });
+  };
+
+  // --------------------------------------------------------------------------
+  // SUB_WORKFLOW_STEP_FILE_SELECTED - the step editor's Workflow-mode pick
+  // (native picker or hosted modal), as the reference the step stores.
+  // Dropped unless the editor is still on the target the pick was asked for
+  // (the echoed `targetKey`) and that target is still a file-reference
+  // workflow step, so a slow pick cannot land on another step.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SUB_WORKFLOW_STEP_FILE_SELECTED] = (message) => {
+    if (typeof message.path !== "string") return;
+    const editor = useEditorStore.getState();
+    if (
+      message.targetKey !==
+        editorTargetKey(
+          editor.selectionTarget,
+          useWorkflowStore.getState().steps
+        ) ||
+      !isSubWorkflowEditorStepType(editor.stepType) ||
+      editor.subWorkflowInline !== null
+    ) {
+      return;
+    }
+    editor.setSubWorkflowPath(message.path);
   };
 
   // --------------------------------------------------------------------------

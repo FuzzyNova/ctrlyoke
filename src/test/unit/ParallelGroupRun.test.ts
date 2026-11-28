@@ -1,10 +1,16 @@
 import * as assert from "assert";
+import { executionStepText } from "../helpers/stepAssertions";
 import { suite, test } from "mocha";
-import { ParallelGroupRun } from "../../core/ParallelGroupRun";
+import {
+  ParallelGroupRun,
+  type ParallelGroupRunOptions,
+} from "../../core/ParallelGroupRun";
+import type { ParallelGroupPreflightMember } from "../../core/ParallelGroupPreflight";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
 } from "../../types/DashboardConstants";
@@ -71,6 +77,10 @@ function makeRun(options: {
   }>;
   readonly onCancel?: () => void;
   readonly persistAdmission?: () => Promise<void>;
+  /** Members whose dispatch preflight reports an issue. */
+  readonly failingPreflight?: ReadonlySet<string>;
+  readonly failedPreflightMember?: ParallelGroupRunOptions<TestContext>["failedPreflightMember"];
+  readonly onExecuteMember?: (member: ParallelGroupPreflightMember) => void;
 }) {
   const steps = new Map(options.ids.map((id) => [id, step(id)]));
   const indices = new Map(options.ids.map((id, index) => [id, index]));
@@ -123,13 +133,24 @@ function makeRun(options: {
           resolvedProperties: properties,
           variables: {},
         },
-        issues: [],
+        issues: options.failingPreflight?.has(executionStepText(memberStep))
+          ? [
+              {
+                code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION,
+                memberIndices: [stepIndex],
+                message: "collides",
+              },
+            ]
+          : [],
         failureMessage: "preflight failed",
       };
     },
-    executeMember: async (target, memberStep) => {
-      const stepId =
-        "prompt" in memberStep ? memberStep.prompt : memberStep.script;
+    ...(options.failedPreflightMember
+      ? { failedPreflightMember: options.failedPreflightMember }
+      : {}),
+    executeMember: async (target, memberStep, _context, _strategy, member) => {
+      if (member) options.onExecuteMember?.(member);
+      const stepId = executionStepText(memberStep);
       return (
         (await options.execute?.(stepId, target)) ?? {
           target,
@@ -607,6 +628,83 @@ suite("ParallelGroupRun", () => {
     assert.strictEqual(outcome.terminalFailure, true);
   });
 
+  test("a member failing its dispatch preflight fails alone without triggering fail-fast", async () => {
+    const runningStarted = deferred();
+    const runningRelease = deferred();
+    let cancelled = 0;
+    const harness = makeRun({
+      ids: ["running", "late"],
+      pendingIds: ["running"],
+      width: 2,
+      failingPreflight: new Set(["late"]),
+      execute: async (stepId, target) => {
+        if (stepId === "running") {
+          runningStarted.resolve();
+          await runningRelease.promise;
+        }
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+      onCancel: () => {
+        cancelled += 1;
+      },
+    });
+
+    const completion = harness.run.run();
+    await runningStarted.promise;
+    assert.strictEqual(harness.run.admit("late"), true);
+    await waitForOutcome(harness.run, "late");
+    assert.strictEqual(
+      harness.run.outcomes.get("late")?.status,
+      PROMPT_TERMINAL_STATUS.FAILED
+    );
+    assert.strictEqual(harness.run.isAdmissionOpen, true);
+    runningRelease.resolve();
+    const outcome = await completion;
+
+    assert.strictEqual(cancelled, 0, "the running sibling was not cancelled");
+    assert.strictEqual(
+      outcome.outcomes[0]?.status,
+      PROMPT_TERMINAL_STATUS.COMPLETED
+    );
+    // As a group-preflight conflict fails its group, the join fails.
+    assert.strictEqual(outcome.terminalFailure, true);
+  });
+
+  test("a member failing its dispatch preflight settles through the member its policy supplies", async () => {
+    const executed: ParallelGroupPreflightMember[] = [];
+    const harness = makeRun({
+      ids: ["first", "late"],
+      width: 2,
+      failingPreflight: new Set(["late"]),
+      failedPreflightMember: (preflight) => ({
+        ...preflight.member,
+        subWorkflowLaunch: {
+          ok: false,
+          failureMessage: preflight.failureMessage,
+        },
+      }),
+      onExecuteMember: (member) => executed.push(member),
+      execute: async (stepId, target) =>
+        stepId === "late"
+          ? {
+              target,
+              status: PROMPT_TERMINAL_STATUS.FAILED,
+              terminalFailure: false,
+            }
+          : { target, status: PROMPT_TERMINAL_STATUS.COMPLETED },
+    });
+
+    const outcome = await harness.run.run();
+
+    const late = executed.find((member) => member.stepIndex === 1);
+    assert.deepStrictEqual(late?.subWorkflowLaunch, {
+      ok: false,
+      failureMessage: "preflight failed",
+    });
+    assert.strictEqual(outcome.terminalFailure, false);
+    assert.strictEqual(outcome.settledCount, 2);
+  });
+
   test("retains the existing behavior when no member is admitted late", async () => {
     const harness = makeRun({ ids: ["first", "second"], width: 2 });
     const outcome = await harness.run.run();
@@ -618,3 +716,19 @@ suite("ParallelGroupRun", () => {
     assert.strictEqual(harness.run.isAdmissionOpen, false);
   });
 });
+
+/** Wait for `stepId` to settle; fail by name if it has not within ~1 s. */
+async function waitForOutcome(
+  run: ParallelGroupRun<TestContext>,
+  stepId: string
+): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    if (run.outcomes.has(stepId)) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail(
+    `Timed out waiting for member "${stepId}" to settle; settled: [${[
+      ...run.outcomes.keys(),
+    ].join(", ")}]`
+  );
+}

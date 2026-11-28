@@ -1,6 +1,8 @@
 import * as assert from "assert";
+import { executionRuntime } from "../helpers/stepAssertions";
 import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
+import { writeFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
@@ -24,8 +26,13 @@ import { StatusMessageReporter } from "../../core/orchestration/StatusMessageRep
 import type { UserFeedbackSink } from "../../core/UserFeedbackSink";
 import {
   PromptFile,
+  type SubWorkflowOutput,
   PromptStep,
   type ScriptProperties,
+  type WorkflowKey,
+  type WorkflowStep,
+  type SubWorkflowStep,
+  isSubWorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import {
   CLI_EVENT_TYPES,
@@ -39,6 +46,7 @@ import {
   isContextResolutionDiagnostic,
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
+  SUB_WORKFLOW_CANCELLATION_SOURCES,
   CTRLYOKE_ENV_VARS,
   CONDITION_ACTIONS,
   ERROR_BEHAVIOR_ACTIONS,
@@ -56,7 +64,12 @@ import { formatVerdictSummary } from "../../core/orchestration/ScriptExecutionRe
 import {
   TIMELINE_ATTEMPT_START_REASONS,
   TIMELINE_ATTEMPT_TERMINAL_STATES,
+  TIMELINE_EVENT_TYPES,
 } from "../../types/WorkflowTimelineTypes";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { SubWorkflowLauncher } from "../../core/orchestration/SubWorkflowLauncher";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { getExitCode } from "../../cli/CliExitCode";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { SecretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
@@ -80,11 +93,21 @@ import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { RunStartView } from "../../utils/RunStartView";
+import type {
+  SubWorkflowControl,
+  SubWorkflowHandle,
+  SubWorkflowHost,
+  SubWorkflowLaunchRequest,
+  SubWorkflowParentLink,
+  SubWorkflowResult,
+} from "../../types/SubWorkflowTypes";
 import {
   VAR_SUBSTITUTION_KINDS,
   VAR_SUBSTITUTION_POLICY,
   VAR_SUBSTITUTION_VIEWS,
 } from "../../utils/VarSubstitutionPolicy";
+import { STEP_TYPES, WORKTREE_MODES } from "../../types/DashboardConstants";
+import { PromptFileParser } from "../../core/PromptFileParser";
 
 interface Deferred {
   readonly promise: Promise<void>;
@@ -2884,7 +2907,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
       assert.strictEqual(queue.getState().currentIndex, 0);
       assert.strictEqual(
-        queue.getState().steps[1]._runtime?.rewoundFailure,
+        executionRuntime(queue.getState().steps[1])?.rewoundFailure,
         true
       );
       await assert.rejects(
@@ -3591,7 +3614,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     try {
       await makeExecutor(queue).execute(integration, makeContext(integration));
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
-      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, []);
+      assert.deepStrictEqual(
+        executionRuntime(queue.getState().steps[0])?.secrets,
+        []
+      );
     } finally {
       configService.setCliOverlay({});
       if (previousValue === undefined) {
@@ -3616,9 +3642,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         new MockHarnessIntegration(undefined, false),
         makeContext(new MockHarnessIntegration(undefined, false))
       );
-      assert.deepStrictEqual(queue.getState().steps[0]._runtime?.secrets, [
-        secretName,
-      ]);
+      assert.deepStrictEqual(
+        executionRuntime(queue.getState().steps[0])?.secrets,
+        [secretName]
+      );
     } finally {
       configService.setCliOverlay({});
       if (previousValue === undefined) delete process.env[secretName];
@@ -4903,11 +4930,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
     assert.ok(runtime?.completedAt);
     assert.strictEqual(
-      queue.getWorkflowFile().finalStep?._runtime?.harness,
+      executionRuntime(queue.getWorkflowFile().finalStep)?.harness,
       HARNESS_IDS.CODEX_CLI
     );
     assert.strictEqual(
-      queue.getWorkflowFile().finalStep?._runtime?.model,
+      executionRuntime(queue.getWorkflowFile().finalStep)?.model,
       "gpt-5.4-mini"
     );
   });
@@ -6177,6 +6204,1582 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
     assert.deepStrictEqual(feedback, []);
   });
+
+  test("a Continue that beats a confirmed pause's unwind carries on in place and clears the pause marker", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    integration.onSend = async (prompt) => ({
+      responseText: `ok:${prompt.prompt}`,
+      ...(prompt.prompt === "first"
+        ? { afterResponse: () => requestQueuePause(queue) }
+        : {}),
+    });
+    queue.loadPrompts({ steps: [{ prompt: "first" }, { prompt: "second" }] });
+
+    // The executor confirms the pause (PAUSING -> PAUSED) and commits it; the
+    // Continue lands inside that commit, before the queue loop has seen the
+    // PAUSED state, so the loop ends on a RUNNING run with a step left.
+    let resumed = false;
+    const subscription = queue.onDidChangeState((state) => {
+      if (!resumed && state.status === EXECUTION_STATES.PAUSED) {
+        resumed = true;
+        assert.ok(queue.getRuntimeStateMachine().resume());
+      }
+    });
+    try {
+      await executor.execute(integration, makeContext(integration));
+    } finally {
+      subscription.dispose();
+    }
+
+    assert.ok(resumed, "the pause was confirmed and resumed in place");
+    assert.deepStrictEqual(integration.sentPrompts, ["first", "second"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      executor.endedOnPause(),
+      false,
+      "the carry-on clears the pause it had confirmed"
+    );
+  });
+});
+
+suite("WorkflowExecutor sub-workflow steps", () => {
+  let tempRoot: string;
+  let originalPlatform: NodeJS.Platform;
+
+  setup(async () => {
+    originalPlatform = process.platform;
+    tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-subworkflow-")
+    );
+  });
+
+  teardown(async () => {
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  async function setupRun(
+    steps: PromptFile["steps"] = [
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+    ],
+    parallelGroups?: PromptFile["parallelGroups"]
+  ): Promise<{
+    queue: PromptQueue;
+    executor: WorkflowExecutor;
+    context: WorkflowExecutionContext;
+    integration: MockHarnessIntegration;
+    childPath: string;
+  }> {
+    const childPath = path.join(tempRoot, "child.ctrlyoke.yaml");
+    await fs.writeFile(childPath, "name: child\nsteps: []\n");
+    const queue = new PromptQueue();
+    queue.loadPrompts({ steps, ...(parallelGroups ? { parallelGroups } : {}) });
+    const queueState = queue as unknown as {
+      state: { workflowKey?: string; runRef?: string };
+    };
+    queueState.state.workflowKey = "parent-key";
+    queueState.state.runRef = "run-parent";
+    const integration = new MockHarnessIntegration(undefined, false);
+    const context = makeContext(integration);
+    context.executionWorkspace = createNoWorktreeExecutionWorkspace(
+      new MockPlatform(tempRoot),
+      tempRoot
+    );
+    context.workspaceFolderPath = tempRoot;
+    context.currentPromptFilePath = path.join(tempRoot, "parent.ctrlyoke.yaml");
+    context.sourceDefinitionPath = context.currentPromptFilePath;
+    context.ancestorPaths = [context.currentPromptFilePath];
+    return {
+      queue,
+      executor: makeExecutor(queue),
+      context,
+      integration,
+      childPath,
+    };
+  }
+
+  function fakeHandle(result: Promise<SubWorkflowResult>): SubWorkflowHandle {
+    return {
+      workflowKey: "child-key" as never,
+      runRef: "run-child" as never,
+      done: result,
+      pause: async () => undefined,
+      cancelPause: async () => undefined,
+      stop: async () => undefined,
+    };
+  }
+
+  function fakeHost(
+    result: Promise<SubWorkflowResult>,
+    observe?: (request: SubWorkflowLaunchRequest) => void
+  ): SubWorkflowHost {
+    return {
+      launch: async (request) => {
+        observe?.(request);
+        return fakeHandle(result);
+      },
+    };
+  }
+
+  const completedResult = (): Promise<SubWorkflowResult> =>
+    Promise.resolve({
+      status: PROMPT_TERMINAL_STATUS.COMPLETED,
+    });
+
+  test("completes when the child completes and passes the resolved path and ancestor chain", async () => {
+    const { queue, executor, context, integration, childPath } =
+      await setupRun();
+    let request: SubWorkflowLaunchRequest | undefined;
+    context.subWorkflowHost = fakeHost(
+      completedResult(),
+      (value) => (request = value)
+    );
+    await executor.execute(integration, context);
+    assert.strictEqual(
+      queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.deepStrictEqual(request?.source, {
+      kind: "file",
+      resolvedPath: childPath,
+    });
+    assert.strictEqual(request?.concurrent, false);
+    assert.deepStrictEqual(request?.ancestorPaths, [
+      context.currentPromptFilePath,
+      childPath,
+    ]);
+    assert.deepStrictEqual(request?.parent, {
+      workflowKey: "parent-key",
+      runRef: "run-parent",
+      phase: FINAL_STEP_PHASES.QUEUE,
+      stepId: queue.getState().steps[0]?._runtime?.stepId,
+    });
+  });
+
+  test("continues after a worktree child start failure when onFail is continue", async () => {
+    const { queue, executor, context, integration } = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    context.subWorkflowHost = {
+      launch: async (request) => {
+        const check = request.parentExecution.prepareWorktreeChild;
+        assert.ok(check);
+        await assert.rejects(check(), /dirty parent/);
+        throw new Error("dirty parent");
+      },
+    };
+    context.prepareSubWorkflowWorktreeChild = async () => {
+      throw new Error("dirty parent");
+    };
+
+    await executor.execute(integration, context);
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
+  test("records one settled event payload for each launched child outcome", async () => {
+    const results: SubWorkflowResult[] = [
+      {
+        status: PROMPT_TERMINAL_STATUS.COMPLETED,
+        worktree: {
+          mode: "managed" as never,
+          branchName: "child-branch",
+          baseCommit: "base",
+          finalBranchTip: "tip",
+          changedFileCount: 2,
+          landingOutcome: "merged" as never,
+          mergeOutcome: "merged" as never,
+          conflictFiles: [],
+        },
+      },
+      { status: PROMPT_TERMINAL_STATUS.FAILED, failureMessage: "failed" },
+      {
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failedToStart: true,
+        failureMessage: "bad child",
+      },
+      { status: PROMPT_TERMINAL_STATUS.CANCELLED, cancelledBy: "parent" },
+    ];
+    for (const result of results) {
+      const run = await setupRun();
+      const recorded: unknown[] = [];
+      run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+      run.context.outputHistoryManager = new Proxy(
+        {
+          recordSubWorkflowSettled: async (...args: unknown[]) => {
+            recorded.push(args);
+          },
+        },
+        {
+          get: (target, property) =>
+            Reflect.get(target, property) ?? (async () => undefined),
+        }
+      ) as never;
+      run.context.subWorkflowHost = fakeHost(Promise.resolve(result));
+      await run.executor.execute(run.integration, run.context);
+      assert.strictEqual(recorded.length, 1);
+      const payload = (recorded[0] as unknown[])[4] as {
+        resolvedWorkflowPath: string;
+        childWorkflowKey: string;
+        childRunRef: string;
+        outcome: SubWorkflowResult;
+        worktree?: SubWorkflowResult["worktree"];
+      };
+      assert.strictEqual(payload.resolvedWorkflowPath, run.childPath);
+      assert.strictEqual(payload.childWorkflowKey, "child-key");
+      assert.strictEqual(payload.childRunRef, "run-child");
+      const { worktree: _worktree, ...expectedOutcome } = result;
+      assert.deepStrictEqual(payload.outcome, expectedOutcome);
+      assert.deepStrictEqual(payload.worktree, result.worktree);
+    }
+  });
+
+  test("records a child stopped while loading as CANCELLED by the parent, as its step settles", async () => {
+    const run = await setupRun();
+    const recorded: unknown[] = [];
+    run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    run.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) => {
+          recorded.push(args);
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    let control: SubWorkflowControl | undefined;
+    run.context.registerActiveTarget = (_target, _attempt, subWorkflow) => {
+      if (subWorkflow) control = subWorkflow;
+    };
+    run.context.subWorkflowHost = {
+      launch: async () => {
+        // The parent's stop arrives while the child loads, and the load then
+        // fails after the child allocated its run identity.
+        await control?.stop();
+        return fakeHandle(
+          Promise.resolve({
+            status: PROMPT_TERMINAL_STATUS.FAILED,
+            failedToStart: true,
+            failureMessage: "load interrupted",
+          })
+        );
+      },
+    };
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(
+      run.queue.getState().results[0]?.status,
+      STEP_STATUS.CANCELLED
+    );
+    assert.strictEqual(recorded.length, 1);
+    const payload = (recorded[0] as unknown[])[4] as {
+      outcome: SubWorkflowResult;
+    };
+    assert.deepStrictEqual(payload.outcome, {
+      status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      cancelledBy: SUB_WORKFLOW_CANCELLATION_SOURCES.PARENT,
+    });
+  });
+
+  test("records a childless failed settlement when failure happens before child launch", async () => {
+    const run = await setupRun();
+    const recorded: unknown[][] = [];
+    run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    run.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          recorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    // No host: the step fails before any child run exists (D12a).
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(recorded.length, 1);
+    const payload = recorded[0][4] as SubWorkflowOutput;
+    assert.strictEqual(payload.childWorkflowKey, undefined);
+    assert.strictEqual(payload.childRunRef, undefined);
+    assert.strictEqual(payload.outcome.status, PROMPT_TERMINAL_STATUS.FAILED);
+    assert.match(payload.outcome.failureMessage ?? "", /not supported/);
+  });
+
+  test("records one childless settlement for a cycle failure under onFail: continue, and none when a child settled", async () => {
+    const cycle = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    const recorded: unknown[][] = [];
+    cycle.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    cycle.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          recorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    cycle.context.subWorkflowHost = fakeHost(completedResult());
+    cycle.context.ancestorPaths = [cycle.childPath];
+    await cycle.executor.execute(cycle.integration, cycle.context);
+    assert.strictEqual(
+      cycle.queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(recorded.length, 1);
+    const payload = recorded[0][4] as SubWorkflowOutput;
+    assert.strictEqual(payload.childWorkflowKey, undefined);
+    assert.match(payload.outcome.failureMessage ?? "", /cycle detected/i);
+
+    // A child that launched and failed records its own event only.
+    const failedChild = await setupRun();
+    const childRecorded: unknown[][] = [];
+    failedChild.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    failedChild.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          childRecorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    failedChild.context.subWorkflowHost = fakeHost(
+      Promise.resolve({
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureMessage: "child broke",
+      })
+    );
+    await failedChild.executor.execute(
+      failedChild.integration,
+      failedChild.context
+    );
+    assert.strictEqual(childRecorded.length, 1);
+    assert.strictEqual(
+      (childRecorded[0][4] as SubWorkflowOutput).childWorkflowKey,
+      "child-key"
+    );
+  });
+
+  test("records a failed settlement addressed to a launched child whose run throws", async () => {
+    const run = await setupRun();
+    const recorded: unknown[][] = [];
+    run.context.historyFilePath = path.join(tempRoot, "events.jsonl");
+    run.context.outputHistoryManager = new Proxy(
+      {
+        recordSubWorkflowSettled: async (...args: unknown[]) =>
+          recorded.push(args),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    ) as never;
+    const crashed = Promise.reject(new Error("child host crashed"));
+    // Handled by the executor's await; this only keeps Node from flagging it
+    // as unhandled before the step reaches it.
+    crashed.catch(() => undefined);
+    run.context.subWorkflowHost = fakeHost(crashed);
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(
+      run.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+    assert.strictEqual(recorded.length, 1);
+    const payload = recorded[0][4] as SubWorkflowOutput;
+    assert.strictEqual(payload.childWorkflowKey, "child-key");
+    assert.strictEqual(payload.childRunRef, "run-child");
+    assert.deepStrictEqual(payload.outcome, {
+      status: PROMPT_TERMINAL_STATUS.FAILED,
+      failureMessage: "child host crashed",
+    });
+  });
+
+  test("fails by default for a failed child and continues with failure metadata when requested", async () => {
+    const stopped = await setupRun();
+    stopped.context.subWorkflowHost = fakeHost(
+      Promise.resolve({
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureMessage: "child broke",
+      })
+    );
+    await stopped.executor.execute(stopped.integration, stopped.context);
+    assert.strictEqual(
+      stopped.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+
+    const continued = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    continued.context.subWorkflowHost = fakeHost(
+      Promise.resolve({
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureMessage: "child broke",
+      })
+    );
+    await continued.executor.execute(continued.integration, continued.context);
+    assert.strictEqual(
+      continued.queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(
+      continued.queue.getState().steps[0]?._runtime?.failureMessage,
+      "child broke"
+    );
+  });
+
+  test("prefixes failed-to-start messages and treats cancellation as a parent stop", async () => {
+    const failed = await setupRun();
+    failed.context.subWorkflowHost = fakeHost(
+      Promise.resolve({
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failedToStart: true,
+        failureMessage: "invalid workflow",
+      })
+    );
+    await failed.executor.execute(failed.integration, failed.context);
+    assert.match(
+      failed.queue.getState().steps[0]?._runtime?.failureMessage ?? "",
+      /^Sub-workflow could not start: /
+    );
+
+    const cancelled = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+        onFail: CONDITION_ACTIONS.CONTINUE,
+      },
+    ]);
+    cancelled.context.subWorkflowHost = fakeHost(
+      Promise.resolve({
+        status: PROMPT_TERMINAL_STATUS.CANCELLED,
+      })
+    );
+    await cancelled.executor.execute(cancelled.integration, cancelled.context);
+    assert.strictEqual(
+      cancelled.queue.getState().results[0]?.status,
+      STEP_STATUS.CANCELLED
+    );
+    assert.strictEqual(
+      cancelled.queue.getState().status,
+      EXECUTION_STATES.STOPPED
+    );
+  });
+
+  test("inline sub-workflows launch with the materialized child definition", async () => {
+    const succeeded = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { prompt: "inline child" },
+      },
+    ]);
+    let request: SubWorkflowLaunchRequest | undefined;
+    succeeded.context.subWorkflowHost = fakeHost(completedResult(), (value) => {
+      request = value;
+    });
+    await succeeded.executor.execute(succeeded.integration, succeeded.context);
+    assert.strictEqual(
+      succeeded.queue.getState().results[0]?.status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(request?.source.kind, "inline");
+    if (request?.source.kind === "inline") {
+      assert.deepStrictEqual(request.source.definition.steps, [
+        { prompt: "inline child" },
+      ]);
+      assert.deepStrictEqual(request.ancestorPaths, [
+        succeeded.context.currentPromptFilePath,
+      ]);
+    }
+  });
+
+  test("a cancelled child stops the parent before its next step", async () => {
+    const run = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+    ]);
+    let launches = 0;
+    run.context.subWorkflowHost = fakeHost(
+      Promise.resolve({ status: PROMPT_TERMINAL_STATUS.CANCELLED }),
+      () => (launches += 1)
+    );
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(launches, 1);
+    assert.strictEqual(run.queue.getState().status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(
+      run.queue.getState().results[1]?.status,
+      STEP_STATUS.PENDING
+    );
+  });
+
+  test("a launch that throws before the child exists is a start failure", async () => {
+    const run = await setupRun();
+    run.context.subWorkflowHost = {
+      launch: async () => {
+        throw new Error("Failed to parse child.ctrlyoke.yaml");
+      },
+    } satisfies SubWorkflowHost;
+    await run.executor.execute(run.integration, run.context);
+    assert.strictEqual(
+      run.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+    assert.strictEqual(
+      run.queue.getState().steps[0]?._runtime?.failureMessage,
+      "Sub-workflow could not start: Failed to parse child.ctrlyoke.yaml"
+    );
+  });
+
+  test("fails cleanly without a host or when the workflow path cannot resolve", async () => {
+    const missingHost = await setupRun();
+    await missingHost.executor.execute(
+      missingHost.integration,
+      missingHost.context
+    );
+    assert.match(
+      missingHost.queue.getState().steps[0]?._runtime?.failureMessage ?? "",
+      /not supported in this host/
+    );
+
+    const missing = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "missing.ctrlyoke.yaml"),
+      },
+    ]);
+    missing.context.subWorkflowHost = fakeHost(completedResult());
+    await missing.executor.execute(missing.integration, missing.context);
+    assert.strictEqual(
+      missing.queue.getState().results[0]?.status,
+      STEP_STATUS.FAILED
+    );
+  });
+
+  test("detects cycles case-insensitively on Windows and permits repeated queued children", async () => {
+    const cycle = await setupRun();
+    const launches: SubWorkflowLaunchRequest[] = [];
+    cycle.context.subWorkflowHost = fakeHost(completedResult(), (request) =>
+      launches.push(request)
+    );
+    Object.defineProperty(process, "platform", { value: "win32" });
+    cycle.context.ancestorPaths = [
+      path.join(tempRoot, "PARENT.CTRLYOKE.YAML"),
+      cycle.childPath.toUpperCase(),
+    ];
+    await cycle.executor.execute(cycle.integration, cycle.context);
+    assert.strictEqual(launches.length, 0);
+    assert.match(
+      cycle.queue.getState().steps[0]?._runtime?.failureMessage ?? "",
+      /cycle detected/i
+    );
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+
+    const repeated = await setupRun([
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: path.join(tempRoot, "child.ctrlyoke.yaml"),
+      },
+    ]);
+    let count = 0;
+    repeated.context.subWorkflowHost = fakeHost(
+      completedResult(),
+      () => count++
+    );
+    await repeated.executor.execute(repeated.integration, repeated.context);
+    assert.strictEqual(count, 2);
+  });
+
+  test("persists child linkage before done resolves with finalStep phase and loopIndex", async () => {
+    let resolvePending!: (result: SubWorkflowResult) => void;
+    const pending = new Promise<SubWorkflowResult>((resolve) => {
+      resolvePending = resolve;
+    });
+    const run = await setupRun([]);
+    const finalStep = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: run.childPath,
+    } as PromptFile["finalStep"];
+    run.queue.loadPrompts({ steps: [], finalStep });
+    const queueState = run.queue as unknown as {
+      state: { workflowKey?: string; runRef?: string };
+    };
+    queueState.state.workflowKey = "parent-key";
+    queueState.state.runRef = "run-parent";
+    run.context.subWorkflowHost = fakeHost(pending, (request) => {
+      assert.deepStrictEqual(request.parent, {
+        workflowKey: "parent-key",
+        runRef: "run-parent",
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 0,
+      });
+    });
+    const dispatch = run.executor as unknown as {
+      executeTargetContract: (
+        target: { kind: string; loopIndex: number },
+        step: NonNullable<PromptFile["finalStep"]>,
+        context: WorkflowExecutionContext
+      ) => Promise<boolean>;
+    };
+    const execution = dispatch.executeTargetContract(
+      { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+      finalStep!,
+      run.context
+    );
+    for (
+      let index = 0;
+      index < 10 &&
+      !(
+        run.queue.getWorkflowFile().finalStep as
+          { _runtime?: { childRunRef?: string } } | undefined
+      )?._runtime?.childRunRef;
+      index++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    // finalStep runtime is stored at the steps.length slot, including an empty queue.
+    const finalRuntime = (
+      run.queue.getWorkflowFile().finalStep as
+        { _runtime?: { childRunRef?: string } } | undefined
+    )?._runtime;
+    assert.strictEqual(finalRuntime?.childRunRef, "run-child");
+    resolvePending({ status: PROMPT_TERMINAL_STATUS.COMPLETED });
+    await execution;
+  });
+
+  suite("parallel members", () => {
+    const group = (endIndex: number) => [
+      { id: "lanes", startIndex: 0, endIndex, failFast: false },
+    ];
+
+    async function writeLane(name: string, content: string): Promise<string> {
+      const lanePath = path.join(tempRoot, name);
+      await fs.writeFile(lanePath, content);
+      return lanePath;
+    }
+
+    function recordingHost(
+      requests: SubWorkflowLaunchRequest[],
+      onLaunch?: () => void
+    ): SubWorkflowHost {
+      return {
+        launch: async (request) => {
+          onLaunch?.();
+          requests.push(request);
+          return fakeHandle(completedResult());
+        },
+      };
+    }
+
+    test("launches every file member concurrently with the parse its preflight made", async () => {
+      const lanePath = await writeLane(
+        "lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: lane work\n"
+      );
+      const run = await setupRun(
+        [
+          { type: STEP_TYPES.WORKFLOW, workflow: lanePath },
+          { type: STEP_TYPES.WORKFLOW, workflow: lanePath },
+        ],
+        group(1)
+      );
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+      const parses: string[] = [];
+      const originalParse = PromptFileParser.prototype.parsePromptFile;
+      PromptFileParser.prototype.parsePromptFile = function (filePath) {
+        parses.push(filePath);
+        return originalParse.call(this, filePath);
+      };
+      try {
+        await run.executor.execute(run.integration, run.context);
+      } finally {
+        PromptFileParser.prototype.parsePromptFile = originalParse;
+      }
+
+      assert.strictEqual(
+        run.queue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.strictEqual(requests.length, 2);
+      for (const request of requests) {
+        assert.strictEqual(request.concurrent, true);
+        assert.strictEqual(request.source.kind, "file");
+        assert.strictEqual(
+          request.source.kind === "file"
+            ? (request.source.parsed?.steps?.[0] as PromptStep | undefined)
+                ?.prompt
+            : undefined,
+          "lane work"
+        );
+      }
+      // Group preflight and each dispatch preflight share one parse per member.
+      assert.deepStrictEqual(parses, [lanePath, lanePath]);
+    });
+
+    test("a member that cannot start fails alone under its own onFail", async () => {
+      const lanePath = await writeLane(
+        "lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: lane work\n"
+      );
+      const invalidPath = await writeLane(
+        "invalid.ctrlyoke.yaml",
+        "steps: 5\n"
+      );
+      // The parent's own file: a member naming it closes a cycle (D10).
+      const parentPath = path.join(tempRoot, "parent.ctrlyoke.yaml");
+      await fs.writeFile(parentPath, "steps: []\n");
+      const run = await setupRun(
+        [
+          {
+            type: STEP_TYPES.WORKFLOW,
+            workflow: path.join(tempRoot, "missing.ctrlyoke.yaml"),
+            onFail: CONDITION_ACTIONS.CONTINUE,
+          },
+          {
+            type: STEP_TYPES.WORKFLOW,
+            workflow: parentPath,
+            onFail: CONDITION_ACTIONS.CONTINUE,
+          },
+          { type: STEP_TYPES.WORKFLOW, workflow: invalidPath },
+          { type: STEP_TYPES.WORKFLOW, workflow: lanePath },
+        ],
+        group(3)
+      );
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+
+      await run.executor.execute(run.integration, run.context);
+
+      const state = run.queue.getState();
+      assert.deepStrictEqual(
+        requests.map((request) =>
+          request.source.kind === "file" ? request.source.resolvedPath : ""
+        ),
+        [lanePath]
+      );
+      assert.deepStrictEqual(
+        state.results.map((result) => result.status),
+        [
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.COMPLETED,
+          STEP_STATUS.FAILED,
+          STEP_STATUS.COMPLETED,
+        ]
+      );
+      assert.match(
+        state.steps[0]?._runtime?.failureMessage ?? "",
+        /could not resolve/
+      );
+      assert.match(
+        state.steps[1]?._runtime?.failureMessage ?? "",
+        /Sub-workflow cycle detected: parent\.ctrlyoke\.yaml → parent\.ctrlyoke\.yaml/
+      );
+      assert.match(
+        state.steps[2]?._runtime?.failureMessage ?? "",
+        /invalid\.ctrlyoke\.yaml is invalid/
+      );
+      // The stopWorkflow member stops the parent once the group has joined.
+      assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+    });
+
+    const inlineLane = (
+      script: string,
+      worktree: boolean,
+      onFail?: typeof CONDITION_ACTIONS.CONTINUE
+    ): WorkflowStep => ({
+      type: STEP_TYPES.WORKFLOW,
+      ...(onFail ? { onFail } : {}),
+      workflow: {
+        type: STEP_TYPES.SCRIPT,
+        script,
+        ...(worktree ? { worktree: { mode: WORKTREE_MODES.MANAGED } } : {}),
+      },
+    });
+
+    test("checks a dirty parent once for the group before any worktree member launches", async () => {
+      const run = await setupRun(
+        [
+          inlineLane("echo one", true),
+          inlineLane("echo two", true),
+          inlineLane("echo shared", false),
+        ],
+        group(2)
+      );
+      const order: string[] = [];
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.prepareSubWorkflowWorktreeChild = async () => {
+        order.push("check");
+      };
+      run.context.subWorkflowHost = recordingHost(requests, () =>
+        order.push("launch")
+      );
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.deepStrictEqual(order, ["check", "launch", "launch", "launch"]);
+      const byScript = new Map(
+        requests.map((request) => [
+          request.source.kind === "inline"
+            ? (request.source.definition.steps?.[0] as { script?: string })
+                ?.script
+            : undefined,
+          request,
+        ])
+      );
+      // The checked lanes skip the launcher's own check; the member without a
+      // worktree keeps it, where the launcher finds nothing to check.
+      assert.strictEqual(
+        byScript.get("echo one")?.parentExecution.prepareWorktreeChild,
+        undefined
+      );
+      assert.strictEqual(
+        byScript.get("echo two")?.parentExecution.prepareWorktreeChild,
+        undefined
+      );
+      assert.ok(
+        byScript.get("echo shared")?.parentExecution.prepareWorktreeChild
+      );
+    });
+
+    test("a refused parent checkout fails only the worktree members, each under its onFail", async () => {
+      const run = await setupRun(
+        [
+          inlineLane("echo one", true, CONDITION_ACTIONS.CONTINUE),
+          inlineLane("echo two", true),
+          inlineLane("echo shared", false),
+        ],
+        group(2)
+      );
+      let checks = 0;
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.prepareSubWorkflowWorktreeChild = async () => {
+        checks += 1;
+        throw new Error(
+          "Commit or stash the parent's changes before starting worktree sub-workflows (dirty: 1 files)"
+        );
+      };
+      run.context.subWorkflowHost = recordingHost(requests);
+
+      await run.executor.execute(run.integration, run.context);
+
+      const state = run.queue.getState();
+      assert.strictEqual(checks, 1);
+      assert.strictEqual(requests.length, 1);
+      assert.deepStrictEqual(
+        state.results.map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.FAILED, STEP_STATUS.COMPLETED]
+      );
+      for (const index of [0, 1]) {
+        assert.match(
+          state.steps[index]?._runtime?.failureMessage ?? "",
+          /Sub-workflow could not start: Commit or stash/
+        );
+      }
+      assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+    });
+
+    test("members of a group that does not fan out launch as sequential children", async () => {
+      const run = await setupRun(
+        [inlineLane("echo one", false), inlineLane("echo two", false)],
+        group(1)
+      );
+      run.context.parallelGroupFanOutEnabled = false;
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.deepStrictEqual(
+        requests.map((request) => request.concurrent),
+        [false, false]
+      );
+    });
+
+    const parsedPrompt = (request: SubWorkflowLaunchRequest | undefined) =>
+      request?.source.kind === "file"
+        ? (request.source.parsed?.steps?.[0] as PromptStep | undefined)?.prompt
+        : undefined;
+
+    test("a Continue after a failed group preflight prepares every child afresh", async () => {
+      const missingPath = path.join(tempRoot, "missing-lane.ctrlyoke.yaml");
+      const editedPath = await writeLane(
+        "edited-lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: before the fix\n"
+      );
+      const run = await setupRun(
+        [
+          { prompt: "sibling" },
+          { type: STEP_TYPES.WORKFLOW, workflow: missingPath },
+          { type: STEP_TYPES.WORKFLOW, workflow: editedPath },
+        ],
+        group(2)
+      );
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+      // A group issue: the prompt member's harness is not ready, so the
+      // group preflight throws after preparing both sub-workflow members.
+      run.context.ensureHarnessReady = async () => "not installed";
+      await assert.rejects(
+        run.executor.execute(run.integration, run.context),
+        /not ready: not installed/
+      );
+      assert.strictEqual(requests.length, 0);
+
+      // The author installs the harness, creates the missing child and edits
+      // the other, then continues.
+      await writeLane(
+        "missing-lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: created\n"
+      );
+      await writeLane(
+        "edited-lane.ctrlyoke.yaml",
+        "steps:\n  - prompt: after the fix\n"
+      );
+      run.context.ensureHarnessReady = undefined;
+      await run.executor.execute(run.integration, run.context);
+
+      const state = run.queue.getState();
+      assert.strictEqual(
+        state.status,
+        EXECUTION_STATES.COMPLETED,
+        JSON.stringify(state.results)
+      );
+      const byPath = new Map(
+        requests.map((request) => [
+          request.source.kind === "file" ? request.source.resolvedPath : "",
+          request,
+        ])
+      );
+      assert.strictEqual(parsedPrompt(byPath.get(missingPath)), "created");
+      assert.strictEqual(parsedPrompt(byPath.get(editedPath)), "after the fix");
+    });
+
+    test("a member waiting for a slot launches its child file as it is when it starts", async () => {
+      // Every child creates a worktree, so the group's fan-out check covers
+      // the members as they were prepared.
+      const laneContent = (prompt: string) =>
+        `worktree:\n  mode: managed\nsteps:\n  - prompt: ${prompt}\n`;
+      const lanePaths = await Promise.all(
+        ["a", "b", "c"].map((name) =>
+          writeLane(`${name}.ctrlyoke.yaml`, laneContent(name))
+        )
+      );
+      const run = await setupRun(
+        lanePaths.map((workflow) => ({ type: STEP_TYPES.WORKFLOW, workflow })),
+        group(2)
+      );
+      // Width 2: the third member waits for a slot, long after the group
+      // preflight parsed its file.
+      run.context.dynamicQueueConfig.maxParallelSteps = 2;
+      let groupChecks = 0;
+      run.context.prepareSubWorkflowWorktreeChild = async () => {
+        groupChecks += 1;
+      };
+      const requests: SubWorkflowLaunchRequest[] = [];
+      let edited = false;
+      run.context.subWorkflowHost = recordingHost(requests, () => {
+        if (edited) return;
+        edited = true;
+        writeFileSync(lanePaths[2]!, laneContent("edited"));
+      });
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.strictEqual(groupChecks, 1);
+      const byPath = new Map(
+        requests.map((request) => [
+          request.source.kind === "file" ? request.source.resolvedPath : "",
+          request,
+        ])
+      );
+      assert.strictEqual(parsedPrompt(byPath.get(lanePaths[2]!)), "edited");
+      // Re-prepared after the group's fan-out, it keeps the launcher's own
+      // D4c check, as a late joiner does; the unchanged members rely on the
+      // group's check.
+      assert.strictEqual(
+        byPath.get(lanePaths[2]!)?.parentExecution.prepareWorktreeChild,
+        run.context.prepareSubWorkflowWorktreeChild
+      );
+      for (const unchanged of lanePaths.slice(0, 2)) {
+        assert.strictEqual(
+          byPath.get(unchanged)?.parentExecution.prepareWorktreeChild,
+          undefined
+        );
+      }
+    });
+
+    test("a group at width 1 leaves the D4c check to each worktree member's launch", async () => {
+      const run = await setupRun(
+        [inlineLane("echo one", true), inlineLane("echo two", true)],
+        group(1)
+      );
+      run.context.dynamicQueueConfig.maxParallelSteps = 1;
+      let groupChecks = 0;
+      run.context.prepareSubWorkflowWorktreeChild = async () => {
+        groupChecks += 1;
+      };
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests);
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      // Nothing checked before the first member; every lane is checked at
+      // its own launch (the recording host never runs the check itself).
+      assert.strictEqual(groupChecks, 0);
+      assert.strictEqual(requests.length, 2);
+      for (const request of requests) {
+        assert.strictEqual(
+          request.parentExecution.prepareWorktreeChild,
+          run.context.prepareSubWorkflowWorktreeChild
+        );
+        assert.strictEqual(request.concurrent, false);
+      }
+    });
+
+    test("lowering maxParallelSteps mid-group keeps every member concurrent", async () => {
+      const run = await setupRun(
+        [inlineLane("echo one", false), inlineLane("echo two", false)],
+        group(1)
+      );
+      const requests: SubWorkflowLaunchRequest[] = [];
+      run.context.subWorkflowHost = recordingHost(requests, () => {
+        // The group already fanned out at width 6; a later member still runs
+        // beside the one launching now.
+        run.context.dynamicQueueConfig.maxParallelSteps = 1;
+      });
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.deepStrictEqual(
+        requests.map((request) => request.concurrent),
+        [true, true]
+      );
+    });
+  });
+
+  suite("D6 reattach to the recorded child run", () => {
+    const parentRunRef = WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 26, 12));
+    const childKey = "child-key" as WorkflowKey;
+    const childRunRef = WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 26, 13));
+    const freshRunRef = WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 26, 14));
+    const histories: OutputHistoryManager[] = [];
+
+    /** Records every launch; a resumed launch returns the requested child identity. */
+    class RecordingSubWorkflowHost implements SubWorkflowHost {
+      readonly requests: SubWorkflowLaunchRequest[] = [];
+      constructor(
+        private readonly result: SubWorkflowResult = {
+          status: PROMPT_TERMINAL_STATUS.COMPLETED,
+        }
+      ) {}
+      async launch(
+        request: SubWorkflowLaunchRequest
+      ): Promise<SubWorkflowHandle> {
+        this.requests.push(request);
+        return {
+          workflowKey: request.resumeChildRun?.workflowKey ?? childKey,
+          runRef: request.resumeChildRun?.runRef ?? freshRunRef,
+          done: Promise.resolve(this.result),
+          pause: async () => undefined,
+          cancelPause: async () => undefined,
+          stop: async () => undefined,
+        };
+      }
+    }
+
+    teardown(async () => {
+      for (const history of histories.splice(0)) {
+        await history.flushPendingIndexRefresh();
+      }
+      await fs.rm(path.dirname(WorkflowPaths.runsRoot(tempRoot)), {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    /**
+     * A parent run with a real timeline whose step (queue step 0, or the
+     * finalStep when `finalStep` is set) recorded `childKey`/`childRunRef`.
+     */
+    async function setupRecordedRun(
+      finalStep = false,
+      /** What the step names now, when it was edited since the stop. */
+      currentWorkflowPath: SubWorkflowStep["workflow"] = path.join(
+        tempRoot,
+        "child.ctrlyoke.yaml"
+      ),
+      /** `null`: the launch recorded no file (an inline step, say). */
+      recordedWorkflowPath: string | null = path.join(
+        tempRoot,
+        "child.ctrlyoke.yaml"
+      )
+    ) {
+      // A launch records the file it resolved beside the child's identity.
+      const childRuntime = {
+        childWorkflowKey: childKey,
+        childRunRef,
+        ...(recordedWorkflowPath === null
+          ? {}
+          : { resolvedWorkflowPath: recordedWorkflowPath }),
+      };
+      const run = await setupRun(
+        finalStep
+          ? []
+          : [
+              {
+                type: STEP_TYPES.WORKFLOW,
+                workflow: currentWorkflowPath,
+                _runtime: { stepId: "step-1", ...childRuntime },
+              },
+            ]
+      );
+      const workflowStep = {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: currentWorkflowPath,
+        _runtime: childRuntime,
+      } as NonNullable<PromptFile["finalStep"]>;
+      if (finalStep) {
+        run.queue.loadPrompts({ steps: [], finalStep: workflowStep });
+      }
+      const queueState = run.queue as unknown as {
+        state: { workflowKey?: string; runRef?: string };
+      };
+      queueState.state.workflowKey = "parent-key";
+      queueState.state.runRef = parentRunRef;
+      const parentRunDir = WorkflowPaths.runDir(
+        tempRoot,
+        "parent-key" as WorkflowKey,
+        parentRunRef
+      );
+      await fs.mkdir(parentRunDir, { recursive: true });
+      run.context.historyFilePath =
+        await new TimelineRecorder().initializeRunAt(
+          parentRunDir,
+          "parent-key",
+          1,
+          Date.now(),
+          EXECUTION_STATES.RUNNING
+        );
+      const history = new OutputHistoryManager(tempRoot);
+      histories.push(history);
+      run.context.outputHistoryManager = history;
+      const stepId = run.queue.getState().steps[0]?._runtime?.stepId;
+      const queueParent: SubWorkflowParentLink = {
+        workflowKey: "parent-key" as WorkflowKey,
+        runRef: parentRunRef,
+        phase: FINAL_STEP_PHASES.QUEUE,
+        stepId: stepId ?? "",
+      };
+      return { ...run, history, queueParent, workflowStep };
+    }
+
+    async function writeChildManifest(
+      executionState: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES],
+      parentRun: SubWorkflowParentLink
+    ): Promise<void> {
+      const childRunDir = WorkflowPaths.runDir(tempRoot, childKey, childRunRef);
+      await fs.mkdir(childRunDir, { recursive: true });
+      await new TimelineRecorder().initializeRunAt(
+        childRunDir,
+        childKey,
+        1,
+        Date.now(),
+        executionState,
+        1,
+        undefined,
+        parentRun
+      );
+    }
+
+    function recordedChildRunRef(queue: PromptQueue): string | undefined {
+      const step = queue.getState().steps[0];
+      return step && isSubWorkflowStep(step)
+        ? step._runtime?.childRunRef
+        : undefined;
+    }
+
+    async function settledEvents(historyFilePath: string) {
+      return (await new TimelineRecorder().readEvents(historyFilePath)).filter(
+        (event) => event.eventType === TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED
+      );
+    }
+
+    /** What every launch from `setupRecordedRun`'s queue step must carry. */
+    function assertFreshLaunchShape(
+      request: SubWorkflowLaunchRequest | undefined,
+      run: Awaited<ReturnType<typeof setupRecordedRun>>
+    ): void {
+      assert.ok(request);
+      assert.deepStrictEqual(request.parent, run.queueParent);
+      assert.deepStrictEqual(request.source, {
+        kind: "file",
+        resolvedPath: run.childPath,
+      });
+      assert.strictEqual(request.stateRoot, tempRoot);
+      assert.deepStrictEqual(
+        {
+          executionRoot: request.parentExecution.executionRoot,
+          executionCheckoutRoot: request.parentExecution.executionCheckoutRoot,
+        },
+        { executionRoot: tempRoot, executionCheckoutRoot: tempRoot }
+      );
+      assert.deepStrictEqual(request.delegationChain, []);
+      assert.deepStrictEqual(request.ancestorPaths, [
+        run.context.currentPromptFilePath,
+        run.childPath,
+      ]);
+    }
+
+    test("a recorded COMPLETED child settles the step without a launch and records one settlement", async () => {
+      for (const alreadyRecorded of [false, true]) {
+        const run = await setupRecordedRun();
+        await writeChildManifest(EXECUTION_STATES.COMPLETED, run.queueParent);
+        if (alreadyRecorded) {
+          await run.history.recordSubWorkflowSettled(
+            run.context.historyFilePath,
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            0,
+            0,
+            {
+              resolvedWorkflowPath: run.childPath,
+              childWorkflowKey: childKey,
+              childRunRef,
+              outcome: { status: PROMPT_TERMINAL_STATUS.COMPLETED },
+            }
+          );
+        }
+        const host = new RecordingSubWorkflowHost();
+        run.context.subWorkflowHost = host;
+
+        await run.executor.execute(run.integration, run.context);
+
+        assert.strictEqual(host.requests.length, 0);
+        assert.strictEqual(
+          run.queue.getState().results[0]?.status,
+          STEP_STATUS.COMPLETED
+        );
+        assert.strictEqual(
+          run.queue.getState().status,
+          EXECUTION_STATES.COMPLETED
+        );
+        const settled = await settledEvents(run.context.historyFilePath);
+        assert.strictEqual(
+          settled.length,
+          1,
+          `alreadyRecorded=${alreadyRecorded}`
+        );
+        assert.strictEqual(settled[0]?.payload.childRunRef, childRunRef);
+        await fs.rm(WorkflowPaths.runsRoot(tempRoot), {
+          recursive: true,
+          force: true,
+        });
+      }
+    });
+
+    test("a recorded COMPLETED child's settlement carries the worktree and ran-with its run file records", async () => {
+      const run = await setupRecordedRun();
+      await writeChildManifest(EXECUTION_STATES.COMPLETED, run.queueParent);
+      await fs.writeFile(
+        WorkflowPaths.runFilePath(tempRoot, childKey, childRunRef),
+        JSON.stringify({
+          steps: [
+            {
+              prompt: "lane",
+              _runtime: { harness: "claude-cli", model: "opus" },
+            },
+          ],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+            worktree: {
+              schemaVersion: 1,
+              mode: WORKTREE_MODES.MANAGED,
+              origin: "created",
+              branchName: "ctrlyoke/lane/run-1",
+              worktreePath: "/tmp/worktree",
+              executionRoot: "/tmp/worktree",
+              executionCheckoutRoot: "/tmp/worktree",
+              sourceCheckoutRoot: "/tmp/source",
+              namedWorkspaceRoots: [],
+              baseCommit: "abc",
+              finalBranchTip: "def",
+              mergeOutcome: "merged",
+              lifecycleOwner: "ctrlyoke",
+              lifecycleState: "settled",
+              directoryState: "removed",
+              branchState: "present",
+              updatedAt: 1,
+            },
+          },
+        })
+      );
+      // The real launcher, whose factory must never be asked for an
+      // instance: a COMPLETED child is read, not relaunched.
+      run.context.subWorkflowHost = new SubWorkflowLauncher(() => {
+        throw new Error("a COMPLETED child must not be launched");
+      });
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(
+        run.queue.getState().results[0]?.status,
+        STEP_STATUS.COMPLETED
+      );
+      const settled = await settledEvents(run.context.historyFilePath);
+      assert.strictEqual(settled.length, 1);
+      const payload = settled[0]!.payload as SubWorkflowOutput;
+      assert.strictEqual(payload.worktree?.branchName, "ctrlyoke/lane/run-1");
+      assert.strictEqual(payload.worktree?.mergeOutcome, "merged");
+      assert.deepStrictEqual(payload.ranWith, {
+        harness: "claude-cli",
+        model: "opus",
+      });
+    });
+
+    test("a recorded STOPPED or ERROR child is continued with the same launch request a fresh launch gets", async () => {
+      for (const state of [EXECUTION_STATES.STOPPED, EXECUTION_STATES.ERROR]) {
+        const run = await setupRecordedRun();
+        await writeChildManifest(state, run.queueParent);
+        const host = new RecordingSubWorkflowHost();
+        run.context.subWorkflowHost = host;
+
+        await run.executor.execute(run.integration, run.context);
+
+        assert.strictEqual(host.requests.length, 1, state);
+        const [request] = host.requests;
+        assertFreshLaunchShape(request, run);
+        assert.deepStrictEqual(request?.resumeChildRun, {
+          workflowKey: childKey,
+          runRef: childRunRef,
+        });
+        assert.strictEqual(recordedChildRunRef(run.queue), childRunRef);
+        assert.strictEqual(
+          run.queue.getState().results[0]?.status,
+          STEP_STATUS.COMPLETED
+        );
+        await fs.rm(WorkflowPaths.runsRoot(tempRoot), {
+          recursive: true,
+          force: true,
+        });
+      }
+    });
+
+    test("a child recorded for another parent step or run, or with no run directory, launches fresh", async () => {
+      const foreignParents: Array<
+        (parent: SubWorkflowParentLink) => SubWorkflowParentLink | undefined
+      > = [
+        (parent) =>
+          ({ ...parent, stepId: "other-step" }) as SubWorkflowParentLink,
+        (parent) => ({
+          ...parent,
+          runRef: WorkflowPaths.formatRunRef(Date.UTC(2026, 10, 25)),
+        }),
+        () => undefined,
+      ];
+      for (const foreignParent of foreignParents) {
+        const run = await setupRecordedRun();
+        const recordedParent = foreignParent(run.queueParent);
+        if (recordedParent) {
+          await writeChildManifest(EXECUTION_STATES.STOPPED, recordedParent);
+        }
+        const host = new RecordingSubWorkflowHost();
+        run.context.subWorkflowHost = host;
+
+        await run.executor.execute(run.integration, run.context);
+
+        assert.strictEqual(host.requests.length, 1);
+        const [request] = host.requests;
+        assertFreshLaunchShape(request, run);
+        assert.strictEqual(request?.resumeChildRun, undefined);
+        assert.strictEqual(recordedChildRunRef(run.queue), freshRunRef);
+        await fs.rm(WorkflowPaths.runsRoot(tempRoot), {
+          recursive: true,
+          force: true,
+        });
+      }
+    });
+
+    test("a file child whose step now names another file launches fresh instead of continuing the recorded child", async () => {
+      const otherPath = path.join(tempRoot, "other.ctrlyoke.yaml");
+      await fs.writeFile(otherPath, "name: other\nsteps: []\n");
+      for (const state of [
+        EXECUTION_STATES.STOPPED,
+        EXECUTION_STATES.COMPLETED,
+      ]) {
+        const run = await setupRecordedRun(false, otherPath);
+        await writeChildManifest(state, run.queueParent);
+        const host = new RecordingSubWorkflowHost();
+        run.context.subWorkflowHost = host;
+
+        await run.executor.execute(run.integration, run.context);
+
+        assert.strictEqual(host.requests.length, 1, state);
+        const [request] = host.requests;
+        assert.strictEqual(request?.resumeChildRun, undefined, state);
+        assert.deepStrictEqual(
+          request?.source,
+          { kind: "file", resolvedPath: otherPath },
+          state
+        );
+        const step = run.queue.getState().steps[0];
+        assert.ok(step && isSubWorkflowStep(step));
+        assert.strictEqual(step._runtime?.childRunRef, freshRunRef, state);
+        assert.strictEqual(step._runtime?.resolvedWorkflowPath, otherPath);
+        await fs.rm(WorkflowPaths.runsRoot(tempRoot), {
+          recursive: true,
+          force: true,
+        });
+      }
+    });
+
+    test("a file child under a step since edited to an inline definition launches fresh", async () => {
+      const run = await setupRecordedRun(false, { prompt: "inline now" });
+      await writeChildManifest(EXECUTION_STATES.STOPPED, run.queueParent);
+      const host = new RecordingSubWorkflowHost();
+      run.context.subWorkflowHost = host;
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(host.requests.length, 1);
+      const [request] = host.requests;
+      assert.strictEqual(request?.resumeChildRun, undefined);
+      assert.strictEqual(request?.source.kind, "inline");
+      const step = run.queue.getState().steps[0];
+      assert.ok(step && isSubWorkflowStep(step));
+      assert.strictEqual(step._runtime?.childRunRef, freshRunRef);
+      // The inline launch clears the old file so a later Continue reattaches.
+      assert.strictEqual(step._runtime?.resolvedWorkflowPath, undefined);
+    });
+
+    test("an inline child recorded with no resolved path reattaches", async () => {
+      const run = await setupRecordedRun(
+        false,
+        { prompt: "inline child" },
+        null
+      );
+      await writeChildManifest(EXECUTION_STATES.STOPPED, run.queueParent);
+      const host = new RecordingSubWorkflowHost();
+      run.context.subWorkflowHost = host;
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(host.requests.length, 1);
+      assert.deepStrictEqual(host.requests[0]?.resumeChildRun, {
+        workflowKey: childKey,
+        runRef: childRunRef,
+      });
+    });
+
+    test("a file child recorded with no resolved path cannot be confirmed and launches fresh", async () => {
+      const run = await setupRecordedRun(
+        false,
+        path.join(tempRoot, "child.ctrlyoke.yaml"),
+        null
+      );
+      await writeChildManifest(EXECUTION_STATES.STOPPED, run.queueParent);
+      const host = new RecordingSubWorkflowHost();
+      run.context.subWorkflowHost = host;
+
+      await run.executor.execute(run.integration, run.context);
+
+      assert.strictEqual(host.requests.length, 1);
+      assert.strictEqual(host.requests[0]?.resumeChildRun, undefined);
+    });
+
+    test("a finalStep child reattaches only within its own pass", async () => {
+      for (const loopIndex of [0, 1]) {
+        const run = await setupRecordedRun(true);
+        await writeChildManifest(EXECUTION_STATES.STOPPED, {
+          workflowKey: "parent-key" as WorkflowKey,
+          runRef: parentRunRef,
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex: 0,
+        });
+        const host = new RecordingSubWorkflowHost();
+        run.context.subWorkflowHost = host;
+        const dispatch = run.executor as unknown as {
+          executeTargetContract: (
+            target: { kind: string; loopIndex: number },
+            step: NonNullable<PromptFile["finalStep"]>,
+            context: WorkflowExecutionContext
+          ) => Promise<boolean>;
+        };
+
+        await dispatch.executeTargetContract(
+          { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+          run.workflowStep,
+          run.context
+        );
+
+        assert.strictEqual(host.requests.length, 1);
+        assert.deepStrictEqual(host.requests[0]?.parent, {
+          workflowKey: "parent-key",
+          runRef: parentRunRef,
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex,
+        });
+        assert.deepStrictEqual(
+          host.requests[0]?.resumeChildRun,
+          loopIndex === 0
+            ? { workflowKey: childKey, runRef: childRunRef }
+            : undefined,
+          `loopIndex=${loopIndex}`
+        );
+        await fs.rm(WorkflowPaths.runsRoot(tempRoot), {
+          recursive: true,
+          force: true,
+        });
+      }
+    });
+  });
 });
 
 suite("WorkflowExecutor workspace snapshot capture", () => {
@@ -6316,7 +7919,7 @@ suite("WorkflowExecutor variable substitution of inherited fields", () => {
     });
     assert.strictEqual(dispatched[0]?.executionMode, EXECUTION_MODES.HEADLESS);
     assert.strictEqual(
-      queue.getState().steps[0]?._runtime?.executionMode,
+      executionRuntime(queue.getState().steps[0])?.executionMode,
       EXECUTION_MODES.HEADLESS
     );
     assert.strictEqual(queue.getWorkflowFile().executionMode, "{{mode}}");
@@ -6494,11 +8097,11 @@ suite("WorkflowExecutor variable substitution of inherited fields", () => {
       queue.getFinalStepRuntime(),
     ];
     assert.strictEqual(
-      state.steps[0]?._runtime?.harness,
+      executionRuntime(state.steps[0])?.harness,
       HARNESS_IDS.CLAUDE_CLI
     );
     assert.strictEqual(
-      state.steps[1]?._runtime?.executionMode,
+      executionRuntime(state.steps[1])?.executionMode,
       EXECUTION_MODES.HEADLESS
     );
     for (const runtime of runtimes)
@@ -6578,7 +8181,7 @@ suite("WorkflowExecutor run-start view", () => {
       "{{h}}"
     );
     assert.strictEqual(
-      queue.getState().steps[0]?._runtime?.harness,
+      executionRuntime(queue.getState().steps[0])?.harness,
       HARNESS_IDS.CODEX_CLI
     );
   });

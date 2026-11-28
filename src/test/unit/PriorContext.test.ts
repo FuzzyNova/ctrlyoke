@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
+import {
+  buildPriorContextXmlFromItems,
+  type PriorContextItem,
+} from "../../core/HarnessIntegration";
 import type { ScriptVerdict } from "../../types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
@@ -10,6 +13,7 @@ import {
   PRIOR_CONTEXT_LIMITS,
   SCRIPT_OPERATORS,
   SCRIPT_VERDICT_OUTCOMES,
+  STEP_TYPES,
   USER_STEER_ATTRIBUTIONS,
 } from "../../types/DashboardConstants";
 import { inlinePriorContextRefToPriorContext } from "../../utils/PriorContextMerge";
@@ -19,6 +23,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.PROMPT,
         name: "plan",
         prompt: "plan it",
         text: "answer",
@@ -26,6 +31,7 @@ suite("prior-context XML", () => {
       },
       {
         index: 1,
+        stepKind: "script",
         name: "test",
         text: "pass\n0",
         detail: "full",
@@ -38,6 +44,7 @@ suite("prior-context XML", () => {
       },
       {
         index: 2,
+        stepKind: "prompt" as const,
         text: "final answer",
         detail: "full",
         type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
@@ -51,6 +58,273 @@ suite("prior-context XML", () => {
       xml.includes(
         `<step index="3" type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP}">`
       )
+    );
+  });
+
+  test("renders workflow metadata and recursively nested child output", () => {
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 1,
+        name: "lane & merge",
+        stepKind: STEP_TYPES.WORKFLOW,
+        detail: "full",
+        workflowPath: "waves/a&b.yaml",
+        subWorkflow: {
+          output: {
+            resolvedWorkflowPath: "/private/absolute/child.yaml",
+            childWorkflowKey: "child&key" as never,
+            childRunRef: 'run"1' as never,
+            outcome: { status: "completed" as never },
+            worktree: {
+              mode: "managed" as never,
+              branchName: "feature&one",
+              baseCommit: "abc",
+              finalBranchTip: "def",
+              changedFileCount: 2,
+              mergeOutcome: "conflict" as never,
+              conflictFiles: ["src/a.ts"],
+            },
+          },
+          children: [
+            {
+              index: 0,
+              name: "child step",
+              prompt: "implement",
+              text: "done",
+              detail: "full",
+              stepKind: STEP_TYPES.WORKFLOW,
+              subWorkflow: {
+                output: {
+                  childWorkflowKey: "grandchild" as never,
+                  childRunRef: "run-2" as never,
+                  outcome: { status: "completed" as never },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    assert.ok(
+      xml.includes('name="lane &amp; merge" workflow="waves/a&amp;b.yaml"'),
+      xml
+    );
+    assert.ok(!xml.includes("/private/absolute"), xml);
+    assert.ok(
+      xml.includes(
+        'workflowKey="child&amp;key" runRef="run&quot;1" outcome="completed"'
+      ),
+      xml
+    );
+    assert.ok(xml.includes('<merge result="conflict">src/a.ts</merge>'), xml);
+    assert.ok(xml.includes('workflowKey="grandchild"'), xml);
+  });
+
+  test("omits unset worktree attributes", () => {
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        stepKind: STEP_TYPES.WORKFLOW,
+        detail: "full",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child" as never,
+            childRunRef: "run-child" as never,
+            outcome: { status: "completed" as never },
+            worktree: { mode: "managed" } as never,
+          },
+          children: [],
+        },
+      },
+    ]);
+    assert.ok(xml.includes('<worktree mode="managed"/>\n'), xml);
+    assert.ok(!xml.includes("filesChanged="), xml);
+    assert.ok(!xml.includes('branch=""'), xml);
+    assert.ok(!xml.includes('base=""'), xml);
+    assert.ok(!xml.includes('tip=""'), xml);
+  });
+
+  test("marks an unavailable workflow child run", () => {
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        detail: "full",
+        stepKind: STEP_TYPES.WORKFLOW,
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "gone" as never,
+            childRunRef: "run-gone" as never,
+            outcome: { status: "completed" as never },
+          },
+        },
+      },
+    ]);
+    assert.ok(xml.includes("<childRunUnavailable/>"), xml);
+  });
+
+  test("renders a childless workflow step's failure with no children and no unavailable marker", () => {
+    for (const detail of ["full", "summary"] as const) {
+      const xml = buildPriorContextXmlFromItems([
+        {
+          index: 0,
+          detail,
+          stepKind: STEP_TYPES.WORKFLOW,
+          workflowPath: "waves/a.yaml",
+          subWorkflow: {
+            output: {
+              outcome: {
+                status: "failed" as never,
+                failedToStart: true,
+                failureMessage: 'cycle <a> & "b"',
+              },
+            },
+          },
+        },
+      ]);
+      assert.ok(xml.includes('outcome="failed"'), xml);
+      assert.ok(
+        xml.includes("<failure>cycle &lt;a&gt; &amp; &quot;b&quot;</failure>"),
+        xml
+      );
+      assert.ok(!xml.includes("workflowKey="), xml);
+      assert.ok(!xml.includes("runRef="), xml);
+      assert.ok(!xml.includes("<childRunUnavailable/>"), xml);
+    }
+  });
+
+  test("names the read_output call on field-level markers inside a child step only", () => {
+    const run = { workflowKey: "child-key", runRef: "run-child" };
+    const call = (index: number, tail?: number) =>
+      `readOutput="read_output { run: { workflowKey: child-key, runRef: run-child }, indices: [${index}]${tail === undefined ? "" : `, tail: ${tail}`} }"`;
+    const longPrompt = "p".repeat(PRIOR_CONTEXT_LIMITS.PROMPT_HEAD_BYTES + 120);
+    const longText = "r".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES + 77);
+    const summaryItem = (index: number): PriorContextItem => ({
+      index,
+      stepKind: STEP_TYPES.PROMPT,
+      detail: "summary",
+      prompt: longPrompt,
+      text: longText,
+    });
+    const commandItem: PriorContextItem = {
+      index: 5,
+      stepKind: STEP_TYPES.PROMPT,
+      detail: "full",
+      containingRun: run,
+      prompt: "p",
+      transcript: [
+        {
+          kind: "command",
+          command: "npm test",
+          output: { text: "o", omitted: "end", omittedBytes: 9 },
+        },
+      ],
+    };
+    const xml = buildPriorContextXmlFromItems([
+      summaryItem(0),
+      {
+        index: 1,
+        stepKind: STEP_TYPES.WORKFLOW,
+        detail: "summary",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child-key" as never,
+            childRunRef: "run-child" as never,
+            outcome: { status: "completed" as never },
+          },
+          children: [{ ...summaryItem(4), containingRun: run }, commandItem],
+        },
+      },
+    ]);
+    // Cut from its end: the hint asks for exactly the omitted tail.
+    assert.ok(
+      xml.includes(`<prompt omitted="end" omittedBytes="120" ${call(4, 120)}>`),
+      xml
+    );
+    // Cut from its start: the rest is the whole step, so no tail.
+    assert.ok(
+      xml.includes(`<response omitted="start" omittedBytes="77" ${call(4)}>`),
+      xml
+    );
+    assert.ok(
+      xml.includes(`<output omitted="end" omittedBytes="9" ${call(5, 9)}>`),
+      xml
+    );
+    // The parent run's own markers stay bare.
+    assert.ok(xml.includes('<prompt omitted="end" omittedBytes="120">'), xml);
+    assert.ok(
+      xml.includes('<response omitted="start" omittedBytes="77">'),
+      xml
+    );
+  });
+
+  test("budgets child summaries with parent summaries while keeping workflow metadata", () => {
+    const childText = "c".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
+    const xml = buildPriorContextXmlFromItems([
+      {
+        index: 0,
+        stepKind: STEP_TYPES.PROMPT,
+        name: "parent",
+        prompt: "parent prompt",
+        text: childText,
+        detail: "summary",
+      },
+      {
+        index: 1,
+        name: "lane",
+        stepKind: STEP_TYPES.WORKFLOW,
+        detail: "summary",
+        subWorkflow: {
+          output: {
+            childWorkflowKey: "child" as never,
+            childRunRef: "run-child" as never,
+            outcome: { status: "completed" as never },
+          },
+          children: Array.from({ length: 30 }, (_, index) => ({
+            index,
+            stepKind: STEP_TYPES.PROMPT,
+            ...(index === 0
+              ? {
+                  containingRun: {
+                    workflowKey: "child&key",
+                    runRef: 'run"child',
+                  },
+                }
+              : {}),
+            name: `child ${index}`,
+            prompt: `prompt ${index}`,
+            text: childText,
+            detail: "summary" as const,
+          })),
+        },
+      },
+    ]);
+
+    assert.match(xml, /<step index="2" type="workflow" name="lane"/);
+    assert.ok(xml.includes('workflowKey="child"'), xml);
+    assert.match(
+      xml,
+      /<step index="1" name="parent" detail="summary" omitted="all"/
+    );
+    assert.match(
+      xml,
+      /<step index="1" name="child 0" detail="summary"[^>]*omitted="all"/
+    );
+    assert.ok(xml.includes("prompt 29"), "the last child summary is retained");
+    assert.ok(!xml.includes('name="lane" detail="summary" omitted="all"'));
+    const summaryXml = xml.slice(
+      xml.indexOf('<step index="2" type="workflow"')
+    );
+    const omittedChildCount = [...summaryXml.matchAll(/omitted="all"/g)].length;
+    assert.ok(
+      omittedChildCount > 0,
+      `omitted child count: ${omittedChildCount}`
+    );
+    assert.ok(
+      xml.includes(
+        'readOutput="read_output { run: { workflowKey: child&amp;key, runRef: run&quot;child }, indices: [0] }"'
+      ),
+      xml
     );
   });
 
@@ -76,6 +350,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         detail: "full",
         scriptOutput,
@@ -100,6 +375,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         detail: "full",
         scriptOutput,
@@ -126,6 +402,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: STEP_TYPES.SCRIPT,
         text: "3 failing\n1",
         scriptOutput,
         detail: "full",
@@ -153,6 +430,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "prompt",
         text: "ok",
         detail: "full",
         type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
@@ -170,8 +448,20 @@ suite("prior-context XML", () => {
 
   test("leaves steps without a verdict unchanged", () => {
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, prompt: "plan it", text: "answer", detail: "full" },
-      { index: 1, text: "3 failing\n1", scriptOutput, detail: "full" },
+      {
+        index: 0,
+        stepKind: "prompt",
+        prompt: "plan it",
+        text: "answer",
+        detail: "full",
+      },
+      {
+        index: 1,
+        stepKind: STEP_TYPES.SCRIPT,
+        text: "3 failing\n1",
+        scriptOutput,
+        detail: "full",
+      },
     ]);
 
     assert.strictEqual(
@@ -184,6 +474,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "prompt",
         detail: "full",
         transcript: [
           {
@@ -288,6 +579,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "prompt",
         detail: "summary",
         prompt,
         transcript: [
@@ -331,6 +623,7 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       {
         index: 0,
+        stepKind: "script",
         detail: "summary",
         scriptOutput: { command: "npm test", stdout, stderr: "", exitCode: 0 },
       },
@@ -353,9 +646,16 @@ suite("prior-context XML", () => {
       ) + 3;
     const fullText = "f".repeat(PRIOR_CONTEXT_LIMITS.SUMMARY_BUDGET_BYTES);
     const xml = buildPriorContextXmlFromItems([
-      { index: 0, name: "full step", text: fullText, detail: "full" },
+      {
+        index: 0,
+        stepKind: "prompt",
+        name: "full step",
+        text: fullText,
+        detail: "full",
+      },
       ...Array.from({ length: stepCount }, (_, offset) => ({
         index: offset + 1,
+        stepKind: "prompt" as const,
         name: `step ${offset + 1}`,
         prompt: `prompt ${offset + 1}`,
         text: stepText,
@@ -389,12 +689,14 @@ suite("prior-context XML", () => {
     const text = "s".repeat(PRIOR_CONTEXT_LIMITS.OUTPUT_TAIL_BYTES);
     const queueItems = Array.from({ length: 30 }, (_, index) => ({
       index,
+      stepKind: STEP_TYPES.PROMPT,
       name: `queue ${index}`,
       text,
       detail: "summary" as const,
     }));
     const finalItems = Array.from({ length: 3 }, (_, index) => ({
       index,
+      stepKind: STEP_TYPES.PROMPT,
       name: `pass ${index}`,
       text,
       detail: "summary" as const,
@@ -413,12 +715,19 @@ suite("prior-context XML", () => {
     const xml = buildPriorContextXmlFromItems([
       ...Array.from({ length: 27 }, (_, index) => ({
         index,
+        stepKind: STEP_TYPES.PROMPT,
         name: `addressed ${index}`,
         text,
         detail: "summary" as const,
         importedRun: true,
       })),
-      { index: 0, name: "current", text, detail: "summary" },
+      {
+        index: 0,
+        stepKind: "prompt",
+        name: "current",
+        text,
+        detail: "summary",
+      },
     ]);
 
     assert.match(xml, /name="addressed 0"[^>]*omitted="all"/);

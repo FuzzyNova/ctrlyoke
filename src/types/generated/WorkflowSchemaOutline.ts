@@ -216,13 +216,18 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "valueKind": "string",
         "enum": [
           "prompt",
-          "script"
+          "script",
+          "workflow"
         ],
         "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
+      "prompt": {
+        "valueKind": "string",
+        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
+      },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
         "valueKind": "oneOf",
@@ -235,10 +240,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "color": {
         "valueKind": "string",
         "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
-      },
-      "prompt": {
-        "valueKind": "string",
-        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
       },
       "maxSteps": {
         "valueKind": "oneOf",
@@ -271,6 +272,10 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "conditions": {
         "valueKind": "object",
         "description": "Named condition presets that MCP agents may attach to steps by name. Authors define every script; MCP agents can choose a preset but can never supply or override its scripts. Preset scripts that use declared params must quote each value (for example, `\"$BUG_FILE\"`) because values are passed through environment variables. A param name may not collide with a key in that preset's own `env`. Not substituted: Preset definitions and parameter names are author-only contracts."
+      },
+      "worktreePresets": {
+        "valueKind": "object",
+        "description": "Named worktree presets that MCP agents may attach to an appended step by name (`worktree: { use: \"<name>\" }`), queuing it as a lane: a single-step sub-workflow that runs in its own managed worktree. Only the managed object form is accepted, so every use creates a fresh branch. Agents can choose a preset but can never supply or override its fields, including `setup`. The preset is copied into the lane when it is queued, so later edits do not change lanes already queued. Without this property, agents cannot queue steps in their own worktree. Not substituted: Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree."
       },
       "trustedExternalRoots": {
         "valueKind": "oneOf",
@@ -359,6 +364,14 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string"
         ],
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+      },
+      "workflow": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "string",
+          "object"
+        ],
+        "description": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step."
       },
       "steps": {
         "valueKind": "array",
@@ -543,9 +556,13 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         ],
         "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored."
       },
+      "prompt": {
+        "valueKind": "string",
+        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
+      },
       "name": {
         "valueKind": "string",
-        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored."
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
       },
       "enabled": {
         "valueKind": "oneOf",
@@ -558,10 +575,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "color": {
         "valueKind": "string",
         "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
-      },
-      "prompt": {
-        "valueKind": "string",
-        "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
       }
     },
     "forbiddenKeys": [
@@ -579,22 +592,6 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "script"
         ],
         "description": "Step type discriminator. Required, and must be \"script\", for script steps. Not substituted: This structural field or identity value stays as authored."
-      },
-      "name": {
-        "valueKind": "string",
-        "description": "Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows the script text. Not substituted: This structural field or identity value stays as authored. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
-      },
-      "enabled": {
-        "valueKind": "oneOf",
-        "alternatives": [
-          "boolean",
-          "string"
-        ],
-        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
-      },
-      "color": {
-        "valueKind": "string",
-        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       },
       "executionMode": {
         "valueKind": "string",
@@ -699,6 +696,22 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
           "string"
         ],
         "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch."
+      },
+      "name": {
+        "valueKind": "string",
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
+      },
+      "enabled": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
+      },
+      "color": {
+        "valueKind": "string",
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
       }
     },
     "forbiddenKeys": [
@@ -708,11 +721,60 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
       "worktree"
     ]
   },
+  "subWorkflowStep": {
+    "properties": {
+      "type": {
+        "valueKind": "string",
+        "enum": [
+          "workflow"
+        ],
+        "description": "Marks this step as a sub-workflow step."
+      },
+      "workflow": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "string",
+          "object"
+        ],
+        "description": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step."
+      },
+      "onFail": {
+        "valueKind": "string",
+        "enum": [
+          "continue",
+          "stopWorkflow"
+        ],
+        "default": "stopWorkflow",
+        "description": "What to do when the child run fails or cannot start. 'stopWorkflow' fails this step and stops the parent; 'continue' records the failure on the step and advances. A stopped child always stops the parent."
+      },
+      "name": {
+        "valueKind": "string",
+        "description": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution."
+      },
+      "enabled": {
+        "valueKind": "oneOf",
+        "alternatives": [
+          "boolean",
+          "string"
+        ],
+        "description": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start."
+      },
+      "color": {
+        "valueKind": "string",
+        "description": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored."
+      }
+    },
+    "forbiddenKeys": [
+      "maxSteps",
+      "trustedExternalRoots",
+      "worktree"
+    ]
+  },
   "parallelGroup": {
     "properties": {
       "parallel": {
         "valueKind": "array",
-        "description": "The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored."
+        "description": "The prompt, script or workflow steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored."
       },
       "failFast": {
         "valueKind": "boolean",
@@ -1036,7 +1098,8 @@ export const WORKFLOW_SCHEMA_OUTLINE: Readonly<
         "enum": [
           "managed",
           "named"
-        ]
+        ],
+        "description": "Always `managed`: a fresh worktree and branch for each run."
       },
       "merge": {
         "valueKind": "boolean",

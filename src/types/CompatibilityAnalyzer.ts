@@ -20,7 +20,7 @@ import {
   type HarnessId,
   type HookEvent,
 } from "./DashboardConstants";
-import { isScriptStep } from "./CtrlYokeTypes";
+import { isPromptStep } from "./CtrlYokeTypes";
 import type { PromptFile, PromptStep } from "./CtrlYokeTypes";
 import { parseAllFileReferences } from "../utils/FileReferenceParser";
 import type {
@@ -103,7 +103,7 @@ export function enumerateCompatibilityTargets(
 ): CompatibilityExecutionTarget[] {
   const targets: CompatibilityExecutionTarget[] = [];
   for (const [stepIndex, step] of (workflow.steps ?? []).entries()) {
-    if (step.enabled === false || isScriptStep(step)) {
+    if (step.enabled === false || !isPromptStep(step)) {
       continue;
     }
     const imageFileRefs = getPromptImageFileRefs(step.prompt);
@@ -115,7 +115,7 @@ export function enumerateCompatibilityTargets(
   }
 
   const finalStep = workflow.finalStep;
-  if (finalStep && finalStep.enabled !== false && !isScriptStep(finalStep)) {
+  if (finalStep && finalStep.enabled !== false && isPromptStep(finalStep)) {
     const imageFileRefs = getPromptImageFileRefs(finalStep.prompt);
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },

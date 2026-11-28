@@ -1,6 +1,17 @@
 import type { PromptFile, ExecutionProperties } from "../types/CtrlYokeTypes";
-import { EXECUTION_MODES, type HarnessId } from "../types/DashboardConstants";
-import { isScriptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
+import {
+  EXECUTION_MODES,
+  STEP_TYPES,
+  type HarnessId,
+} from "../types/DashboardConstants";
+import {
+  assertNever,
+  getStepType,
+  isPromptStep,
+  isScriptStep,
+  isExecutionStep,
+  type WorkflowStep,
+} from "../types/CtrlYokeTypes";
 import type { CliExecutionOptions } from "./CliRunCommandDefinitions";
 
 /** CLI property flag names that can be extended to workflow steps. */
@@ -185,7 +196,7 @@ export function applyCliPropertyOverrides(
   if (forceModel) {
     const harnessSteps = new Map<HarnessId | undefined, string[]>();
     for (const step of getWorkflowSteps(workflow)) {
-      if (isScriptStep(step)) continue;
+      if (!isPromptStep(step)) continue;
       const harness =
         step.harness ?? workflow.harness ?? overrides.effectiveHarness;
       const labels = harnessSteps.get(harness) ?? [];
@@ -220,7 +231,7 @@ function applyForcedFlagToStep(
 ): void {
   switch (flag) {
     case ForceableFlag.HARNESS:
-      if (!isScriptStep(step) && overrides.workflow.harness) {
+      if (isPromptStep(step) && overrides.workflow.harness) {
         const priorHarness = step.harness ?? oldHarness;
         step.harness = overrides.workflow.harness;
         if (
@@ -242,13 +253,16 @@ function applyForcedFlagToStep(
       }
       return;
     case ForceableFlag.MODEL:
-      if (!isScriptStep(step) && overrides.workflow.model !== undefined) {
+      if (isPromptStep(step) && overrides.workflow.model !== undefined) {
         step.model = overrides.workflow.model;
       }
       return;
     case ForceableFlag.HEADLESS:
     case ForceableFlag.INTERACTIVE:
-      if (overrides.workflow.executionMode !== undefined) {
+      if (
+        isExecutionStep(step) &&
+        overrides.workflow.executionMode !== undefined
+      ) {
         step.executionMode = overrides.workflow.executionMode;
       }
       return;
@@ -257,30 +271,42 @@ function applyForcedFlagToStep(
     case ForceableFlag.DENY_TOOL:
     case ForceableFlag.RESUME_SESSION:
     case ForceableFlag.SESSION_ID:
-      if (!isScriptStep(step)) {
+      if (isPromptStep(step)) {
         applyForcedPromptProperty(step, flag, overrides);
       }
       return;
     case ForceableFlag.SCRIPT_TIMEOUT:
       if (overrides.scriptTimeout !== undefined) {
-        if (isScriptStep(step)) {
-          step.timeoutSec = overrides.scriptTimeout;
-        } else {
-          if (step.preCondition)
-            step.preCondition.timeoutSec = overrides.scriptTimeout;
-          if (step.endCondition)
-            step.endCondition.timeoutSec = overrides.scriptTimeout;
+        const stepType = getStepType(step);
+        switch (stepType) {
+          case STEP_TYPES.SCRIPT:
+            if (isScriptStep(step)) {
+              step.timeoutSec = overrides.scriptTimeout;
+            }
+            break;
+          case STEP_TYPES.PROMPT:
+            if (isPromptStep(step)) {
+              if (step.preCondition)
+                step.preCondition.timeoutSec = overrides.scriptTimeout;
+              if (step.endCondition)
+                step.endCondition.timeoutSec = overrides.scriptTimeout;
+            }
+            break;
+          case STEP_TYPES.WORKFLOW:
+            break;
+          default:
+            assertNever(stepType);
         }
       }
       return;
     case ForceableFlag.SANDBOX:
     case ForceableFlag.SANDBOX_NONE:
-      if (!isScriptStep(step) && overrides.workflow.sandbox !== undefined) {
+      if (isPromptStep(step) && overrides.workflow.sandbox !== undefined) {
         step.sandbox = overrides.workflow.sandbox;
       }
       return;
     case ForceableFlag.SANDBOX_MODE:
-      if (!isScriptStep(step) && overrides.workflow.sandboxMode !== undefined) {
+      if (isPromptStep(step) && overrides.workflow.sandboxMode !== undefined) {
         step.sandboxMode = overrides.workflow.sandboxMode;
       }
       return;

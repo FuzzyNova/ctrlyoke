@@ -1,7 +1,7 @@
 import { suite, test, teardown } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
-import { readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
@@ -63,6 +63,7 @@ const SCHEMA_PATH = path.resolve(
 
 const PROMPT_TEXT = "seeded prompt text";
 const SCRIPT_TEXT = "npm run seeded";
+const WORKFLOW_TEXT = "workflows/seeded.ctrlyoke.yaml";
 
 type SchemaObject = Record<string, unknown>;
 
@@ -114,6 +115,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
     "conditions",
     "author-defined MCP preset catalog; preserved as workflow metadata and tested below, not edited as a dashboard execution property",
   ],
+  [
+    "worktreePresets",
+    "author-defined MCP lane preset catalog; preserved as workflow metadata and tested below, not edited as a dashboard execution property",
+  ],
   ["runtimeMetadata", "engine-written runtime block"],
   ["startedAt", "engine-written timestamp"],
   ["definitionRevision", "engine-written optimistic-concurrency counter"],
@@ -126,6 +131,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["type", "step-kind discriminator carried by the message"],
   ["prompt", "step content carried by the message's `text`"],
   ["script", "step content carried by the message's `text`"],
+  [
+    "workflow",
+    "a sub-workflow step's content: the file path travels in the message's `text` like a command, and an inline definition travels whole; its editor controls are checked by `CONTENT_CONTROLS`, and the inline definition's own keys by the inline surfaces",
+  ],
   [
     "name",
     "a step's travels in the message's `promptName`; the workflow's is the lineage descriptor's, edited by the heading-row rename",
@@ -160,6 +169,9 @@ const SAMPLES: Record<string, unknown> = {
       operator: "isEmpty",
       params: ["BUG_FILE"],
     },
+  },
+  worktreePresets: {
+    lane: { mode: "managed", merge: true, setup: "npm ci" },
   },
   additionalArgs: "--effort high",
   maxSteps: 30,
@@ -283,19 +295,123 @@ const rootProperties = () =>
     ])
   ).sort();
 
+const displayProperties = () =>
+  authorableProperties(definition("stepDisplayProperties"));
+
 const promptStepProperties = () =>
   Array.from(
     new Set([
       ...executionProperties(),
+      ...displayProperties(),
       ...authorableProperties(promptStepOwnBranch()),
     ])
   ).sort();
 
 const scriptStepProperties = () =>
-  authorableProperties(definition("scriptStep"));
+  Array.from(
+    new Set([
+      ...displayProperties(),
+      ...authorableProperties(definition("scriptStep")),
+    ])
+  ).sort();
+
+const subWorkflowStepProperties = () =>
+  Array.from(
+    new Set([
+      ...displayProperties(),
+      ...authorableProperties(definition("subWorkflowStep")),
+    ])
+  ).sort();
+
+/**
+ * The properties an inline sub-workflow definition (D13) of `kind` can hold,
+ * read from the schema's `inlineSubWorkflowDefinition` arm for that kind:
+ * the wrapped step's own properties plus the inline root's (`worktree`). A
+ * key added to either side joins this surface without editing the suite.
+ */
+function inlineSubWorkflowProperties(kind: "promptStep" | "scriptStep") {
+  const arms = definition("inlineSubWorkflowDefinition")
+    .oneOf as SchemaObject[];
+  const arm = arms.find((candidate) =>
+    (candidate.allOf as SchemaObject[]).some(
+      (member) => member.$ref === `#/$defs/${kind}`
+    )
+  );
+  assert.ok(arm, `inlineSubWorkflowDefinition arm wrapping ${kind} not found`);
+  const properties = new Set<string>();
+  for (const member of arm.allOf as SchemaObject[]) {
+    if (member.$ref === "#/$defs/promptStep") {
+      promptStepProperties().forEach((key) => properties.add(key));
+    } else if (member.$ref === "#/$defs/scriptStep") {
+      scriptStepProperties().forEach((key) => properties.add(key));
+    } else {
+      assert.ok(
+        member.$ref === undefined,
+        `unexpected arm member ${member.$ref}`
+      );
+      authorableProperties(member).forEach((key) => properties.add(key));
+    }
+  }
+  return [...properties].sort();
+}
 
 const promptStepSeed = () => ({ prompt: PROMPT_TEXT });
 const scriptStepSeed = () => ({ type: "script", script: SCRIPT_TEXT });
+const subWorkflowStepSeed = () => ({
+  type: "workflow",
+  workflow: WORKFLOW_TEXT,
+});
+
+/**
+ * An inline sub-workflow step surface. Its properties live inside
+ * `workflow`, which the editor always sends whole (it is the step's content,
+ * like a prompt's text), so a save carries the definition the editor loaded.
+ * "Saving without" a property is therefore a save of the step's other fields
+ * with the loaded definition unchanged, as the enable toggle and an
+ * unrelated editor edit post it; the Vitest round trip in
+ * `utils/subWorkflowStepProperties.test.ts` covers the editor building that
+ * definition back from what it loaded.
+ */
+function inlineSubWorkflowSurface(
+  id: string,
+  kind: "promptStep" | "scriptStep",
+  wrappedSeed: () => SchemaObject
+): Surface {
+  const step = (inline: SchemaObject) => ({
+    type: "workflow",
+    workflow: inline,
+  });
+  const inlineOf = (head: RunDefinition) =>
+    (head.steps?.[0] as { workflow?: SchemaObject } | undefined)?.workflow;
+  return {
+    id,
+    properties: inlineSubWorkflowProperties(kind),
+    seed: (head, property, value) => {
+      head.steps = [step({ ...wrappedSeed(), [property]: value })];
+    },
+    read: inlineOf,
+    saveWithout: async (harness) => {
+      const loaded = inlineOf(await harness.readRunDefinition());
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: PROMPT_TEXT,
+        properties: { type: "workflow", workflow: loaded, enabled: false },
+      });
+    },
+    saveWith: (harness, property, value) =>
+      harness.routeUpdatePrompt({
+        index: 0,
+        text: PROMPT_TEXT,
+        properties: {
+          type: "workflow",
+          workflow: { ...wrappedSeed(), [property]: value },
+        },
+      }),
+    validationDocument: (seeds) => ({
+      steps: [step({ ...wrappedSeed(), ...seeds })],
+    }),
+  };
+}
 
 const SURFACES: Surface[] = [
   {
@@ -364,6 +480,39 @@ const SURFACES: Surface[] = [
     }),
   },
   {
+    id: "workflow step",
+    properties: subWorkflowStepProperties(),
+    seed: (head, property, value) => {
+      head.steps = [{ ...subWorkflowStepSeed(), [property]: value }];
+    },
+    read: (head) => head.steps?.[0],
+    saveWithout: (harness) =>
+      harness.routeUpdatePrompt({
+        index: 0,
+        text: WORKFLOW_TEXT,
+        properties: { type: "workflow" },
+      }),
+    saveWith: (harness, property, value) =>
+      harness.routeUpdatePrompt({
+        index: 0,
+        text: WORKFLOW_TEXT,
+        properties: { type: "workflow", [property]: value },
+      }),
+    validationDocument: (seeds) => ({
+      steps: [{ ...subWorkflowStepSeed(), ...seeds }],
+    }),
+  },
+  inlineSubWorkflowSurface(
+    "workflow step (inline prompt)",
+    "promptStep",
+    promptStepSeed
+  ),
+  inlineSubWorkflowSurface(
+    "workflow step (inline script)",
+    "scriptStep",
+    scriptStepSeed
+  ),
+  {
     id: "final step (prompt)",
     properties: promptStepProperties(),
     seed: (head, property, value) => {
@@ -407,6 +556,26 @@ const SURFACES: Surface[] = [
       finalStep: { ...scriptStepSeed(), ...seeds },
     }),
   },
+  {
+    id: "final step (workflow)",
+    properties: subWorkflowStepProperties(),
+    seed: (head, property, value) => {
+      head.finalStep = { ...subWorkflowStepSeed(), [property]: value };
+    },
+    read: (head) => head.finalStep,
+    saveWithout: (harness) =>
+      harness.routeUpdateFinalPrompt({
+        finalStep: subWorkflowStepSeed() as never,
+      }),
+    saveWith: (harness, property, value) =>
+      harness.routeUpdateFinalPrompt({
+        finalStep: { ...subWorkflowStepSeed(), [property]: value } as never,
+      }),
+    validationDocument: (seeds) => ({
+      steps: [promptStepSeed()],
+      finalStep: { ...subWorkflowStepSeed(), ...seeds },
+    }),
+  },
 ];
 
 /**
@@ -430,7 +599,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["mcpServers", ["settings-mcp-servers"]],
   ["maxSteps", ["settings-max-steps"]],
   ["model", ["settings-model"]],
-  ["onFail", ["${idPrefix}-on-fail"]],
+  ["onFail", ["${idPrefix}-on-fail", "sub-workflow-step-on-fail"]],
   ["onPass", ["${idPrefix}-on-pass"]],
   ["preCondition", ["settings-pre-condition-enabled"]],
   ["priorContext", ["settings-prior-context"]],
@@ -461,10 +630,43 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ],
   ["trustedExternalRoots", ["settings-trusted-external-roots-mode"]],
   ["vars", ["settings-vars"]],
-  ["worktree", ["settings-worktree-mode"]],
+  // The shared worktree editor, behind the workflow properties panel
+  // (`settings`) and the inline sub-workflow form (`sub-workflow-step`).
+  ["worktree", ["${idPrefix}-worktree-mode"]],
 ]);
 
 const UI_CONTROL_OPTOUTS = new Map<string, string>();
+
+/**
+ * Editor controls for step content keys, which are `NOT_AUTHORABLE` above
+ * because they travel in the message's `text`. Only the newest content key
+ * is listed; prompt and script content controls predate this guard.
+ *
+ * A source scan cannot tell a rendered control from an unused id constant,
+ * so each entry also names the Vitest suite that renders the editor and
+ * asserts every id sits on its control. This guard proves only what it can:
+ * the key is a content key, its ids are still declared in production
+ * source, and the render suite that checks them still exists.
+ */
+const CONTENT_CONTROLS: ReadonlyMap<
+  string,
+  { readonly ids: readonly string[]; readonly renderSuite: string }
+> = new Map([
+  [
+    "workflow",
+    {
+      ids: [
+        "sub-workflow-step-file",
+        "sub-workflow-step-browse",
+        "sub-workflow-step-form-file",
+        "sub-workflow-step-form-inline",
+        "sub-workflow-step-inline-prompt",
+        "sub-workflow-step-inline-script",
+      ],
+      renderSuite: "components/editor/SubWorkflowStepFields.test.tsx",
+    },
+  ],
+]);
 
 const UI_ENUM_META = [
   { path: "toolPermissions.mode", meta: PERMISSION_MODE_OPTIONS_META },
@@ -576,6 +778,33 @@ suite("Schema -> dashboard property round trip", () => {
     assert.deepStrictEqual(
       (await harness.readRunDefinition()).conditions,
       conditions
+    );
+  });
+
+  test("worktree presets validate and survive a dashboard save", async () => {
+    const worktreePresets = sampleFor("worktreePresets");
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-worktree-presets-")
+    );
+    const ajv = new Ajv({ allErrors: true, strict: false });
+    const validate = ajv.compile(schema);
+    assert.strictEqual(
+      validate({ steps: [promptStepSeed()], worktreePresets }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    const run = await createPromotedRun(workspace, {
+      steps: [{ prompt: PROMPT_TEXT }],
+    });
+    const harness = createRoundTripHarness(workspace, run);
+    await harness.patchRunDefinition((head) => {
+      head.worktreePresets = worktreePresets;
+    });
+    await harness.routeWorkflowPropertyUpdate("model", "sonnet");
+    assert.deepStrictEqual(
+      (await harness.readRunDefinition()).worktreePresets,
+      worktreePresets
     );
   });
 
@@ -695,6 +924,32 @@ suite("Schema -> dashboard property round trip", () => {
         [],
         `Schema → UI control parity failures:\n${failures.join("\n")}`
       );
+    });
+
+    test("every registered step content key declares its control ids and keeps its render suite", () => {
+      const source = webviewSource();
+      const failures: string[] = [];
+      for (const [contentKey, { ids, renderSuite }] of CONTENT_CONTROLS) {
+        if (!NOT_AUTHORABLE.has(contentKey)) {
+          failures.push(
+            `${contentKey}: not a NOT_AUTHORABLE content key; register it in UI_CONTROL_IDS instead`
+          );
+        }
+        for (const controlId of ids) {
+          if (!source.includes(controlId)) {
+            failures.push(
+              `${contentKey}: content control id "${controlId}" is absent from src/ui/webview-react`
+            );
+          }
+        }
+        const suitePath = path.join(WEBVIEW_SOURCE_ROOT, "test", renderSuite);
+        if (!existsSync(suitePath)) {
+          failures.push(
+            `${contentKey}: render suite ${renderSuite} (which asserts the ids are on rendered controls) is missing`
+          );
+        }
+      }
+      assert.deepStrictEqual(failures, []);
     });
 
     test("workflow enum controls use schema-matched metadata values and labels", () => {
@@ -926,6 +1181,156 @@ suite("Schema -> dashboard property round trip", () => {
       assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
         type: "script",
         script: SCRIPT_TEXT,
+      });
+    });
+
+    test("a file workflow step saved from the editor round-trips", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      await harness.patchRunDefinition((head) => {
+        head.steps = [
+          {
+            type: "workflow",
+            workflow: "workflows/verify.ctrlyoke.yaml",
+            name: "Verify",
+            onFail: "continue",
+            color: "#123456",
+          },
+        ];
+        head.finalStep = {
+          type: "workflow",
+          workflow: "workflows/wrap-up.ctrlyoke.yaml",
+        };
+      });
+
+      // StepEditor.handleUpdate, Workflow mode: the path changed and onFail
+      // went back to its default.
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: "workflows/checks.ctrlyoke.yaml",
+        promptName: "Verify",
+        properties: { type: "workflow", color: "#123456" },
+        clearProperties: ["onFail", "enabled"],
+      });
+      await harness.routeUpdateFinalPrompt({
+        finalStep: {
+          type: "workflow",
+          workflow: "workflows/wrap-up.ctrlyoke.yaml",
+          onFail: "continue",
+        } as never,
+        clearProperties: ["color", "enabled", "name"],
+      });
+
+      const definition = await harness.readRunDefinition();
+      const { _runtime: _stepRuntime, ...step } = definition.steps![0];
+      assert.deepStrictEqual(step, {
+        type: "workflow",
+        workflow: "workflows/checks.ctrlyoke.yaml",
+        name: "Verify",
+        color: "#123456",
+      });
+      const { _runtime: _finalRuntime, ...finalStep } =
+        definition.finalStep as Record<string, unknown>;
+      assert.deepStrictEqual(finalStep, {
+        type: "workflow",
+        workflow: "workflows/wrap-up.ctrlyoke.yaml",
+        onFail: "continue",
+      });
+    });
+
+    test("an inline workflow step saved from the editor round-trips, and File and Inline replace each other", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      await harness.patchRunDefinition((head) => {
+        head.steps = [
+          {
+            type: "workflow",
+            workflow: "workflows/verify.ctrlyoke.yaml",
+            name: "Verify",
+            onFail: "continue",
+          },
+        ];
+        head.finalStep = {
+          type: "workflow",
+          workflow: { prompt: "Wrap up", model: "sonnet" },
+        };
+      });
+      const stepOf = async () => {
+        const { _runtime: _omitted, ...step } = (
+          await harness.readRunDefinition()
+        ).steps![0] as Record<string, unknown>;
+        return step;
+      };
+
+      // StepEditor.handleUpdate, Workflow mode: File switched to Inline.
+      const inline = {
+        prompt: PROMPT_TEXT,
+        harness: "claude-cli",
+        worktree: { mode: "managed", merge: true },
+      };
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: PROMPT_TEXT,
+        promptName: "Verify",
+        properties: { type: "workflow", workflow: inline, onFail: "continue" },
+        clearProperties: ["color", "enabled"],
+      });
+      assert.deepStrictEqual(await stepOf(), {
+        type: "workflow",
+        workflow: inline,
+        name: "Verify",
+        onFail: "continue",
+      });
+
+      // Inline prompt to inline script: nothing of the prompt survives.
+      const script = { type: "script", script: SCRIPT_TEXT, timeoutSec: 30 };
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: SCRIPT_TEXT,
+        promptName: "Verify",
+        properties: { type: "workflow", workflow: script },
+        clearProperties: ["onFail", "color", "enabled"],
+      });
+      assert.deepStrictEqual(await stepOf(), {
+        type: "workflow",
+        workflow: script,
+        name: "Verify",
+      });
+
+      // Back to File: the path replaces the definition.
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: "workflows/checks.ctrlyoke.yaml",
+        promptName: "Verify",
+        properties: { type: "workflow" },
+        clearProperties: ["onFail", "color", "enabled"],
+      });
+      assert.deepStrictEqual(await stepOf(), {
+        type: "workflow",
+        workflow: "workflows/checks.ctrlyoke.yaml",
+        name: "Verify",
+      });
+
+      // The final step's inline definition is replaced whole as well.
+      await harness.routeUpdateFinalPrompt({
+        finalStep: {
+          type: "workflow",
+          workflow: { prompt: "Wrap up again", worktree: false },
+        } as never,
+        clearProperties: ["onFail", "color", "enabled", "name"],
+      });
+      const { _runtime: _finalRuntime, ...finalStep } = (
+        await harness.readRunDefinition()
+      ).finalStep as Record<string, unknown>;
+      assert.deepStrictEqual(finalStep, {
+        type: "workflow",
+        workflow: { prompt: "Wrap up again", worktree: false },
       });
     });
 

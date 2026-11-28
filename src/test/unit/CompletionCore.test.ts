@@ -262,10 +262,16 @@ suite("CompletionCore", () => {
     const core = createCore({ files: [deep, shallow] });
     const fileItems = await core.getFileCompletions("");
     const promptItems = await core.getPromptFileCompletions("");
-    const fileShallow = fileItems.find((item) => item.label === "guide.prompt.md");
+    const fileShallow = fileItems.find(
+      (item) => item.label === "guide.prompt.md"
+    );
     const fileDeep = fileItems.find((item) => item.label === "deep.prompt.md");
-    const promptShallow = promptItems.find((item) => item.label === "guide.prompt.md");
-    const promptDeep = promptItems.find((item) => item.label === "deep.prompt.md");
+    const promptShallow = promptItems.find(
+      (item) => item.label === "guide.prompt.md"
+    );
+    const promptDeep = promptItems.find(
+      (item) => item.label === "deep.prompt.md"
+    );
     assert.ok(fileShallow?.sortText && fileDeep?.sortText);
     assert.ok(promptShallow?.sortText && promptDeep?.sortText);
     assert.ok(fileShallow.sortText < fileDeep.sortText);
@@ -380,6 +386,23 @@ suite("CompletionCore", () => {
       (await core.getPromptFileCompletions("")).every(
         (item) => item.kind === 16
       )
+    );
+  });
+
+  test("workflow file paths list workflow files, inserted like prompt-file paths", async () => {
+    const items = await createCore({
+      files: [
+        "flows/check.ctrlyoke.yaml",
+        "flows/one.prompt.md",
+        "flows/notes.md",
+      ],
+    }).getWorkflowFilePathCompletions("./flows/");
+    assert.deepStrictEqual(items.map((item) => item.insertText).sort(), [
+      "./flows/check.ctrlyoke.yaml",
+      "./flows/one.prompt.md",
+    ]);
+    assert.ok(
+      items[0]?.documentation?.startsWith("**Workflow file reference**")
     );
   });
 

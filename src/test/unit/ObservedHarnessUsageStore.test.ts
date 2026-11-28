@@ -38,7 +38,14 @@ suite("ObservedHarnessUsageStore", () => {
   });
 
   teardown(async () => {
-    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    await fs
+      .rm(workspaceRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      })
+      .catch(() => {});
     if (originalCtrlyokeHome === undefined) {
       delete process.env.CTRLYOKE_HOME;
     } else {

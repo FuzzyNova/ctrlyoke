@@ -1,4 +1,5 @@
 import type { HarnessId, WorkflowStep } from "../types/CtrlYokeTypes";
+import { getExecutionRuntime } from "../types/CtrlYokeTypes";
 import type { SessionAttachments } from "./SessionAttachmentLedger";
 
 export interface ResumeAttachmentResolution {
@@ -67,7 +68,7 @@ export class ResumeAttachmentResolver {
     let found = params.priorAttachments !== undefined;
 
     for (let i = params.promptIndex - 1; i >= 0; i--) {
-      const runtime = params.allPrompts[i]?._runtime;
+      const runtime = getExecutionRuntime(params.allPrompts[i]);
       if (!runtime?.completedAt) {
         continue;
       }

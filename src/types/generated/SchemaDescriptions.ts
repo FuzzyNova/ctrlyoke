@@ -6,6 +6,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.activeParallelGroup": "Durable admission state for the currently executing parallel group",
   "_runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "_runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "_runtime.childRunRef": "Run reference of the child run, used to locate its output and history.",
+  "_runtime.childWorkflowKey": "Lineage key of the child run.",
   "_runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
   "_runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
   "_runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
@@ -35,7 +37,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.executionEndTime": "Wall-clock timestamp when workflow execution reached a terminal state",
   "_runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "_runtime.executionState": "Current execution state",
-  "_runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
+  "_runtime.failureKind": "Structured classification of the last failure for this step.",
   "_runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
   "_runtime.finalStep": "Runtime metadata for final step execution state (optional, added automatically during execution)",
   "_runtime.finalStep.completedAt": "Timestamp when final step execution completed",
@@ -94,8 +96,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
   "_runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "_runtime.priorContext[]": "1-based prompt number",
+  "_runtime.resolvedWorkflowPath": "Absolute path the workflow reference resolved to when the child launched.",
   "_runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "_runtime.retryCount": "Number of retry attempts for this prompt",
+  "_runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
   "_runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
   "_runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
   "_runtime.schemaVersion": "Run-file format version for _runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten. Not substituted: This structural field or identity value stays as authored.",
@@ -262,6 +266,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "defaults.worktree.directory": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.",
   "defaults.worktree.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
   "defaults.worktree.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "defaults.worktree.mode": "Always `managed`: a fresh worktree and branch for each run.",
   "defaults.worktree.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
   "definitionRevision": "Monotonic optimistic-concurrency counter, bumped on every definition-changing edit and not on runtime-only writes. Starts at 1; each promoted run restarts its own sequence at 1 (working files only).",
   "diagnostics": "Logging and diagnostic output settings.",
@@ -306,6 +311,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
   "finalStep._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "finalStep._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep._runtime.childRunRef": "Run reference of the child run, used to locate its output and history.",
+  "finalStep._runtime.childWorkflowKey": "Lineage key of the child run.",
   "finalStep._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
   "finalStep._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
   "finalStep._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
@@ -332,7 +339,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "finalStep._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "finalStep._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
-  "finalStep._runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
+  "finalStep._runtime.failureKind": "Structured classification of the last failure for this step.",
   "finalStep._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
   "finalStep._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
   "finalStep._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
@@ -372,8 +379,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
   "finalStep._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "finalStep._runtime.priorContext[]": "1-based prompt number",
+  "finalStep._runtime.resolvedWorkflowPath": "Absolute path the workflow reference resolved to when the child launched.",
   "finalStep._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "finalStep._runtime.retryCount": "Number of retry attempts for this prompt",
+  "finalStep._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
   "finalStep._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
   "finalStep._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
   "finalStep._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
@@ -438,7 +447,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
   "finalStep.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
   "finalStep.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
-  "finalStep.name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
   "finalStep.onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "finalStep.onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "finalStep.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
@@ -479,6 +488,192 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
   "finalStep.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
   "finalStep.type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.",
+  "finalStep.workflow._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "finalStep.workflow._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "finalStep.workflow._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "finalStep.workflow._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "finalStep.workflow._runtime.elapsed": "Completed prompt duration in seconds",
+  "finalStep.workflow._runtime.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "finalStep.workflow._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "finalStep.workflow._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "finalStep.workflow._runtime.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "finalStep.workflow._runtime.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "finalStep.workflow._runtime.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "finalStep.workflow._runtime.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "finalStep.workflow._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "finalStep.workflow._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.failureKind": "Structured classification of the last failure for this step.",
+  "finalStep.workflow._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
+  "finalStep.workflow._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "finalStep.workflow._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "finalStep.workflow._runtime.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "finalStep.workflow._runtime.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "finalStep.workflow._runtime.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "finalStep.workflow._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "finalStep.workflow._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "finalStep.workflow._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "finalStep.workflow._runtime.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "finalStep.workflow._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "finalStep.workflow._runtime.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "finalStep.workflow._runtime.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "finalStep.workflow._runtime.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "finalStep.workflow._runtime.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "finalStep.workflow._runtime.mcpServers[].id": "Unique server identifier",
+  "finalStep.workflow._runtime.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "finalStep.workflow._runtime.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "finalStep.workflow._runtime.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "finalStep.workflow._runtime.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "finalStep.workflow._runtime.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow._runtime.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "finalStep.workflow._runtime.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "finalStep.workflow._runtime.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "finalStep.workflow._runtime.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "finalStep.workflow._runtime.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "finalStep.workflow._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "finalStep.workflow._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.priorContext[]": "1-based prompt number",
+  "finalStep.workflow._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow._runtime.retryCount": "Number of retry attempts for this prompt",
+  "finalStep.workflow._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
+  "finalStep.workflow._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "finalStep.workflow._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "finalStep.workflow._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "finalStep.workflow._runtime.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
+  "finalStep.workflow._runtime.stepId": "Stable internal identity for this queue step within its run",
+  "finalStep.workflow._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
+  "finalStep.workflow._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
+  "finalStep.workflow._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "finalStep.workflow._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "finalStep.workflow._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "finalStep.workflow._runtime.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "finalStep.workflow._runtime.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "finalStep.workflow._runtime.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "finalStep.workflow.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.color": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.enabled": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start.",
+  "finalStep.workflow.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "finalStep.workflow.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "finalStep.workflow.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "finalStep.workflow.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "finalStep.workflow.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "finalStep.workflow.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "finalStep.workflow.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "finalStep.workflow.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "finalStep.workflow.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "finalStep.workflow.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "finalStep.workflow.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "finalStep.workflow.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "finalStep.workflow.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "finalStep.workflow.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "finalStep.workflow.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "finalStep.workflow.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "finalStep.workflow.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "finalStep.workflow.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "finalStep.workflow.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "finalStep.workflow.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "finalStep.workflow.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "finalStep.workflow.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "finalStep.workflow.mcpServers[].id": "Unique server identifier",
+  "finalStep.workflow.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "finalStep.workflow.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "finalStep.workflow.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "finalStep.workflow.name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "finalStep.workflow.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "finalStep.workflow.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "finalStep.workflow.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "finalStep.workflow.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "finalStep.workflow.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "finalStep.workflow.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "finalStep.workflow.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "finalStep.workflow.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.priorContext[]": "1-based prompt number",
+  "finalStep.workflow.prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
+  "finalStep.workflow.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "finalStep.workflow.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "finalStep.workflow.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "finalStep.workflow.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "finalStep.workflow.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "finalStep.workflow.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "finalStep.workflow.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "finalStep.workflow.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "finalStep.workflow.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "finalStep.workflow.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "finalStep.workflow.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "finalStep.workflow.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "finalStep.workflow.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow.type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow.worktree": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+  "finalStep.workflow.worktree.base": "Optional Git ref resolved to a commit when the worktree is created.",
+  "finalStep.workflow.worktree.branch": "Local Git branch name for the named worktree.",
+  "finalStep.workflow.worktree.directory": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.",
+  "finalStep.workflow.worktree.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow.worktree.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "finalStep.workflow.worktree.mode": "Always `managed`: a fresh worktree and branch for each run.",
+  "finalStep.workflow.worktree.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
   "general": "General format, template, and behavior settings.",
   "general.autoLoadRecentSession": "When a window opens, reopen the workflow the dashboard was last showing, or the most recently modified workflow if there is none or its run no longer exists. When off, every new window starts on a new workflow, and a hosted browser without a workflow in its URL shows the same workflow as the VS Code panel. Reloading the dashboard later in the same session always keeps its current workflow.",
   "general.defaultFormat": "Default file format for new workflows.",
@@ -519,7 +714,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
   "model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
   "modelPricing": "Optional per-harness/per-model USD pricing overrides. User and workspace scopes merge per model, with workspace rates taking precedence for the same model. Rates are USD per one million tokens.",
-  "name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.",
+  "name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
   "notifications": "Notification settings.",
   "notifications.browser": "Browser notification settings.",
   "notifications.browser.mode": "When to send browser notifications. 'connectedOnly' fires while the hosted dashboard is open; 'push' enables background push notifications.",
@@ -633,6 +828,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
   "steps[]._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "steps[]._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[]._runtime.childRunRef": "Run reference of the child run, used to locate its output and history.",
+  "steps[]._runtime.childWorkflowKey": "Lineage key of the child run.",
   "steps[]._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
   "steps[]._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
   "steps[]._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
@@ -659,7 +856,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[]._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[]._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
-  "steps[]._runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
+  "steps[]._runtime.failureKind": "Structured classification of the last failure for this step.",
   "steps[]._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
   "steps[]._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
   "steps[]._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
@@ -699,8 +896,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
   "steps[]._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[]._runtime.priorContext[]": "1-based prompt number",
+  "steps[]._runtime.resolvedWorkflowPath": "Absolute path the workflow reference resolved to when the child launched.",
   "steps[]._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[]._runtime.retryCount": "Number of retry attempts for this prompt",
+  "steps[]._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
   "steps[]._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
   "steps[]._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
   "steps[]._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
@@ -766,15 +965,17 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
   "steps[].mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
   "steps[].model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
-  "steps[].name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
   "steps[].onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
-  "steps[].parallel": "The prompt or script steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel": "The prompt, script or workflow steps that run concurrently. Groups cannot be nested. Not substituted: This structural field or identity value stays as authored.",
   "steps[].parallel[]": "Shared execution configuration properties used across workflow-level defaults, prompt-level overrides, and runtime metadata",
   "steps[].parallel[]._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
   "steps[].parallel[]._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "steps[].parallel[]._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[]._runtime.childRunRef": "Run reference of the child run, used to locate its output and history.",
+  "steps[].parallel[]._runtime.childWorkflowKey": "Lineage key of the child run.",
   "steps[].parallel[]._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
   "steps[].parallel[]._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
   "steps[].parallel[]._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
@@ -801,7 +1002,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].parallel[]._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].parallel[]._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
-  "steps[].parallel[]._runtime.failureKind": "Structured classification of the last harness/session failure for this prompt.",
+  "steps[].parallel[]._runtime.failureKind": "Structured classification of the last failure for this step.",
   "steps[].parallel[]._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
   "steps[].parallel[]._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
   "steps[].parallel[]._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
@@ -841,8 +1042,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
   "steps[].parallel[]._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].parallel[]._runtime.priorContext[]": "1-based prompt number",
+  "steps[].parallel[]._runtime.resolvedWorkflowPath": "Absolute path the workflow reference resolved to when the child launched.",
   "steps[].parallel[]._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].parallel[]._runtime.retryCount": "Number of retry attempts for this prompt",
+  "steps[].parallel[]._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
   "steps[].parallel[]._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
   "steps[].parallel[]._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
   "steps[].parallel[]._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
@@ -907,7 +1110,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[].mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
   "steps[].parallel[].mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
   "steps[].parallel[].model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
-  "steps[].parallel[].name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a truncated preview of the prompt text. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
   "steps[].parallel[].onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].parallel[].onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].parallel[].operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
@@ -948,6 +1151,192 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[].toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
   "steps[].parallel[].toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
   "steps[].parallel[].type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.",
+  "steps[].parallel[].workflow._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "steps[].parallel[].workflow._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "steps[].parallel[].workflow._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "steps[].parallel[].workflow._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "steps[].parallel[].workflow._runtime.elapsed": "Completed prompt duration in seconds",
+  "steps[].parallel[].workflow._runtime.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "steps[].parallel[].workflow._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].parallel[].workflow._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "steps[].parallel[].workflow._runtime.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "steps[].parallel[].workflow._runtime.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "steps[].parallel[].workflow._runtime.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].parallel[].workflow._runtime.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].parallel[].workflow._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "steps[].parallel[].workflow._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.failureKind": "Structured classification of the last failure for this step.",
+  "steps[].parallel[].workflow._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
+  "steps[].parallel[].workflow._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "steps[].parallel[].workflow._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "steps[].parallel[].workflow._runtime.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "steps[].parallel[].workflow._runtime.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "steps[].parallel[].workflow._runtime.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "steps[].parallel[].workflow._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "steps[].parallel[].workflow._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "steps[].parallel[].workflow._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "steps[].parallel[].workflow._runtime.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "steps[].parallel[].workflow._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "steps[].parallel[].workflow._runtime.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "steps[].parallel[].workflow._runtime.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "steps[].parallel[].workflow._runtime.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "steps[].parallel[].workflow._runtime.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "steps[].parallel[].workflow._runtime.mcpServers[].id": "Unique server identifier",
+  "steps[].parallel[].workflow._runtime.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "steps[].parallel[].workflow._runtime.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "steps[].parallel[].workflow._runtime.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "steps[].parallel[].workflow._runtime.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "steps[].parallel[].workflow._runtime.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow._runtime.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].parallel[].workflow._runtime.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].parallel[].workflow._runtime.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].parallel[].workflow._runtime.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "steps[].parallel[].workflow._runtime.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "steps[].parallel[].workflow._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "steps[].parallel[].workflow._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.priorContext[]": "1-based prompt number",
+  "steps[].parallel[].workflow._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow._runtime.retryCount": "Number of retry attempts for this prompt",
+  "steps[].parallel[].workflow._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
+  "steps[].parallel[].workflow._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].parallel[].workflow._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].parallel[].workflow._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "steps[].parallel[].workflow._runtime.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
+  "steps[].parallel[].workflow._runtime.stepId": "Stable internal identity for this queue step within its run",
+  "steps[].parallel[].workflow._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
+  "steps[].parallel[].workflow._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
+  "steps[].parallel[].workflow._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].parallel[].workflow._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "steps[].parallel[].workflow._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "steps[].parallel[].workflow._runtime.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "steps[].parallel[].workflow._runtime.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "steps[].parallel[].workflow._runtime.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "steps[].parallel[].workflow.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.color": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.enabled": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start.",
+  "steps[].parallel[].workflow.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "steps[].parallel[].workflow.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].parallel[].workflow.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "steps[].parallel[].workflow.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "steps[].parallel[].workflow.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "steps[].parallel[].workflow.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].parallel[].workflow.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].parallel[].workflow.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "steps[].parallel[].workflow.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "steps[].parallel[].workflow.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "steps[].parallel[].workflow.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "steps[].parallel[].workflow.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "steps[].parallel[].workflow.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "steps[].parallel[].workflow.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "steps[].parallel[].workflow.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "steps[].parallel[].workflow.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "steps[].parallel[].workflow.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "steps[].parallel[].workflow.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "steps[].parallel[].workflow.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "steps[].parallel[].workflow.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "steps[].parallel[].workflow.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "steps[].parallel[].workflow.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "steps[].parallel[].workflow.mcpServers[].id": "Unique server identifier",
+  "steps[].parallel[].workflow.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "steps[].parallel[].workflow.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "steps[].parallel[].workflow.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "steps[].parallel[].workflow.name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "steps[].parallel[].workflow.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].parallel[].workflow.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].parallel[].workflow.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].parallel[].workflow.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].parallel[].workflow.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "steps[].parallel[].workflow.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "steps[].parallel[].workflow.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "steps[].parallel[].workflow.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.priorContext[]": "1-based prompt number",
+  "steps[].parallel[].workflow.prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
+  "steps[].parallel[].workflow.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].parallel[].workflow.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].parallel[].workflow.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].parallel[].workflow.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].parallel[].workflow.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "steps[].parallel[].workflow.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].parallel[].workflow.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].parallel[].workflow.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].parallel[].workflow.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "steps[].parallel[].workflow.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "steps[].parallel[].workflow.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "steps[].parallel[].workflow.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "steps[].parallel[].workflow.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow.type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow.worktree": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+  "steps[].parallel[].workflow.worktree.base": "Optional Git ref resolved to a commit when the worktree is created.",
+  "steps[].parallel[].workflow.worktree.branch": "Local Git branch name for the named worktree.",
+  "steps[].parallel[].workflow.worktree.directory": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.",
+  "steps[].parallel[].workflow.worktree.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow.worktree.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].parallel[].workflow.worktree.mode": "Always `managed`: a fresh worktree and branch for each run.",
+  "steps[].parallel[].workflow.worktree.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
   "steps[].preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
   "steps[].preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
   "steps[].preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
@@ -985,6 +1374,192 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
   "steps[].toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
   "steps[].type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.",
+  "steps[].workflow._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "steps[].workflow._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "steps[].workflow._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "steps[].workflow._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "steps[].workflow._runtime.elapsed": "Completed prompt duration in seconds",
+  "steps[].workflow._runtime.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "steps[].workflow._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].workflow._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "steps[].workflow._runtime.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "steps[].workflow._runtime.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "steps[].workflow._runtime.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].workflow._runtime.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].workflow._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "steps[].workflow._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.failureKind": "Structured classification of the last failure for this step.",
+  "steps[].workflow._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
+  "steps[].workflow._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "steps[].workflow._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "steps[].workflow._runtime.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "steps[].workflow._runtime.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "steps[].workflow._runtime.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "steps[].workflow._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "steps[].workflow._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "steps[].workflow._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "steps[].workflow._runtime.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "steps[].workflow._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "steps[].workflow._runtime.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "steps[].workflow._runtime.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "steps[].workflow._runtime.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "steps[].workflow._runtime.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "steps[].workflow._runtime.mcpServers[].id": "Unique server identifier",
+  "steps[].workflow._runtime.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "steps[].workflow._runtime.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "steps[].workflow._runtime.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "steps[].workflow._runtime.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "steps[].workflow._runtime.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow._runtime.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].workflow._runtime.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].workflow._runtime.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].workflow._runtime.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "steps[].workflow._runtime.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "steps[].workflow._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "steps[].workflow._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.priorContext[]": "1-based prompt number",
+  "steps[].workflow._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow._runtime.retryCount": "Number of retry attempts for this prompt",
+  "steps[].workflow._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
+  "steps[].workflow._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].workflow._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].workflow._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "steps[].workflow._runtime.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
+  "steps[].workflow._runtime.stepId": "Stable internal identity for this queue step within its run",
+  "steps[].workflow._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
+  "steps[].workflow._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
+  "steps[].workflow._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].workflow._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "steps[].workflow._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "steps[].workflow._runtime.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "steps[].workflow._runtime.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "steps[].workflow._runtime.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "steps[].workflow.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.color": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.enabled": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start.",
+  "steps[].workflow.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "steps[].workflow.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].workflow.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "steps[].workflow.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "steps[].workflow.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "steps[].workflow.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].workflow.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].workflow.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "steps[].workflow.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "steps[].workflow.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "steps[].workflow.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "steps[].workflow.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "steps[].workflow.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "steps[].workflow.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "steps[].workflow.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "steps[].workflow.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "steps[].workflow.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "steps[].workflow.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "steps[].workflow.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "steps[].workflow.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "steps[].workflow.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "steps[].workflow.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "steps[].workflow.mcpServers[].id": "Unique server identifier",
+  "steps[].workflow.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "steps[].workflow.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "steps[].workflow.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "steps[].workflow.name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "steps[].workflow.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "steps[].workflow.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "steps[].workflow.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].workflow.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].workflow.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "steps[].workflow.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "steps[].workflow.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "steps[].workflow.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.priorContext[]": "1-based prompt number",
+  "steps[].workflow.prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
+  "steps[].workflow.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "steps[].workflow.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].workflow.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].workflow.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "steps[].workflow.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "steps[].workflow.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "steps[].workflow.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "steps[].workflow.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "steps[].workflow.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "steps[].workflow.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "steps[].workflow.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "steps[].workflow.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "steps[].workflow.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow.type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow.worktree": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+  "steps[].workflow.worktree.base": "Optional Git ref resolved to a commit when the worktree is created.",
+  "steps[].workflow.worktree.branch": "Local Git branch name for the named worktree.",
+  "steps[].workflow.worktree.directory": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.",
+  "steps[].workflow.worktree.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow.worktree.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "steps[].workflow.worktree.mode": "Always `managed`: a fresh worktree and branch for each run.",
+  "steps[].workflow.worktree.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
   "storage": "User-only storage location configuration.",
   "storage.runHistoryLocation": "Store run history under the user state home or beside the workspace. Recently deleted runs, observed usage, and the history search index move with it. User scope only. Takes effect after a window reload, and existing history is not moved: the other location appears as a separate history, and switching back restores it. With `workspace`, each run's live definition sits where any agent with write access to the workspace can edit it, including a pending step's scripts and permissions. ctrlyoke keeps a record of every definition it writes under the user state home: a running workflow ignores a change made outside ctrlyoke, and a run with one cannot run or be edited until you accept or restore it. Choose `workspace` only for agents and repositories you trust.",
   "storage.trashRetentionDays": "Days a deleted run or workflow stays in Recently deleted before it is permanently removed. Every history delete, including Clear all history, moves runs to Recently deleted, where they can be restored until then.",
@@ -1050,13 +1625,207 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "usageTracking.providerRefreshEnabled": "Allow provider quota refreshes from configured collectors. Requires `usageTracking.enabled`.",
   "usageTracking.warningPercentUsed": "Quota usage percentage at which ctrlyoke starts warning that a provider limit is close.",
   "vars": "Default values for `{{varName}}` substitutions. Not substituted: Variables are not recursively expanded.",
+  "workflow": "A workflow file path (not variable-substituted in v1), or an inline single prompt or script step.",
+  "workflow._runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution). Not substituted: This structural field or identity value stays as authored.",
+  "workflow._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "workflow._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "workflow._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "workflow._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "workflow._runtime.elapsed": "Completed prompt duration in seconds",
+  "workflow._runtime.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "workflow._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "workflow._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "workflow._runtime.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "workflow._runtime.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "workflow._runtime.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "workflow._runtime.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "workflow._runtime.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "workflow._runtime.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.failureKind": "Structured classification of the last failure for this step.",
+  "workflow._runtime.failureMessage": "Human-readable message describing the last harness/session failure.",
+  "workflow._runtime.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "workflow._runtime.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "workflow._runtime.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "workflow._runtime.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "workflow._runtime.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "workflow._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "workflow._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "workflow._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "workflow._runtime.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "workflow._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "workflow._runtime.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "workflow._runtime.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "workflow._runtime.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "workflow._runtime.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "workflow._runtime.mcpServers[].id": "Unique server identifier",
+  "workflow._runtime.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "workflow._runtime.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "workflow._runtime.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "workflow._runtime.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "workflow._runtime.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow._runtime.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "workflow._runtime.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "workflow._runtime.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "workflow._runtime.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "workflow._runtime.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "workflow._runtime.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "workflow._runtime.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.priorContext[]": "1-based prompt number",
+  "workflow._runtime.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow._runtime.retryCount": "Number of retry attempts for this prompt",
+  "workflow._runtime.rewoundFailure": "Set when a failed step was rewound to pending, so its earlier history stays owned by this queue position.",
+  "workflow._runtime.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "workflow._runtime.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "workflow._runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "workflow._runtime.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow._runtime.startedAt": "Timestamp when the executor claimed this step for dispatch",
+  "workflow._runtime.stepId": "Stable internal identity for this queue step within its run",
+  "workflow._runtime.terminalFailure": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure.",
+  "workflow._runtime.terminalStatus": "Terminal state of this prompt. Absent or 'completed' means successful completion. 'noTurnStarted' means the harness handled submitted input without beginning an AI turn. Used to restore the correct visual status after a working file reload.",
+  "workflow._runtime.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "workflow._runtime.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "workflow._runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "workflow._runtime.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "workflow._runtime.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "workflow._runtime.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "workflow.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Flags are harness-specific, so workflow-level additionalArgs apply only to steps that run on the workflow's harness; a step on another harness that omits additionalArgs uses that harness's defaults.additionalArgs setting. On a step, null (None in the step properties) disables additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
+  "workflow.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. On a step, null (None in the step properties) disables the agent inherited from the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.color": "Optional authored identity colour for this step. Not substituted: This structural field or identity value stays as authored.",
+  "workflow.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.enabled": "Whether this step executes. A whole-value {{name}} placeholder is coerced to boolean and validated at run start.",
+  "workflow.endCondition": "End condition validation to run after this prompt completes. On a step, null (None in the step properties) disables the inherited workflow end condition, even if the workflow defines one. Omitting this field inherits the workflow-level end condition (if any).",
+  "workflow.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.endCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "workflow.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.endCondition.passRetryPrompt": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.",
+  "workflow.endCondition.resumeSessionOnRetry": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.",
+  "workflow.endCondition.retryPrompt": "Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt.",
+  "workflow.endCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "workflow.endCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "workflow.endCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.endCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow.errorBehavior": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
+  "workflow.errorBehavior.maxRetries": "Maximum retry attempts when onError is retry or retryPhase. When omitted, one retry is allowed. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.errorBehavior.onError": "What to do when a step phase cannot run or otherwise encounters an internal error. 'stopWorkflow': fail the step and stop the workflow (default). 'retry': re-run the whole step from its pre-condition, starting a fresh harness session; a harness error while sending an end-condition retry prompt also restarts the whole step. 'retryPhase': re-run only the phase that errored — an errored end-condition re-runs just its script against the existing response without another AI call, and a failed prompt is re-sent in a fresh harness session without re-running the pre-condition; if an end-condition retry prompt send fails, that retry prompt is resent in the existing session when available, otherwise a fresh session. For pre-conditions and script steps, retryPhase behaves like retry. 'continue': proceed as if the phase had not errored and record a warning. Each phase keeps its own retry count. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.errorBehavior.retryDelaySec": "Delay before retrying, in seconds. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.harness": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
+  "workflow.hooks": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped.",
+  "workflow.hooks[].command": "Command to execute. Resolved relative to workspace root if not absolute.",
+  "workflow.hooks[].env": "Each hook receives only its own env values, merged over the harness environment when it runs. These values are not added to the harness process environment, but are written to a per-step temp file readable by the local user, so they are not hidden from a model with shell access. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), Stop (Codex), agentStop (Copilot). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
+  "workflow.hooks[].timeoutSec": "Maximum time a user hook may run, in seconds. Applied by Copilot, Claude Code, Codex, Qwen Code, Antigravity, and OpenCode; harnesses that do not support per-hook timeouts use their own limit.",
+  "workflow.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to let the harness append steps through ctrlyoke's MCP server (a dynamic workflow). Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers. Not substituted: Entries launch programs and carry authored secret grants.",
+  "workflow.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
+  "workflow.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
+  "workflow.mcpServers[].autoApprove": "Tools to auto-approve from this MCP server: true = all tools, string[] = tool names. For Copilot CLI, server IDs must not match built-in permission kinds or contain whitespace, parentheses, or commas, and tool names must not contain parentheses or commas.",
+  "workflow.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
+  "workflow.mcpServers[].deniedTools": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.",
+  "workflow.mcpServers[].description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.",
+  "workflow.mcpServers[].env": "Environment variables for the server process (stdio servers only)",
+  "workflow.mcpServers[].headers": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values.",
+  "workflow.mcpServers[].id": "Unique server identifier",
+  "workflow.mcpServers[].transport": "Transport protocol for remote servers. Defaults to \"streamable-http\".",
+  "workflow.mcpServers[].url": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")",
+  "workflow.model": "AI model to use for this prompt. Model IDs are harness-specific, so a workflow-level model applies only to steps that run on the workflow's harness; a step on another harness that omits model uses that harness's defaults.models setting. Some harnesses replace a model they don't support with their default and log a warning, while others pass it through and the harness CLI may reject it. 'none' (None (harness default) in the dashboard) passes no model flag, so the harness CLI uses its own configured default model; it is also the out-of-the-box defaults.models value for every harness. Use it as well when you pass the model yourself in additionalArgs (e.g. a custom Bedrock model string). Optional - defaults to the harness's defaults.models setting.",
+  "workflow.name": "Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows a preview of the step's prompt or script text. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.onFail": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default). A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.onPass": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.preCondition": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow. When set at workflow level, all prompts inherit it unless overridden. On a step, null (None in the step properties) disables an inherited pre-condition.",
+  "workflow.preCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.preCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
+  "workflow.preCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.preCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.preCondition.mcpLiteralEnvKeys": "Internal provenance for MCP supplied literal env values.",
+  "workflow.preCondition.onFail": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.preCondition.onPass": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.preCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. Every `matches` comparison runs in a worker bounded by `execution.regexTimeoutSec`; a timeout is an evaluation error handled by `errorBehavior`. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.preCondition.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "workflow.preCondition.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "workflow.preCondition.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.preCondition.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.priorContext": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior queue prompt outputs; 'previous' injects the immediately preceding queue prompt output; 'none' disables injection; 'finalStepAll' injects all previous final-step pass outputs; 'finalStepPrevious' injects the immediately preceding final-step pass output; { previous: N } injects the last N queue outputs before this prompt; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflow, run? } imports resolved output from a completed run of another workflow in this workspace. 'workflow' accepts the workflow's name, workflow key, or key without its timestamp suffix; 'run' is an optional run number or stable run reference. When 'run' is omitted, the workflow's latest completed run is used. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation). Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.priorContext.previous": "How many of the most recent earlier outputs to include",
+  "workflow.priorContext.run": "Which run of the workflow to import: its number, or its run reference. Omit it to use the workflow's latest completed run, which moves on as new runs complete. A run named here cannot be deleted while a workflow references it. A string placeholder resolves at dispatch and must become an integer or stable run reference.",
+  "workflow.priorContext.workflow": "The workflow to import from, in this workspace: its workflow key (Copy Workflow Key in the workflow list's context menu), its name, or its key without the timestamp suffix. Names are matched case-insensitively, and a name shared by several workflows is an error at execution, so use the key to be exact.",
+  "workflow.priorContextDetail": "How much prior output to include. 'full' includes the complete bounded transcript; 'summary' includes the authored prompt head, changed files, and text tail. Resolves prompt → workflow. Inline :summary references ($previous:summary, $step:summary:1,3) select summary for that reference. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.priorContext[]": "1-based prompt number",
+  "workflow.prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
+  "workflow.resumeSession": "Whether this step continues an earlier step's conversation instead of starting a new session. When omitted, a step inherits the workflow's value and a workflow inherits the `defaults.resumeSession` setting (default: true). Without a sessionId, a resuming step continues the most recent earlier step on the same harness, skipping steps that ran on other harnesses; the first step always starts a new session. Set false where each step must start fresh, such as orchestrated loops whose steps are self-contained. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
+  "workflow.sandbox": "Terminal-command containment, separate from tool approval. `true` turns the harness's sandbox on: terminal commands may write only what `sandboxMode` allows. `false` (the shipped `defaults.sandbox`) turns the harness's sandbox off, overriding a sandbox you enabled in the harness's own settings: Codex gets `-s danger-full-access`, Claude Code `sandbox.enabled: false`, Copilot CLI `--no-sandbox` and Qwen Code `--sandbox=false` with `QWEN_SANDBOX=false`; Antigravity CLI and OpenCode have nothing to turn off. An organization or managed policy that forces a sandbox still wins. `null` (None) passes no sandbox flags, so the harness's own settings apply; with `toolPermissions` mode `none` it hands both axes to the harness. When absent, inherits the workflow, then `defaults.sandbox`. Network access, harness file tools and MCP servers follow each harness's own sandbox policy. Only Codex CLI and Claude Code support `true`: on Copilot CLI, Antigravity CLI, Qwen Code and OpenCode a `true` written in the workflow or step fails the step at launch, while one inherited from `defaults.sandbox` is skipped with a warning and the harness's own settings apply. Not substituted: Permission posture must match the reviewed value.",
+  "workflow.sandboxMode": "How strict `sandbox: true` is. `workspace-write` (the default) lets terminal commands write the workspace roots, approved external roots, temp directories and the harness's own caches. `read-only` lets them write none of the workspace: Codex runs `-s read-only` (which also covers its file edits), and Claude Code denies Bash writes to the workspace roots, while its built-in Write and Edit tools still follow tool permissions. Has no effect unless `sandbox` resolves to `true`. Resolves step → workflow → the `defaults.sandboxMode` setting. Not substituted: Permission posture must match the reviewed value.",
+  "workflow.script": "Shell command or path to script. Relative paths are checked in this order: execution directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.",
+  "workflow.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants. Not substituted: Secret grant approval is keyed to authored grant names.",
+  "workflow.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.shell": "Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. \"pwsh\", \"bash\", \"cmd\". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.skills": "Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke adds the skill name, path, and description to the prompt so the harness can read the SKILL.md file when it uses the skill; skill files outside trusted roots are read and embedded. This makes workflow skills available on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). On a step, null (None in the step properties) disables inherited workflow skills; skills declared by the selected agent still attach. Variable substitution: step text accepts {{name}} and resolves at dispatch; unresolved placeholders fail before execution.",
+  "workflow.timeoutSec": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies. A whole-value {{name}} placeholder is coerced and validated before dispatch.",
+  "workflow.toolPermissions": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'. Not substituted: Permission posture must match the reviewed value.",
+  "workflow.toolPermissions.allowedTools": "Tool patterns to allow (used in custom mode). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search or subagent tools, or allow a command chain piecemeal. Codex has no allow list, so Allowed Tools are NOT ENFORCED there; its sandbox and approval modes decide what runs.",
+  "workflow.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Supported by Copilot CLI, Claude CLI, Qwen Code, OpenCode, and Antigravity. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Antigravity cannot translate web search, subagent, or list/search denials. Codex enforces only `mcp__<server>__<tool>` entries for MCP servers the workflow attaches, passed as that server's `disabled_tools`; it does NOT ENFORCE shell or other tool patterns.",
+  "workflow.toolPermissions.headlessApprovalTimeoutSec": "Maximum time in seconds to wait for a dashboard response to a headless approval request. Qwen Code may impose a lower limit on older versions.",
+  "workflow.toolPermissions.headlessApprovals": "How a headless step handles a tool approval request. `deny` answers immediately; `ask` publishes a request to connected dashboards and denies if no dashboard can answer. Applies to Claude Code `custom` requests and `auto` judge escalations, Qwen Code approval requests, Codex CLI 0.146.0+ command, file-change and permission requests, Copilot CLI 1.0.112+ ACP requests in `custom` mode, and OpenCode 2.3.0+ plugin requests when using its private standalone server. OpenCode 1 and OpenCode 2 versions before 2.3.0 continue to reject headless approval requests; an explicit `--server` also disables the per-process control channel. Copilot `auto` stays on its assisted-approval path and does not use this ACP channel. No allow-always option is offered.",
+  "workflow.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'auto' lets the harness's own safety judge approve or block each request; the deny list always blocks, while the allow list pre-approves tools without limiting what runs. Unsupported harnesses run with custom tool permissions and report a warning. Codex auto review can approve sandbox escalations. 'custom' uses allowedTools + deniedTools. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config). Not substituted: This structural field or identity value stays as authored.",
+  "workflow.type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible). Not substituted: This structural field or identity value stays as authored.",
+  "workflow.worktree": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+  "workflow.worktree.base": "Optional Git ref resolved to a commit when the worktree is created.",
+  "workflow.worktree.branch": "Local Git branch name for the named worktree.",
+  "workflow.worktree.directory": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.",
+  "workflow.worktree.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
+  "workflow.worktree.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "workflow.worktree.mode": "Always `managed`: a fresh worktree and branch for each run.",
+  "workflow.worktree.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
   "worktree": "Run the workflow in the working checkout or in a Git worktree. When omitted, the `defaults.worktree` setting applies.",
   "worktree.base": "Optional Git ref resolved to a commit when the worktree is created.",
   "worktree.branch": "Local Git branch name for the named worktree.",
   "worktree.directory": "Optional long-lived directory for this named worktree, so one directory can hold different branches over time. Use an absolute path, a ~-prefixed path, or a bare name with no slash or backslash; relative paths containing separators are rejected. A bare name reuses the registered linked worktree whose directory has that exact name (or the directory ctrlyoke derived for a branch of that name); otherwise ctrlyoke creates the directory as `<worktree root>/<name>`, with no hash suffix, or as `<worktrees.root>/<repository>-<hash>/<name>` when the shared `worktrees.root` setting is set. When `branch` differs from the branch the directory holds, ctrlyoke switches it only when it is clean and never switches it back. Omit to derive the directory from the branch.",
   "worktree.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
   "worktree.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "worktree.mode": "Always `managed`: a fresh worktree and branch for each run.",
   "worktree.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
+  "worktreePresets": "Named worktree presets that MCP agents may attach to an appended step by name (`worktree: { use: \"<name>\" }`), queuing it as a lane: a single-step sub-workflow that runs in its own managed worktree. Only the managed object form is accepted, so every use creates a fresh branch. Agents can choose a preset but can never supply or override its fields, including `setup`. The preset is copied into the lane when it is queued, so later edits do not change lanes already queued. Without this property, agents cannot queue steps in their own worktree. Not substituted: Preset definitions are author-only contracts; a preset's base and setup are substituted by the lane once copied into its worktree.",
+  "worktreePresets.*": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+  "worktreePresets.*.base": "Optional Git ref resolved to a commit when the worktree is created.",
+  "worktreePresets.*.keep": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run. Not substituted: This structural field or identity value stays as authored.",
+  "worktreePresets.*.merge": "Merge the managed branch into the captured source checkout after the run. Not substituted: This structural field or identity value stays as authored.",
+  "worktreePresets.*.mode": "Always `managed`: a fresh worktree and branch for each run.",
+  "worktreePresets.*.setup": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.",
   "worktrees": "User-only worktree checkout placement configuration.",
   "worktrees.root": "Absolute or ~-prefixed directory where ctrlyoke creates worktrees. Every repository shares it, so a new bare-name `directory` goes in a `<repository>-<hash>` folder inside it."
 };
@@ -1889,7 +2658,307 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   ],
   "finalStep.type": [
     "prompt",
+    "script",
+    "workflow"
+  ],
+  "finalStep.workflow._runtime.agent": [
+    ""
+  ],
+  "finalStep.workflow._runtime.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "finalStep.workflow._runtime.endCondition.maxRetries": [
+    -1
+  ],
+  "finalStep.workflow._runtime.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow._runtime.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow._runtime.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "finalStep.workflow._runtime.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "finalStep.workflow._runtime.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "finalStep.workflow._runtime.failureKind": [
+    "userCancelled",
+    "processExit",
+    "harnessError",
+    "harnessNotInstalled",
+    "timeout",
+    "unknown"
+  ],
+  "finalStep.workflow._runtime.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "finalStep.workflow._runtime.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "finalStep.workflow._runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "finalStep.workflow._runtime.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "finalStep.workflow._runtime.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "finalStep.workflow._runtime.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow._runtime.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow._runtime.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "finalStep.workflow._runtime.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "finalStep.workflow._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "finalStep.workflow._runtime.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "finalStep.workflow._runtime.terminalStatus": [
+    "completed",
+    "cancelled",
+    "failed",
+    "skipped",
+    "noTurnStarted"
+  ],
+  "finalStep.workflow._runtime.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "finalStep.workflow._runtime.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "finalStep.workflow.agent": [
+    ""
+  ],
+  "finalStep.workflow.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "finalStep.workflow.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "finalStep.workflow.endCondition.maxRetries": [
+    -1
+  ],
+  "finalStep.workflow.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "finalStep.workflow.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "finalStep.workflow.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "finalStep.workflow.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "finalStep.workflow.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "finalStep.workflow.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "finalStep.workflow.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "finalStep.workflow.onFail": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow.onPass": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "finalStep.workflow.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "finalStep.workflow.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "finalStep.workflow.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "finalStep.workflow.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "finalStep.workflow.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "finalStep.workflow.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "finalStep.workflow.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "finalStep.workflow.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "finalStep.workflow.type": [
+    "prompt",
     "script"
+  ],
+  "finalStep.workflow.worktree": [
+    false,
+    true
+  ],
+  "finalStep.workflow.worktree.mode": [
+    "managed",
+    "named"
   ],
   "general.defaultFormat": [
     "yaml",
@@ -2692,7 +3761,307 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   ],
   "steps[].parallel[].type": [
     "prompt",
+    "script",
+    "workflow"
+  ],
+  "steps[].parallel[].workflow._runtime.agent": [
+    ""
+  ],
+  "steps[].parallel[].workflow._runtime.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].parallel[].workflow._runtime.endCondition.maxRetries": [
+    -1
+  ],
+  "steps[].parallel[].workflow._runtime.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow._runtime.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow._runtime.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].parallel[].workflow._runtime.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "steps[].parallel[].workflow._runtime.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "steps[].parallel[].workflow._runtime.failureKind": [
+    "userCancelled",
+    "processExit",
+    "harnessError",
+    "harnessNotInstalled",
+    "timeout",
+    "unknown"
+  ],
+  "steps[].parallel[].workflow._runtime.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "steps[].parallel[].workflow._runtime.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "steps[].parallel[].workflow._runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "steps[].parallel[].workflow._runtime.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "steps[].parallel[].workflow._runtime.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].parallel[].workflow._runtime.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow._runtime.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow._runtime.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].parallel[].workflow._runtime.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "steps[].parallel[].workflow._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "steps[].parallel[].workflow._runtime.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "steps[].parallel[].workflow._runtime.terminalStatus": [
+    "completed",
+    "cancelled",
+    "failed",
+    "skipped",
+    "noTurnStarted"
+  ],
+  "steps[].parallel[].workflow._runtime.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "steps[].parallel[].workflow._runtime.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "steps[].parallel[].workflow.agent": [
+    ""
+  ],
+  "steps[].parallel[].workflow.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].parallel[].workflow.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].parallel[].workflow.endCondition.maxRetries": [
+    -1
+  ],
+  "steps[].parallel[].workflow.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].parallel[].workflow.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "steps[].parallel[].workflow.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "steps[].parallel[].workflow.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "steps[].parallel[].workflow.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "steps[].parallel[].workflow.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "steps[].parallel[].workflow.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "steps[].parallel[].workflow.onFail": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow.onPass": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].parallel[].workflow.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].parallel[].workflow.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].parallel[].workflow.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].parallel[].workflow.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "steps[].parallel[].workflow.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "steps[].parallel[].workflow.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "steps[].parallel[].workflow.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "steps[].parallel[].workflow.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "steps[].parallel[].workflow.type": [
+    "prompt",
     "script"
+  ],
+  "steps[].parallel[].workflow.worktree": [
+    false,
+    true
+  ],
+  "steps[].parallel[].workflow.worktree.mode": [
+    "managed",
+    "named"
   ],
   "steps[].preCondition.compareSource": [
     "stdout",
@@ -2750,7 +4119,307 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   ],
   "steps[].type": [
     "prompt",
+    "script",
+    "workflow"
+  ],
+  "steps[].workflow._runtime.agent": [
+    ""
+  ],
+  "steps[].workflow._runtime.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].workflow._runtime.endCondition.maxRetries": [
+    -1
+  ],
+  "steps[].workflow._runtime.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].workflow._runtime.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].workflow._runtime.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].workflow._runtime.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "steps[].workflow._runtime.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "steps[].workflow._runtime.failureKind": [
+    "userCancelled",
+    "processExit",
+    "harnessError",
+    "harnessNotInstalled",
+    "timeout",
+    "unknown"
+  ],
+  "steps[].workflow._runtime.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "steps[].workflow._runtime.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "steps[].workflow._runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "steps[].workflow._runtime.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "steps[].workflow._runtime.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].workflow._runtime.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].workflow._runtime.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].workflow._runtime.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].workflow._runtime.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "steps[].workflow._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "steps[].workflow._runtime.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "steps[].workflow._runtime.terminalStatus": [
+    "completed",
+    "cancelled",
+    "failed",
+    "skipped",
+    "noTurnStarted"
+  ],
+  "steps[].workflow._runtime.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "steps[].workflow._runtime.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "steps[].workflow.agent": [
+    ""
+  ],
+  "steps[].workflow.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].workflow.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].workflow.endCondition.maxRetries": [
+    -1
+  ],
+  "steps[].workflow.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].workflow.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "steps[].workflow.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].workflow.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "steps[].workflow.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "steps[].workflow.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "steps[].workflow.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "steps[].workflow.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "steps[].workflow.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "steps[].workflow.onFail": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "steps[].workflow.onPass": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "steps[].workflow.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].workflow.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "steps[].workflow.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].workflow.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "steps[].workflow.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "steps[].workflow.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "steps[].workflow.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "steps[].workflow.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "steps[].workflow.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "steps[].workflow.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "steps[].workflow.type": [
+    "prompt",
     "script"
+  ],
+  "steps[].workflow.worktree": [
+    false,
+    true
+  ],
+  "steps[].workflow.worktree.mode": [
+    "managed",
+    "named"
   ],
   "storage.runHistoryLocation": [
     "user",
@@ -2779,7 +4448,8 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   ],
   "type": [
     "prompt",
-    "script"
+    "script",
+    "workflow"
   ],
   "ui.accessibility.outputAnnouncements": [
     "none",
@@ -2806,6 +4476,305 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "used",
     "remaining"
   ],
+  "workflow._runtime.agent": [
+    ""
+  ],
+  "workflow._runtime.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "workflow._runtime.endCondition.maxRetries": [
+    -1
+  ],
+  "workflow._runtime.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "workflow._runtime.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "workflow._runtime.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "workflow._runtime.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "workflow._runtime.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "workflow._runtime.failureKind": [
+    "userCancelled",
+    "processExit",
+    "harnessError",
+    "harnessNotInstalled",
+    "timeout",
+    "unknown"
+  ],
+  "workflow._runtime.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "workflow._runtime.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "workflow._runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "workflow._runtime.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "workflow._runtime.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "workflow._runtime.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "workflow._runtime.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "workflow._runtime.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "workflow._runtime.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "workflow._runtime.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "workflow._runtime.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "workflow._runtime.terminalStatus": [
+    "completed",
+    "cancelled",
+    "failed",
+    "skipped",
+    "noTurnStarted"
+  ],
+  "workflow._runtime.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "workflow._runtime.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "workflow.agent": [
+    ""
+  ],
+  "workflow.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "workflow.endCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "workflow.endCondition.maxRetries": [
+    -1
+  ],
+  "workflow.endCondition.onFail": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "workflow.endCondition.onPass": [
+    "continue",
+    "retry",
+    "stopWorkflow"
+  ],
+  "workflow.endCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "workflow.errorBehavior.onError": [
+    "stopWorkflow",
+    "retry",
+    "retryPhase",
+    "continue"
+  ],
+  "workflow.executionMode": [
+    "interactive",
+    "headless"
+  ],
+  "workflow.harness": [
+    "copilot-cli",
+    "claude-cli",
+    "codex-cli",
+    "opencode-cli",
+    "qwen-cli",
+    "antigravity-cli"
+  ],
+  "workflow.hooks[].event": [
+    "stop",
+    "sessionStart",
+    "preToolUse",
+    "postToolUse",
+    "userPromptSubmit",
+    "permissionRequest",
+    "notification",
+    "error"
+  ],
+  "workflow.mcpServers[].id": [
+    "ctrlyoke"
+  ],
+  "workflow.mcpServers[].transport": [
+    "streamable-http",
+    "sse"
+  ],
+  "workflow.onFail": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "workflow.onPass": [
+    "continue",
+    "stopWorkflow"
+  ],
+  "workflow.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "workflow.preCondition.compareSource": [
+    "stdout",
+    "stderr",
+    "exitCode"
+  ],
+  "workflow.preCondition.onFail": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "workflow.preCondition.onPass": [
+    "continue",
+    "skipPrompt",
+    "stopWorkflow"
+  ],
+  "workflow.preCondition.operator": [
+    "eq",
+    "ne",
+    "contains",
+    "notContains",
+    "gte",
+    "gt",
+    "lte",
+    "lt",
+    "matches",
+    "isEmpty",
+    "isNotEmpty"
+  ],
+  "workflow.priorContext": [
+    "all",
+    "previous",
+    "none",
+    "finalStepAll",
+    "finalStepPrevious"
+  ],
+  "workflow.priorContextDetail": [
+    "full",
+    "summary"
+  ],
+  "workflow.sandboxMode": [
+    "workspace-write",
+    "read-only"
+  ],
+  "workflow.toolPermissions.headlessApprovals": [
+    "deny",
+    "ask"
+  ],
+  "workflow.toolPermissions.mode": [
+    "dangerouslyAllowAll",
+    "allowAll",
+    "auto",
+    "custom",
+    "none"
+  ],
+  "workflow.type": [
+    "prompt",
+    "script"
+  ],
+  "workflow.worktree": [
+    false,
+    true
+  ],
+  "workflow.worktree.mode": [
+    "managed",
+    "named"
+  ],
   "worktree": [
     false,
     true
@@ -2813,6 +4782,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "worktree.mode": [
     "managed",
     "named"
+  ],
+  "worktreePresets.*.mode": [
+    "managed"
   ]
 };
 
@@ -2855,7 +4827,8 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
     "-1": "Unlimited."
   },
   "finalStep": {
-    "script": "A workflow step that runs a shell script/command with no AI interaction."
+    "script": "A workflow step that runs a shell script/command with no AI interaction.",
+    "workflow": "Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage and run history. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends. A stopped child always stops the parent; onFail controls failed children."
   },
   "finalStep._runtime.agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
@@ -2875,6 +4848,30 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
   "finalStep.mcpServers[]": {
     "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
   },
+  "finalStep.workflow._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "finalStep.workflow._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "finalStep.workflow._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "finalStep.workflow.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "finalStep.workflow.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "finalStep.workflow.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "finalStep.workflow.worktree": {
+    "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+    "true": "Managed-worktree shorthand.",
+    "managed": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+    "named": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to."
+  },
   "maxSteps": {
     "-1": "Unlimited."
   },
@@ -2891,7 +4888,8 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
     "-1": "Unlimited."
   },
   "steps[]": {
-    "script": "A workflow step that runs a shell script/command with no AI interaction."
+    "script": "A workflow step that runs a shell script/command with no AI interaction.",
+    "workflow": "Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage and run history. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends. A stopped child always stops the parent; onFail controls failed children."
   },
   "steps[]._runtime.agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
@@ -2912,7 +4910,8 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
     "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
   },
   "steps[].parallel[]": {
-    "script": "A workflow step that runs a shell script/command with no AI interaction."
+    "script": "A workflow step that runs a shell script/command with no AI interaction.",
+    "workflow": "Runs another ctrlyoke workflow file to completion as its own child run, with its own lineage and run history. The child keeps its own harness, vars, and finalStep. If the child file has no worktree key, it runs in the parent's execution root; otherwise its worktree setting is honoured. The parent step waits until the child run ends. A stopped child always stops the parent; onFail controls failed children."
   },
   "steps[].parallel[]._runtime.agent": {
     "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
@@ -2932,8 +4931,80 @@ export const SCHEMA_VARIANT_DESCRIPTIONS: Readonly<Record<string, Readonly<Recor
   "steps[].parallel[].mcpServers[]": {
     "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
   },
+  "steps[].parallel[].workflow._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].parallel[].workflow._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].parallel[].workflow._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].parallel[].workflow.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].parallel[].workflow.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].parallel[].workflow.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].parallel[].workflow.worktree": {
+    "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+    "true": "Managed-worktree shorthand.",
+    "managed": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+    "named": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to."
+  },
+  "steps[].workflow._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].workflow._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].workflow._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].workflow.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "steps[].workflow.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "steps[].workflow.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "steps[].workflow.worktree": {
+    "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+    "true": "Managed-worktree shorthand.",
+    "managed": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+    "named": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to."
+  },
   "ui.outputVirtualizationRowThreshold": {
     "-1": "Unlimited."
+  },
+  "workflow._runtime.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "workflow._runtime.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "workflow._runtime.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "workflow.agent": {
+    "": "Empty string means no agent — the form the dashboard's \"None\" selection serializes to. Distinct from null, which explicitly disables an inherited agent."
+  },
+  "workflow.endCondition.maxRetries": {
+    "-1": "Unlimited."
+  },
+  "workflow.mcpServers[]": {
+    "ctrlyoke": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools."
+  },
+  "workflow.worktree": {
+    "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",
+    "true": "Managed-worktree shorthand.",
+    "managed": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
+    "named": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to."
   },
   "worktree": {
     "false": "No worktree: the workflow runs directly in the ordinary workspace checkout, sharing it with your own edits.",

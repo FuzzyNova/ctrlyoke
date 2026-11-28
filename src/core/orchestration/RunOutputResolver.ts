@@ -1,14 +1,24 @@
 import * as path from "path";
+import * as fs from "fs";
 import type {
   ScriptRuntimeOutput,
+  SubWorkflowOutput,
   ScriptVerdict,
+  SubWorkflowStep,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
+import {
+  getStepType,
+  getWorkflowStepText,
+  isPromptStep,
+  isScriptStep,
+  isSubWorkflowStep,
+} from "../../types/CtrlYokeTypes";
 import {
   CLI_EVENT_TYPES,
   DIFF_CHANGE_TYPES,
   FINAL_STEP_PHASES,
+  STEP_TYPES,
   PRIOR_CONTEXT_DETAILS,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
@@ -20,6 +30,10 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import {
+  toSubWorkflowSettlement,
+  type SubWorkflowSettlement,
+} from "./SubWorkflowSettlements";
 import {
   outputAttemptKey,
   outputTargetKey,
@@ -63,6 +77,7 @@ import {
 } from "../../utils/OutputContextWindow";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   type PriorContextDetail,
   type PriorContextFileChange,
@@ -98,11 +113,32 @@ interface ResolvedRunAttemptOutput extends ResolvedRunAttempt {
 
 export interface ResolvedRunAttemptValue
   extends ResolvedRunAttempt, StepOutputSource {
+  subWorkflowOutput?: SubWorkflowOutput;
   prompt?: string;
   kind?: TimelineAttemptKind;
   startReason?: TimelineAttemptStartReason;
   terminalState?: TimelineAttemptTerminalState;
   terminalReason?: string;
+}
+
+function createWorkflowPriorContextItem(
+  index: number,
+  step: SubWorkflowStep,
+  output: SubWorkflowOutput,
+  detail: PriorContextDetail,
+  extra: Partial<PriorContextItem> = {}
+): PriorContextItem {
+  return {
+    index,
+    ...(step.name ? { name: step.name } : {}),
+    detail,
+    ...extra,
+    subWorkflow: { output },
+    stepKind: getStepType(step),
+    ...(typeof step.workflow === "string"
+      ? { workflowPath: step.workflow }
+      : {}),
+  };
 }
 
 /** Identity and timing shared by both attempt lifecycle records. */
@@ -184,6 +220,8 @@ export interface RunOutputProjection {
   /** Queue targets only. Final-step loops are reduced into `finalStep`. */
   targets: Map<string, RunAttemptProjection>;
   finalStep?: RunFinalStepProjection;
+  /** Settled direct child runs, in the order their timeline events were written. */
+  subWorkflowRuns?: SubWorkflowSettlement[];
 }
 
 export interface RunOutputProjectionOptions {
@@ -213,6 +251,11 @@ interface OpenAttemptState {
  * preview consumers, while script and terminal facts remain explicit.
  */
 export type RunOutputResolverEvent =
+  | {
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED;
+      attempt: ResolvedRunAttempt;
+      settlement: SubWorkflowSettlement;
+    }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED;
       attempt: ResolvedRunAttempt;
@@ -313,10 +356,42 @@ export type RunOutputResolverAttemptEvent =
  * `resolveAttempt()` is a convenience reduction that retains only one attempt's
  * output (the value it returns), never the run's complete event log.
  */
+/** Visited-set key for sub-workflow recursion: one entry per run address. */
+function subWorkflowVisitKey(workflowKey: string, runRef: string): string {
+  return `${workflowKey}/${runRef}`;
+}
+
+/** The same key, from a run's manifest path (`<runsRoot>/<workflowKey>/<runRef>/manifest.json`). */
+function subWorkflowVisitKeyFromManifest(manifestPath: string): string {
+  const runDirectory = path.dirname(manifestPath);
+  return subWorkflowVisitKey(
+    path.basename(path.dirname(runDirectory)),
+    path.basename(runDirectory)
+  );
+}
+
 export class RunOutputResolver {
   constructor(
     private readonly recorder: TimelineRecorder = new TimelineRecorder()
   ) {}
+
+  /** Build the same workflow item used by prior-context resolution, with its descendants. */
+  async resolveWorkflowPriorContextItem(
+    manifestPath: string,
+    index: number,
+    step: SubWorkflowStep,
+    output: SubWorkflowOutput,
+    options: RunOutputProjectionOptions,
+    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
+  ): Promise<PriorContextItem> {
+    const item = createWorkflowPriorContextItem(index, step, output, detail);
+    const items = await this.resolveSubWorkflowChildren(
+      [item],
+      options,
+      new Set([subWorkflowVisitKeyFromManifest(manifestPath)])
+    );
+    return items[0];
+  }
 
   async *stream(
     manifestPath: string
@@ -474,6 +549,20 @@ export class RunOutputResolver {
             scriptOutput: event.payload,
           };
           break;
+        case TIMELINE_EVENT_TYPES.SUB_WORKFLOW_SETTLED:
+          yield {
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED,
+            attempt: this.createAttemptReference(
+              event.target,
+              event.runIndex,
+              event.attemptIndex,
+              event.definitionRevision,
+              activeDefinition,
+              event.phase
+            ),
+            settlement: toSubWorkflowSettlement(event),
+          };
+          break;
         case TIMELINE_EVENT_TYPES.RETRY_SCHEDULED:
           yield {
             kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED,
@@ -601,6 +690,10 @@ export class RunOutputResolver {
           if (event.attempt.phase !== undefined) {
             state.terminated = true;
           }
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED:
+          state.value.subWorkflowOutput = event.settlement.output;
+          state.terminated = true;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
           state.value.terminalState = event.terminalState;
@@ -786,11 +879,19 @@ export class RunOutputResolver {
     }
 
     const finalAccumulator = new ProjectionAccumulator();
+    const subWorkflowRuns: RunOutputProjection["subWorkflowRuns"] = [];
     let latestFinalLoop: ProjectionAccumulator | undefined;
     let latestFinalLoopIndex = -1;
 
     try {
       for await (const event of this.stream(manifestPath)) {
+        if (
+          event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SUB_WORKFLOW_SETTLED
+        ) {
+          // The definition snapshot has `_runtime` stripped, so a step's
+          // identity comes from the event itself, never from that snapshot.
+          subWorkflowRuns.push(event.settlement);
+        }
         if (
           event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
           event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION
@@ -940,6 +1041,7 @@ export class RunOutputResolver {
           : {}),
       };
     }
+    projection.subWorkflowRuns = subWorkflowRuns;
     return projection;
   }
 
@@ -959,6 +1061,7 @@ export class RunOutputResolver {
     }
     return {
       projection: {
+        subWorkflowRuns: [],
         targets: new Map(
           [...accumulators].map(([key, accumulator]) => [
             key,
@@ -1094,7 +1197,8 @@ export class RunOutputResolver {
     contexts: readonly PriorContextRequest[],
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number,
-    options: RunOutputProjectionOptions
+    options: RunOutputProjectionOptions,
+    visitedSubWorkflows?: Set<string>
   ): Promise<PriorContextItem[]> {
     // Steps with no output are skipped when selecting the most recent N, so
     // previous selectors resolve every earlier candidate before selecting.
@@ -1247,6 +1351,16 @@ export class RunOutputResolver {
         );
         const step = value?.definition?.step ?? allPrompts[index];
         if (!step || !value) return [];
+        if (isSubWorkflowStep(step) && value.subWorkflowOutput) {
+          return [
+            createWorkflowPriorContextItem(
+              index,
+              step,
+              value.subWorkflowOutput,
+              merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail
+            ),
+          ];
+        }
         if (isScriptStep(step)) {
           const scriptOutput = value.scriptOutput;
           const text = scriptOutput
@@ -1272,6 +1386,7 @@ export class RunOutputResolver {
                 {
                   index,
                   name: step.name,
+                  stepKind: getStepType(step),
                   detail:
                     merged.detailByQueueIndex.get(index) ??
                     merged.allQueueDetail,
@@ -1314,7 +1429,8 @@ export class RunOutputResolver {
               {
                 index,
                 name: step.name,
-                prompt: step.prompt,
+                stepKind: getStepType(step),
+                prompt: getWorkflowStepText(step),
                 detail:
                   merged.detailByQueueIndex.get(index) ?? merged.allQueueDetail,
                 filesChanged:
@@ -1386,6 +1502,7 @@ export class RunOutputResolver {
         const targetKey = outputTargetKey(value.target);
         const common = {
           index,
+          stepKind: step ? getStepType(step) : STEP_TYPES.PROMPT,
           type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
           // Set below, once the latest pass with output is known.
           detail: merged.allFinalStepsDetail,
@@ -1397,6 +1514,16 @@ export class RunOutputResolver {
         };
         if (step && isScriptStep(step) && value.scriptOutput)
           return [{ ...common, scriptOutput: value.scriptOutput }];
+        if (step && isSubWorkflowStep(step) && value.subWorkflowOutput)
+          return [
+            createWorkflowPriorContextItem(
+              index,
+              step,
+              value.subWorkflowOutput,
+              common.detail,
+              { ...common, type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP }
+            ),
+          ];
         const projected = latestValues.get(targetKey);
         const transcript = projected?.transcript;
         const text = projected?.legacyText ?? "";
@@ -1404,7 +1531,7 @@ export class RunOutputResolver {
           ? [
               {
                 ...common,
-                ...(step && !isScriptStep(step) ? { prompt: step.prompt } : {}),
+                ...(step && isPromptStep(step) ? { prompt: step.prompt } : {}),
                 ...(transcript?.length ? { transcript } : {}),
                 ...(text ? { text } : {}),
               },
@@ -1428,14 +1555,70 @@ export class RunOutputResolver {
       : merged.includePreviousFinalStep
         ? finalItems.slice(-1)
         : [];
-    return deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]);
+    return this.resolveSubWorkflowChildren(
+      deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]),
+      options,
+      visitedSubWorkflows ??
+        new Set([subWorkflowVisitKeyFromManifest(manifestPath)])
+    );
+  }
+
+  private async resolveSubWorkflowChildren(
+    items: PriorContextItem[],
+    options: RunOutputProjectionOptions,
+    visited: Set<string>
+  ): Promise<PriorContextItem[]> {
+    for (const item of items) {
+      if (!item.subWorkflow) continue;
+      const { childWorkflowKey, childRunRef } = item.subWorkflow.output;
+      // A step that failed before a child run existed has no child to read.
+      if (childWorkflowKey === undefined || childRunRef === undefined) continue;
+      try {
+        const address = subWorkflowVisitKey(childWorkflowKey, childRunRef);
+        if (visited.has(address)) {
+          Log.warn(`[RunOutputResolver] Sub-workflow cycle at ${address}`);
+          continue;
+        }
+        const childManifestPath = WorkflowPaths.manifestPath(
+          options.workspaceRoot,
+          childWorkflowKey,
+          childRunRef
+        );
+        await fs.promises.access(childManifestPath);
+        const childVisited = new Set(visited);
+        childVisited.add(address);
+        item.subWorkflow.children = await this.resolveAllPriorContextItems(
+          childManifestPath,
+          options,
+          item.detail,
+          childVisited
+        );
+        for (const child of item.subWorkflow.children)
+          child.containingRun = {
+            workflowKey: childWorkflowKey,
+            runRef: childRunRef,
+          };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          Log.debug(
+            `[RunOutputResolver] Child run unavailable: ${String(error)}`
+          );
+        } else {
+          Log.warn(
+            `[RunOutputResolver] Child run unreadable: ${String(error)}`
+          );
+        }
+      }
+    }
+    return items;
   }
 
   /** Read a whole terminal source run through the timeline reader. */
   async resolveAllPriorContextItems(
     manifestPath: string,
     options: RunOutputProjectionOptions,
-    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL
+    detail: PriorContextDetail = PRIOR_CONTEXT_DETAILS.FULL,
+    visitedSubWorkflows?: Set<string>
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
     for await (const event of this.stream(manifestPath)) {
@@ -1459,7 +1642,9 @@ export class RunOutputResolver {
         prompt: "",
       })),
       maxIndex + 1,
-      options
+      options,
+      visitedSubWorkflows ??
+        new Set([subWorkflowVisitKeyFromManifest(manifestPath)])
     );
   }
 

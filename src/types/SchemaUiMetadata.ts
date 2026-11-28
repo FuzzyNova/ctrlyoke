@@ -290,6 +290,25 @@ export const WORKTREE_SELECTION_OPTIONS_META = {
   },
 } as const;
 
+/**
+ * UI modes for an inline sub-workflow child's `worktree` (D13): the workflow
+ * selector's modes plus omitting the key, which runs the child in its
+ * parent's checkout (D4a). `false` is the main checkout, as at the root.
+ */
+export const INLINE_SUB_WORKFLOW_WORKTREE_SELECTION_OPTIONS_META = {
+  [WORKTREE_MODE_SELECTIONS.INHERIT]: {
+    value: WORKTREE_MODE_SELECTIONS.INHERIT,
+    label: "Parent's checkout",
+    description: "Runs where this workflow runs, including its worktree",
+    pseudo: { omit: true },
+  },
+  ...WORKTREE_SELECTION_OPTIONS_META,
+  [WORKTREE_MODE_SELECTIONS.NONE]: {
+    ...WORKTREE_SELECTION_OPTIONS_META[WORKTREE_MODE_SELECTIONS.NONE],
+    label: "None (main checkout)",
+  },
+} as const;
+
 export const AGENT_SELECTION_OPTIONS_META = {
   [INHERIT_DEFAULT_OPTION]: {
     value: INHERIT_DEFAULT_OPTION,

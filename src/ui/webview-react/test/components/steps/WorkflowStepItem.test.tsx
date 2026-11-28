@@ -4,6 +4,11 @@ import { WorkflowStepItem } from "@components/steps/WorkflowStepItem";
 import { STEP_STATUS, type CliOutput } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import { useSettingsStore } from "@store/settingsStore";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { navigateToWorkflowAddress } from "@utils/runNavigation";
+
+vi.mock("@hooks/useVsCodeApi", () => ({ getVsCodeApi: () => ({}) }));
+vi.mock("@utils/runNavigation", () => ({ navigateToWorkflowAddress: vi.fn() }));
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 
@@ -125,4 +130,75 @@ describe("WorkflowStep token usage", () => {
       expect(contextFill).toHaveClass("opacity-90");
     }
   );
+});
+
+describe("WorkflowStepItem workflow variant", () => {
+  it("shows workflow badge and referenced path without harness stats", () => {
+    const { container } = render(
+      <WorkflowStepItem
+        text="workflows/verify.ctrlyoke.yaml"
+        index={0}
+        status={STEP_STATUS.COMPLETED}
+        stepType={STEP_TYPES.WORKFLOW}
+      />
+    );
+
+    expect(container).toHaveTextContent("Workflow");
+    expect(container).toHaveTextContent("workflows/verify.ctrlyoke.yaml");
+    expect(container).not.toHaveTextContent("tks");
+    expect(container).not.toHaveTextContent("Claude");
+  });
+
+  it("shows the D9 warning and opens the child run address", () => {
+    render(
+      <WorkflowStepItem
+        text="workflows/verify.ctrlyoke.yaml"
+        index={0}
+        status={STEP_STATUS.COMPLETED}
+        stepType={STEP_TYPES.WORKFLOW}
+        showFailureWarning
+        childExecutionState="running"
+        workflowRun={{
+          workflowKey: "child-key" as never,
+          runRef: "child-run" as never,
+          workflowName: "Verification",
+        }}
+      />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("running");
+    fireEvent.click(screen.getByRole("button", { name: "Open run →" }));
+    expect(navigateToWorkflowAddress).toHaveBeenCalledWith(
+      {},
+      { workflowKey: "child-key", kind: "run", runRef: "child-run" },
+      "Verification"
+    );
+  });
+
+  it("renders an inline lane with harness, worktree branch and merge warning", () => {
+    render(
+      <WorkflowStepItem
+        text="Implement the palette."
+        index={0}
+        status={STEP_STATUS.COMPLETED}
+        stepType={STEP_TYPES.WORKFLOW}
+        workflowIsInline
+        inlineWorkflowTitle="Implement the palette."
+        harnessId="claude-cli"
+        harnessLabel="Claude Code"
+        modelLabel="sonnet"
+        worktreeBadge={{ branchName: "ctrlyoke/palette" }}
+        mergeWarning={{ label: "Merge conflict", reason: "Conflicts: a.ts" }}
+      />
+    );
+
+    // The unnamed lane is titled by its prompt, with no duplicate subtitle.
+    expect(screen.getAllByText("Implement the palette.")).toHaveLength(1);
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("ctrlyoke/palette")).toBeInTheDocument();
+    expect(screen.getByText("Merge conflict")).toHaveAttribute(
+      "title",
+      "Conflicts: a.ts"
+    );
+  });
 });

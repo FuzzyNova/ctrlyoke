@@ -171,6 +171,10 @@ Everything after the first `=` is the value, so values may contain `=`. A
 missing `=` or an invalid name exits with code 2 before the run starts. See
 [`ctrlyoke run`](/cli/ctrlyoke).
 
+The overrides also reach every [sub-workflow](/workflows/sub-workflow-steps)
+file the run launches, at any depth, and replace that file's own default the
+same way.
+
 ## Environment variables {#environment-variables}
 
 Every script ctrlyoke runs itself — script steps, pre-conditions, end

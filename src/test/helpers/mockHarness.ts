@@ -158,23 +158,52 @@ export class MockHarnessIntegration extends HarnessIntegration {
     return true;
   }
 
-  protected async cancelImplementation(): Promise<void> {}
+  /** When set, a cancel completes the pending response, as a killed CLI's does. */
+  public completeResponseOnCancel = false;
+
+  protected async cancelImplementation(): Promise<void> {
+    if (this.completeResponseOnCancel) {
+      this.responseCompleteEmitter.fire(undefined);
+    }
+  }
+}
+
+/**
+ * Sends each prompt but holds its response until the integration is
+ * cancelled, like a long AI turn: `sendPrompt` returns once the prompt is
+ * sent, and only a cancel completes the response.
+ */
+export class HeldResponseHarnessIntegration extends MockHarnessIntegration {
+  override completeResponseOnCancel = true;
+
+  override async sendPrompt(prompt: PromptStep): Promise<boolean> {
+    this.sentPrompts.push(prompt.prompt);
+    this.promptReadyEmitter.fire({ fullPrompt: prompt.prompt });
+    return true;
+  }
 }
 
 /**
  * IntegrationFactory whose execution integrations are always mocks.
  * Pass a specific `executionIntegration` to observe every prompt the
- * workflow sends through a single recording instance.
+ * workflow sends through a single recording instance, or a function to
+ * build a distinct one per call (one instance shared by every call is also
+ * the workflow's unkeyed default integration, which is never retained
+ * across a pause).
  */
 export class MockIntegrationFactory extends IntegrationFactory {
   constructor(
     platform: PlatformAdapter,
-    private readonly executionIntegration?: MockHarnessIntegration
+    private readonly executionIntegration?:
+      MockHarnessIntegration | (() => MockHarnessIntegration)
   ) {
     super(platform);
   }
 
   override createForExecution(_harness: HarnessId): HarnessIntegration {
+    if (typeof this.executionIntegration === "function") {
+      return this.executionIntegration();
+    }
     return (
       this.executionIntegration ?? new MockHarnessIntegration(undefined, false)
     );

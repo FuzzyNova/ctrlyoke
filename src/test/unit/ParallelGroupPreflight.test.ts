@@ -1,17 +1,26 @@
 import * as assert from "assert";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import {
   HARNESS_IDS,
   CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
+  STEP_TYPES,
+  WORKTREE_MODES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type {
   ParallelGroupDefinition,
+  WorktreeConfig,
   PromptFile,
   PromptStep,
+  SubWorkflowStep,
+  WorkflowStep,
 } from "../../types/CtrlYokeTypes";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "../../types/SubWorkflowTypes";
+import { classifySubWorkflowWorktree } from "../../utils/WorktreeConfigShape";
 import {
   ctrlYokeToolFamilies,
   type ExecutionPropertyDefaults,
@@ -21,8 +30,11 @@ import {
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
 } from "../../utils/McpToolDefinitions";
 import {
+  MERGE_INTO_SHARED_ROOT_GUIDANCE,
+  WORKTREE_COLLISION_GUIDANCE,
   preflightParallelGroup,
   preflightParallelGroupMember,
+  runsInMainCheckout,
 } from "../../core/ParallelGroupPreflight";
 
 const group: ParallelGroupDefinition = {
@@ -70,6 +82,116 @@ async function run(
 }
 
 suite("ParallelGroupPreflight", () => {
+  test("a run is in the main checkout only when it executes at its state root", () => {
+    const stateRoot = path.join(os.tmpdir(), "ctrlyoke-main-checkout");
+    assert.strictEqual(runsInMainCheckout(stateRoot, stateRoot), true);
+    assert.strictEqual(
+      runsInMainCheckout(path.join(stateRoot, "."), stateRoot),
+      true
+    );
+    // An inherited child (D4a) has no worktree record of its own, but runs
+    // in its parent's worktree, so it is not in the main checkout.
+    assert.strictEqual(
+      runsInMainCheckout(`${stateRoot}.worktrees/parent`, stateRoot),
+      false
+    );
+    // A worktree that is not placed yet (a preview) is not the main checkout.
+    assert.strictEqual(runsInMainCheckout(undefined, stateRoot), false);
+  });
+
+  test("prepares a sub-workflow member once and skips harness, session and interactive checks", async () => {
+    const prepared: Array<{ stepIndex: number; workflow: unknown }> = [];
+    const harnessChecks: HarnessId[] = [];
+    const integrations: number[] = [];
+    const result = await preflightParallelGroup({
+      workflow: {
+        // An interactive, explicitly shared session would collide for two
+        // prompt members; a child run owns its own terminal and sessions.
+        executionMode: "interactive",
+        sessionId: "shared-session",
+        steps: [
+          { prompt: "interactive sibling" },
+          {
+            type: STEP_TYPES.WORKFLOW,
+            workflow: { type: STEP_TYPES.SCRIPT, script: "echo lane" },
+            _runtime: { stepId: "lane" },
+          },
+        ],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: false,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      checkHarnessReady: (harness) => {
+        harnessChecks.push(harness);
+        return undefined;
+      },
+      ensureIsolatedIntegration: (member) => {
+        integrations.push(member.stepIndex);
+        return { member: member.stepIndex };
+      },
+      prepareSubWorkflowMember: async (step, stepIndex) => {
+        prepared.push({ stepIndex, workflow: step.workflow });
+        return {
+          ok: false,
+          failureMessage: "Sub-workflow could not resolve 'x'",
+        };
+      },
+    });
+
+    assert.deepStrictEqual(result.issues, []);
+    assert.deepStrictEqual(prepared, [
+      {
+        stepIndex: 1,
+        workflow: { type: STEP_TYPES.SCRIPT, script: "echo lane" },
+      },
+    ]);
+    assert.deepStrictEqual(harnessChecks, [HARNESS_IDS.COPILOT_CLI]);
+    assert.deepStrictEqual(integrations, [0]);
+    const lane = result.members.find((member) => member.stepIndex === 1);
+    // A failed preparation is the member's own start failure, not a group issue.
+    assert.deepStrictEqual(lane?.subWorkflowLaunch, {
+      ok: false,
+      failureMessage: "Sub-workflow could not resolve 'x'",
+    });
+    assert.strictEqual(lane?.resolvedSessionId, undefined);
+  });
+
+  test("an interactive prompt member joining beside a sub-workflow member is not multiplexed", async () => {
+    const workflow: PromptFile = {
+      executionMode: "interactive",
+      steps: [
+        { type: STEP_TYPES.WORKFLOW, workflow: "lane.ctrlyoke.yaml" },
+        { prompt: "joiner" },
+      ],
+      parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+    };
+    const options = {
+      workflow,
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: false,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+    };
+    const lane = await preflightParallelGroupMember({
+      ...options,
+      step: workflow.steps![0]!,
+      stepIndex: 0,
+    });
+    const joiner = await preflightParallelGroupMember({
+      ...options,
+      step: workflow.steps![1]!,
+      stepIndex: 1,
+      reservedMembers: [lane.member],
+    });
+    assert.deepStrictEqual(joiner.issues, []);
+  });
+
   test("finds inherited/default explicit session collisions", async () => {
     const result = await run(
       {
@@ -343,5 +465,420 @@ suite("ParallelGroupPreflight", () => {
       [undefined, undefined]
     );
     assert.strictEqual(result.issues.length, 0);
+  });
+});
+
+suite("ParallelGroupPreflight MERGE_INTO_SHARED_ROOT", () => {
+  const mergeLane: WorkflowStep = {
+    type: STEP_TYPES.WORKFLOW,
+    name: "merge lane",
+    workflow: {
+      prompt: "lane work",
+      worktree: { mode: WORKTREE_MODES.MANAGED, merge: true },
+    },
+  };
+  const plainLane: WorkflowStep = {
+    type: STEP_TYPES.WORKFLOW,
+    name: "plain lane",
+    workflow: {
+      prompt: "lane work",
+      worktree: { mode: WORKTREE_MODES.MANAGED },
+    },
+  };
+  const inheritingMember: WorkflowStep = {
+    type: STEP_TYPES.WORKFLOW,
+    name: "inheriting",
+    workflow: { type: STEP_TYPES.SCRIPT, script: "npm test" },
+  };
+
+  /**
+   * Preflight a group of `steps`, preparing each sub-workflow member the way
+   * the executor does: its plan is classified from the inline definition.
+   * `prepare: false` leaves members unprepared, as a preview does.
+   */
+  async function preflight(
+    steps: WorkflowStep[],
+    options: { prepare?: boolean; parentRunsInMainCheckout?: boolean } = {}
+  ) {
+    const groupDefinition = {
+      ...group,
+      startIndex: 0,
+      endIndex: steps.length - 1,
+    };
+    return preflightParallelGroup({
+      workflow: {
+        steps: steps.map((step, index) => ({
+          ...step,
+          _runtime: { stepId: `member-${index}` },
+        })),
+        parallelGroups: [groupDefinition],
+      },
+      group: groupDefinition,
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      ...(options.parentRunsInMainCheckout !== undefined
+        ? { parentRunsInMainCheckout: options.parentRunsInMainCheckout }
+        : {}),
+      ...(options.prepare === false
+        ? {}
+        : {
+            prepareSubWorkflowMember: async (step: SubWorkflowStep) => {
+              const definition = step.workflow as Exclude<
+                SubWorkflowStep["workflow"],
+                string
+              >;
+              return {
+                ok: true as const,
+                source: {
+                  kind: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+                  resolvedPath: "/child.ctrlyoke.yaml",
+                },
+                worktreePlan: classifySubWorkflowWorktree(definition.worktree),
+              };
+            },
+          }),
+    });
+  }
+
+  const mergeIssues = (
+    result: Awaited<ReturnType<typeof preflightParallelGroup>>
+  ) =>
+    result.issues.filter(
+      (issue) =>
+        issue.code ===
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT
+    );
+
+  test("a prompt member beside a merge lane is an issue naming both", async () => {
+    const result = await preflight([{ prompt: "edit in place" }, mergeLane]);
+
+    const issues = mergeIssues(result);
+    assert.strictEqual(issues.length, 1);
+    assert.deepStrictEqual(issues[0].memberIndices, [0, 1]);
+    assert.strictEqual(
+      issues[0].message,
+      `Step 2 ("merge lane") merges into the parent's checkout, which Step 1 edits in the same parallel group. ${MERGE_INTO_SHARED_ROOT_GUIDANCE}`
+    );
+    assert.strictEqual(result.issues.length, 1);
+  });
+
+  test("a script member counts as editing the parent's checkout, in either order", async () => {
+    const result = await preflight([
+      mergeLane,
+      { type: STEP_TYPES.SCRIPT, script: "npm run build" },
+    ]);
+
+    assert.deepStrictEqual(
+      mergeIssues(result).map((issue) => issue.memberIndices),
+      [[0, 1]]
+    );
+  });
+
+  test("an inheriting workflow member beside a merge lane is an issue", async () => {
+    const result = await preflight([inheritingMember, mergeLane]);
+
+    assert.deepStrictEqual(
+      mergeIssues(result).map((issue) => issue.memberIndices),
+      [[0, 1]]
+    );
+    // It edits the parent's root wherever the parent runs, so a worktree
+    // parent refuses it too (D4d: rule 2 never admits a merge lease).
+    const inWorktree = await preflight([inheritingMember, mergeLane], {
+      parentRunsInMainCheckout: false,
+    });
+    assert.deepStrictEqual(
+      mergeIssues(inWorktree).map((issue) => issue.memberIndices),
+      [[0, 1]]
+    );
+  });
+
+  test("inheriting members beside each other, or beside a lane without merge, are not an issue", async () => {
+    for (const parentRunsInMainCheckout of [true, false]) {
+      const result = await preflight(
+        [inheritingMember, { ...inheritingMember, name: "second" }, plainLane],
+        { parentRunsInMainCheckout }
+      );
+      assert.deepStrictEqual(
+        result.issues,
+        [],
+        String(parentRunsInMainCheckout)
+      );
+    }
+  });
+
+  test("a merge lane beside a lane without merge is not an issue", async () => {
+    const result = await preflight([mergeLane, plainLane]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("two merge lanes are not an issue", async () => {
+    const result = await preflight([
+      mergeLane,
+      { ...mergeLane, name: "second" },
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a preview classifies an unprepared inline member from its definition", async () => {
+    const result = await preflight([inheritingMember, mergeLane], {
+      prepare: false,
+    });
+
+    assert.strictEqual(mergeIssues(result).length, 1);
+  });
+
+  test("a worktree: false child edits the parent's checkout only when the parent runs in the main checkout", async () => {
+    const mainCheckoutChild: WorkflowStep = {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "main", worktree: false },
+    };
+
+    const onMain = await preflight([mainCheckoutChild, mergeLane], {
+      parentRunsInMainCheckout: true,
+    });
+    const inWorktree = await preflight([mainCheckoutChild, mergeLane], {
+      parentRunsInMainCheckout: false,
+    });
+
+    assert.strictEqual(mergeIssues(onMain).length, 1);
+    assert.deepStrictEqual(inWorktree.issues, []);
+  });
+
+  test("a member that fails alone in preparation is not counted", async () => {
+    const result = await preflightParallelGroup({
+      workflow: {
+        steps: [{ prompt: "edit in place" }, mergeLane],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      prepareSubWorkflowMember: async () => ({
+        ok: false,
+        failureMessage: "Sub-workflow could not resolve 'x'",
+      }),
+    });
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a member claimed beside a running merge lane fails its dispatch preflight", async () => {
+    const workflow: PromptFile = {
+      steps: [mergeLane, { prompt: "late joiner" }],
+      parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+    };
+    const groupResult = await preflight([mergeLane]);
+    const claimed = await preflightParallelGroupMember({
+      workflow,
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      step: { prompt: "late joiner" },
+      stepIndex: 1,
+      reservedMembers: groupResult.members,
+    });
+
+    assert.deepStrictEqual(
+      claimed.issues.map((issue) => issue.code),
+      [PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.MERGE_INTO_SHARED_ROOT]
+    );
+    assert.match(claimed.failureMessage, /Parallel step 2 failed preflight/);
+  });
+});
+
+suite("ParallelGroupPreflight WORKTREE_COLLISION", () => {
+  const namedInline = (
+    name: string,
+    worktree: WorktreeConfig
+  ): WorkflowStep => ({
+    type: STEP_TYPES.WORKFLOW,
+    name,
+    workflow: { prompt: `${name} work`, worktree },
+  });
+  /** A member whose preparation fails, as an invalid child file does. */
+  const FAILS_TO_PREPARE = "broken";
+  const fileMember = (name: string, file: string): WorkflowStep => ({
+    type: STEP_TYPES.WORKFLOW,
+    name,
+    workflow: file,
+  });
+
+  /**
+   * Preflight `steps` as one group. A file member's child is "parsed" to the
+   * `worktree` in `fileWorktrees`; an inline member is classified from its
+   * definition, as the executor prepares them.
+   */
+  async function preflight(
+    steps: WorkflowStep[],
+    fileWorktrees: Record<string, WorktreeConfig | undefined> = {}
+  ) {
+    const groupDefinition = {
+      ...group,
+      startIndex: 0,
+      endIndex: steps.length - 1,
+    };
+    return preflightParallelGroup({
+      workflow: {
+        steps: steps.map((step, index) => ({
+          ...step,
+          _runtime: { stepId: `member-${index}` },
+        })),
+        parallelGroups: [groupDefinition],
+      },
+      group: groupDefinition,
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      parentRunsInMainCheckout: true,
+      prepareSubWorkflowMember: async (step: SubWorkflowStep) =>
+        step.name === FAILS_TO_PREPARE
+          ? { ok: false as const, failureMessage: "invalid child" }
+          : {
+              ok: true as const,
+              source: {
+                kind: SUB_WORKFLOW_SOURCE_KINDS.FILE,
+                resolvedPath: "/child.ctrlyoke.yaml",
+              },
+              worktreePlan: classifySubWorkflowWorktree(
+                typeof step.workflow === "string"
+                  ? fileWorktrees[step.workflow]
+                  : step.workflow.worktree
+              ),
+            },
+    });
+  }
+
+  const collisions = (
+    result: Awaited<ReturnType<typeof preflightParallelGroup>>
+  ) =>
+    result.issues.filter(
+      (issue) =>
+        issue.code ===
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION
+    );
+
+  test("two inline members naming one branch are an issue naming both", async () => {
+    const result = await preflight([
+      namedInline("docs", "ctrlyoke/docs"),
+      namedInline("site", {
+        mode: WORKTREE_MODES.NAMED,
+        branch: "ctrlyoke/docs",
+      }),
+    ]);
+
+    assert.deepStrictEqual(result.issues, collisions(result));
+    assert.strictEqual(result.issues.length, 1);
+    assert.deepStrictEqual(result.issues[0].memberIndices, [0, 1]);
+    assert.strictEqual(
+      result.issues[0].message,
+      `Step 1 ("docs"), Step 2 ("site") use the same named worktree "ctrlyoke/docs" in one parallel group. ${WORKTREE_COLLISION_GUIDANCE}`
+    );
+  });
+
+  test("normalizes the branch as WorktreeManager does", async () => {
+    const result = await preflight([
+      namedInline("a", " refs/heads/ctrlyoke/docs "),
+      namedInline("b", { mode: WORKTREE_MODES.NAMED, branch: "ctrlyoke/docs" }),
+    ]);
+
+    assert.deepStrictEqual(
+      collisions(result).map((issue) => issue.memberIndices),
+      [[0, 1]]
+    );
+  });
+
+  test("file children are compared after parsing, and with inline children", async () => {
+    const result = await preflight(
+      [
+        fileMember("first", "a.ctrlyoke.yaml"),
+        fileMember("second", "b.ctrlyoke.yaml"),
+        namedInline("third", "release"),
+      ],
+      {
+        "a.ctrlyoke.yaml": { mode: WORKTREE_MODES.NAMED, branch: "release" },
+        "b.ctrlyoke.yaml": "release",
+      }
+    );
+
+    assert.deepStrictEqual(
+      collisions(result).map((issue) => issue.memberIndices),
+      [
+        [0, 1],
+        [0, 1, 2],
+      ]
+    );
+  });
+
+  test("distinct branches, managed lanes and inheriting members are not an issue", async () => {
+    const result = await preflight([
+      namedInline("a", "ctrlyoke/a"),
+      namedInline("b", "ctrlyoke/b"),
+      namedInline("managed", { mode: WORKTREE_MODES.MANAGED }),
+      namedInline("managed 2", { mode: WORKTREE_MODES.MANAGED }),
+      {
+        type: STEP_TYPES.WORKFLOW,
+        workflow: { type: STEP_TYPES.SCRIPT, script: "npm test" },
+      },
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a branch built from a {{var}} is left to the child's start", async () => {
+    const result = await preflight([
+      namedInline("a", "lane/{{topic}}"),
+      namedInline("b", "lane/{{topic}}"),
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a member that fails alone in preparation is not counted", async () => {
+    const result = await preflight([
+      namedInline(FAILS_TO_PREPARE, "release"),
+      namedInline("b", "release"),
+    ]);
+
+    assert.deepStrictEqual(result.issues, []);
+  });
+
+  test("a member claimed beside a running holder of its branch fails its dispatch preflight", async () => {
+    const holder = namedInline("holder", "release");
+    const late = namedInline("late", "release");
+    const groupResult = await preflight([holder]);
+    const claimed = await preflightParallelGroupMember({
+      workflow: {
+        steps: [holder, late],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      step: late,
+      stepIndex: 1,
+      reservedMembers: groupResult.members,
+    });
+
+    assert.deepStrictEqual(
+      claimed.issues.map((issue) => issue.code),
+      [PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.WORKTREE_COLLISION]
+    );
+    assert.match(claimed.failureMessage, /Parallel step 2 failed preflight/);
   });
 });

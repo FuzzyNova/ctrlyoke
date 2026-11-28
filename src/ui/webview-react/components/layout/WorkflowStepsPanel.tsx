@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { isScriptStep } from "@root/types/CtrlYokeTypes";
+import { isPromptStep, isSubWorkflowStep } from "@root/types/CtrlYokeTypes";
 import {
   DOCS_URLS,
   KEYBOARD_KEYS,
@@ -18,6 +18,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useSubWorkflowRanWithIndex } from "@hooks/useSubWorkflowRanWithIndex";
 import {
   useStepStatus,
   useStepClickHandler,
@@ -91,6 +92,11 @@ import {
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 import { buildStepOverrideChips } from "@utils/stepOverrideChips";
 import {
+  getInlinePromptStep,
+  getRecordedLaneRanWith,
+  resolveEffectiveStepHarness,
+} from "@utils/subWorkflowDisplay";
+import {
   PENDING_TAIL_DRAG_ID,
   absoluteIndexFromStepDragId,
   groupDragId,
@@ -102,6 +108,26 @@ import {
 import { Icon } from "../shared/Icon";
 import { ParallelStepsIcon } from "../shared/ParallelStepsIcon";
 import { remapIndicesThroughPermutation } from "@utils/stepMultiSelection";
+
+/**
+ * The harness/model line for values a run recorded (a started prompt step's
+ * `_runtime`, a settled lane's `ranWith`): shown as they are, never marked
+ * default or expected.
+ */
+function recordedHarnessModel(
+  harnessId: HarnessId | undefined,
+  recorded: { harness?: string; model?: string }
+) {
+  return {
+    harnessId,
+    harnessLabel: recorded.harness
+      ? getHarnessDisplayName(recorded.harness)
+      : undefined,
+    harnessIsDefault: false,
+    modelLabel: recorded.model,
+    modelIsDefault: false,
+  };
+}
 
 type PendingDragContainer = {
   id: string;
@@ -918,9 +944,39 @@ const WorkflowStepsPanelInner: React.FC<{
     [globalSettings, workflowProperties, getEffectiveModel]
   );
 
+  const recordedRanWith = useSubWorkflowRanWithIndex();
   const getStepHarnessModel = useCallback(
     (step: (typeof steps)[0], status?: StepStatus) => {
-      if (isScriptStep(step))
+      // The row rail, the chip rail and the output blocks all colour a step
+      // by this harness, so it comes from the one shared resolver.
+      const harnessId = resolveEffectiveStepHarness(
+        step,
+        (workflowProperties.harness ?? globalSettings.harness) as
+          HarnessId | undefined,
+        recordedRanWith,
+        status
+      );
+      // An inline prompt child (a lane) runs with the same defaults an
+      // ordinary step here would (D13), so it shows what its inner prompt
+      // step would. Once its child settles, the settlement records what it
+      // actually ran with, shown as a started prompt step's runtime values
+      // are. Until then, including while a child continued in place runs
+      // again, a child that exists marks the values as expected.
+      const inlinePrompt = isSubWorkflowStep(step)
+        ? getInlinePromptStep(step)
+        : undefined;
+      if (inlinePrompt && isSubWorkflowStep(step)) {
+        const ranWith = getRecordedLaneRanWith(step, recordedRanWith, status);
+        if (ranWith) {
+          return recordedHarnessModel(harnessId, ranWith);
+        }
+        return {
+          ...getPendingHarnessModel(inlinePrompt),
+          harnessId,
+          harnessModelIsExpected: Boolean(step._runtime?.childRunRef),
+        };
+      }
+      if (!isPromptStep(step))
         return {
           harnessId: undefined,
           harnessLabel: undefined,
@@ -937,21 +993,21 @@ const WorkflowStepsPanelInner: React.FC<{
         (step._runtime?.harness ?? step._runtime?.model) ||
         (isTerminalStatus && step._runtime != null)
       ) {
-        const h = step._runtime?.harness;
-        const m = step._runtime?.model;
-        return {
-          harnessId: h as HarnessId | undefined,
-          harnessLabel: h ? getHarnessDisplayName(h) : undefined,
-          harnessIsDefault: false,
-          modelLabel: m,
-          modelIsDefault: false,
-        };
+        return recordedHarnessModel(harnessId, {
+          harness: step._runtime?.harness,
+          model: step._runtime?.model,
+        });
       }
 
       // Pending / queued — reflect live settings with default indicators
-      return getPendingHarnessModel(step);
+      return { ...getPendingHarnessModel(step), harnessId };
     },
-    [getPendingHarnessModel]
+    [
+      getPendingHarnessModel,
+      globalSettings,
+      recordedRanWith,
+      workflowProperties,
+    ]
   );
 
   // Step-level property overrides to surface as chips. Recomputed whenever
@@ -1334,7 +1390,7 @@ const WorkflowStepsPanelInner: React.FC<{
   // Compute resolved harness/model for the final step using the same
   // three-tier logic as regular steps, so defaults are shown correctly.
   const getFinalStepHarnessModel = () => {
-    if (!finalStep || isScriptStep(finalStep)) return {};
+    if (!finalStep || !isPromptStep(finalStep)) return {};
     if (finalStep._runtime?.harness ?? finalStep._runtime?.model) {
       const h = finalStep._runtime!.harness;
       const m = finalStep._runtime!.model;
@@ -2055,6 +2111,7 @@ const WorkflowStepsPanelInner: React.FC<{
                           step={step}
                           index={index}
                           stepColorMode={globalSettings.stepColorMode}
+                          harnessColorSettings={globalSettings.harnessColors}
                           currentStep={currentStep}
                           executionState={executionState}
                           status={status}

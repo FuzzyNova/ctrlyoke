@@ -1,7 +1,7 @@
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import type { WorkflowExecutionContext } from "../WorkflowExecutor";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
+import { isExecutionStep, isPromptStep } from "../../types/CtrlYokeTypes";
 import type { PromptQueue } from "../PromptQueue";
 import type { OutputHistoryManager } from "./OutputHistoryManager";
 import type { StatusMessageReporter } from "./StatusMessageReporter";
@@ -126,8 +126,14 @@ export type WorkflowStartupHistoryPort = Pick<
 
 export type WorkflowStartupWorktreeManagerPort = Pick<
   WorktreeManager,
-  "releaseRuntimeTrust" | "completeManagedRun"
+  "releaseRuntimeTrust"
 >;
+
+/** How a managed worktree's artifacts were left, for its settlement. */
+export interface ManagedWorktreeCleanup {
+  readonly artifactsClean: boolean;
+  readonly cleanupMessage?: string;
+}
 
 export type WorkflowStartupStatusPort = Pick<
   StatusMessageReporter,
@@ -147,6 +153,11 @@ export interface WorkflowStartupExecutionPort {
   readonly setRunStartView?: (view: RunStartView) => void;
   readonly clearOutputBuffers: () => void;
   readonly prepareExecutionWorktree: (historyFilePath: string) => Promise<void>;
+  /**
+   * The cycle is RUNNING inside its startup guard, the first point at which
+   * a stop or pause acts on it (`SubWorkflowInstance.onDidStartExecutionCycle`).
+   */
+  readonly onExecutionCycleStarted?: () => void;
   readonly createIntegrationForMode: (
     modeOverride?: HarnessId
   ) => HarnessIntegration;
@@ -164,6 +175,9 @@ export interface WorkflowStartupExecutionPort {
     missingDirectories: readonly string[]
   ) => string;
   readonly getDefinitionRevisionContext: () => DefinitionRevisionContext;
+  readonly getParentRun?: () =>
+    import("../../types/SubWorkflowTypes").SubWorkflowParentLink | undefined;
+  readonly getInheritedParentExecution?: () => boolean;
   readonly getResolvedHistoryFilePath: () => string;
   readonly getActiveHistoryFilePath: () => string;
   readonly setActiveHistoryFilePath: (filePath: string) => void;
@@ -230,6 +244,15 @@ export interface WorkflowStartupWorktreePort {
   readonly getExecutionLease: () => ExecutionLeaseHandle | undefined;
   readonly clearExecutionLease: () => void;
   readonly manager: WorkflowStartupWorktreeManagerPort;
+  /**
+   * Settle the active managed worktree the way every settlement does: merge
+   * and keep come from its worktree config, and a stop ends the wait for a
+   * sibling's settlement or merge (D4d).
+   */
+  readonly settleManagedWorktree: (
+    worktree: WorktreeInfo,
+    cleanup: ManagedWorktreeCleanup
+  ) => Promise<unknown>;
   readonly ensureRunnerLock: (
     workingFilePath: string | undefined
   ) => Promise<void>;
@@ -673,6 +696,21 @@ export class WorkflowStartupPipeline {
     workflow = this.port.queue.getWorkflowFile(),
     defaultWorktree = ConfigurationUtils.getDefaultWorktree()
   ): Promise<void> {
+    if (
+      this.port.execution.getInheritedParentExecution?.() &&
+      !Object.prototype.hasOwnProperty.call(workflow, "worktree")
+    ) {
+      const resolution = await resolveWorktreeForStart(
+        false,
+        false,
+        this.port.platform.getNamedWorkspaceRoots(),
+        undefined,
+        isContinuation
+      );
+      this.port.worktree.setResolution(resolution);
+      this.worktreeNotice = resolution.notice;
+      return;
+    }
     const resolution = await resolveWorktreeForStart(
       workflow.worktree,
       defaultWorktree,
@@ -936,6 +974,7 @@ export class WorkflowStartupPipeline {
   private resolveAnnouncedExecutionMode(
     step: QueueState["steps"][number]
   ): ExecutionMode | undefined {
+    if (!isExecutionStep(step)) return undefined;
     const workflow = this.port.queue.getWorkflowFile();
     const vars = this.runStartView?.vars ?? workflow.vars ?? {};
     const stepIndex = this.port.queue.getState().currentIndex;
@@ -1053,6 +1092,7 @@ export class WorkflowStartupPipeline {
     if (runtime.startExecution()) {
       await this.port.queue.commitRuntimeTransition();
     }
+    this.port.execution.onExecutionCycleStarted?.();
 
     await this.port.execution.prepareExecutionWorktree(this.historyFilePath);
     if (this.stopRequestedSinceStart()) {
@@ -1222,7 +1262,7 @@ export class WorkflowStartupPipeline {
     const queuedAttempts = queueState.steps
       .slice(startIndex)
       .filter((step, offset): step is PromptStep => {
-        if (step.enabled === false || isScriptStep(step)) return false;
+        if (step.enabled === false || !isPromptStep(step)) return false;
         const absoluteIndex = startIndex + offset;
         if (restartFromBeginning) return true;
         const status = queueState.results[absoluteIndex]?.status;
@@ -1244,7 +1284,7 @@ export class WorkflowStartupPipeline {
     const finalStepStillQueued =
       finalStep !== undefined &&
       finalStep.enabled !== false &&
-      !isScriptStep(finalStep) &&
+      isPromptStep(finalStep) &&
       (restartFromBeginning ||
         !finalStepRuntime ||
         finalStepRuntime.phase === FINAL_STEP_PHASES.QUEUE ||
@@ -1347,7 +1387,8 @@ export class WorkflowStartupPipeline {
     const startedAt = Date.now();
     const promoted = await this.port.queue.promoteToNewRun(
       runWorkspaceRoot,
-      startedAt
+      startedAt,
+      this.port.execution.getParentRun?.()
     );
     if (!promoted) return workingFilePath;
 
@@ -1363,7 +1404,8 @@ export class WorkflowStartupPipeline {
       promoted.runId,
       startedAt,
       [],
-      this.port.execution.getDefinitionRevisionContext().definition
+      this.port.execution.getDefinitionRevisionContext().definition,
+      this.port.execution.getParentRun?.()
     );
     if (!historyInit.filePath) {
       throw new Error(
@@ -1455,18 +1497,9 @@ export class WorkflowStartupPipeline {
     }
     const worktree = this.port.worktree.getActiveWorktree();
     if (!worktree) return;
-    const worktreeConfig = this.port.worktree.getResolution().config;
     this.port.worktree.manager.releaseRuntimeTrust(worktree);
-    await this.port.worktree.manager
-      .completeManagedRun(worktree, {
-        merge:
-          worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-          worktreeConfig.merge === true,
-        keep:
-          worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-          worktreeConfig.keep === true,
-        artifactsClean: true,
-      })
+    await this.port.worktree
+      .settleManagedWorktree(worktree, { artifactsClean: true })
       .catch((settlementError) =>
         Log.error(
           `[inst:${this.port.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
@@ -1492,19 +1525,10 @@ export class WorkflowStartupPipeline {
   private async releaseReservationsAfterSetupStop(): Promise<void> {
     const worktree = this.port.worktree.getActiveWorktree();
     if (worktree) {
-      const worktreeConfig = this.port.worktree.getResolution().config;
       this.port.worktree.manager.releaseRuntimeTrust(worktree);
       if (worktree.mode === WORKTREE_MODES.MANAGED) {
-        await this.port.worktree.manager
-          .completeManagedRun(worktree, {
-            merge:
-              worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-              worktreeConfig.merge === true,
-            keep:
-              worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
-              worktreeConfig.keep === true,
-            artifactsClean: true,
-          })
+        await this.port.worktree
+          .settleManagedWorktree(worktree, { artifactsClean: true })
           .catch((error) =>
             Log.warn(
               `[inst:${this.port.id.slice(0, 8)}] Failed to settle worktree after stop during setup:`,

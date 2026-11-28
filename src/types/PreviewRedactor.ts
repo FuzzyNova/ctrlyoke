@@ -12,7 +12,9 @@ import type {
   SubstitutedFieldPreview,
   VariableResolutionPreview,
   WorkflowExecutionPreview,
+  WorktreeExecutionPreview,
 } from "./ExecutionPreviewTypes";
+import { SUB_WORKFLOW_SOURCE_KINDS } from "./SubWorkflowTypes";
 
 export interface RedactionRule {
   id: string;
@@ -279,6 +281,15 @@ function redactStep(
         }
       : {}),
     ...(redactedCommand ? { command: redactedCommand } : {}),
+    ...(step.subWorkflow?.source === SUB_WORKFLOW_SOURCE_KINDS.INLINE &&
+    step.subWorkflow.worktree
+      ? {
+          subWorkflow: {
+            ...step.subWorkflow,
+            worktree: redactWorktree(step.subWorkflow.worktree, exactSecrets),
+          },
+        }
+      : {}),
     ...(step.mcpApplication
       ? {
           mcpApplication: {
@@ -309,17 +320,21 @@ export function redactExecutionPreview(
           })),
         }
       : {}),
-    ...(preview.worktree?.setupCommand
-      ? {
-          worktree: {
-            ...preview.worktree,
-            setupCommand: redactPreviewText(
-              preview.worktree.setupCommand,
-              [],
-              exactSecrets
-            ).text,
-          },
-        }
+    ...(preview.worktree
+      ? { worktree: redactWorktree(preview.worktree, exactSecrets) }
       : {}),
   };
+}
+
+function redactWorktree(
+  worktree: WorktreeExecutionPreview,
+  exactSecrets: readonly string[]
+): WorktreeExecutionPreview {
+  return worktree.setupCommand
+    ? {
+        ...worktree,
+        setupCommand: redactPreviewText(worktree.setupCommand, [], exactSecrets)
+          .text,
+      }
+    : worktree;
 }

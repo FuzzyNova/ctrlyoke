@@ -1,11 +1,18 @@
 import * as assert from "assert";
+import { executionStepText } from "./helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { PromptFileParser } from "../core/PromptFileParser";
-import type { PromptStep, WorkflowStep } from "../types/CtrlYokeTypes";
+import {
+  isSubWorkflowStep,
+  type PromptStep,
+  type WorkflowStep,
+} from "../types/CtrlYokeTypes";
 import {
   CTRLYOKE_FILE_KINDS,
+  FINAL_STEP_PHASES,
+  PRIOR_CONTEXT_KEYWORDS,
   WORKFLOW_VALIDATION_WARNING_CODES,
 } from "../types/DashboardConstants";
 
@@ -206,6 +213,14 @@ suite("PromptFileParser Tests", () => {
       assert.ok(!promptWrongKind.message.includes("Did you mean 'shell'?"));
       assert.ok(promptTypo?.message.includes("Did you mean 'harness'?"));
       assert.ok(scriptTypo?.message.includes("Did you mean 'shell'?"));
+      const workflowTypo = parser
+        .getSchemaWarnings({
+          type: "workflow",
+          workflow: "child.ctrlyoke.yaml",
+          onFial: "continue",
+        })
+        .find((warning) => warning.propertyPointer === "/onFial");
+      assert.ok(workflowTypo?.message.includes("Did you mean 'onFail'?"));
     });
 
     test("warns for an other-kind key on a single-step root", () => {
@@ -222,6 +237,221 @@ suite("PromptFileParser Tests", () => {
   });
 
   suite("parsePromptFile - JSON Format", () => {
+    test("normalizes workflow steps, finalStep, and a single-step root", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-subworkflow-parser-")
+      );
+      try {
+        await fs.writeFile(
+          path.join(tempDir, "child.ctrlyoke.yaml"),
+          "steps:\n  - prompt: child\n",
+          "utf8"
+        );
+        for (const [name, source, expectedType] of [
+          [
+            "steps",
+            {
+              steps: [
+                {
+                  type: "workflow",
+                  workflow: "child.ctrlyoke.yaml",
+                  name: "child",
+                },
+              ],
+            },
+            "steps",
+          ],
+          [
+            "final",
+            {
+              steps: [{ prompt: "parent" }],
+              finalStep: { type: "workflow", workflow: "child.ctrlyoke.yaml" },
+            },
+            "finalStep",
+          ],
+          [
+            "root",
+            {
+              type: "workflow",
+              workflow: "child.ctrlyoke.yaml",
+              worktree: true,
+            },
+            "steps",
+          ],
+        ] as const) {
+          const filePath = path.join(tempDir, `${name}.ctrlyoke.json`);
+          await fs.writeFile(filePath, JSON.stringify(source), "utf8");
+          const result = await parser.parsePromptFile(filePath);
+          assert.ok(
+            result,
+            parser.lastParseError?.message ?? `Failed to parse ${name}`
+          );
+          const workflowStep =
+            expectedType === "finalStep" ? result.finalStep : result.steps?.[0];
+          assert.strictEqual(workflowStep?.type, "workflow");
+          assert.strictEqual(workflowStep?.workflow, "child.ctrlyoke.yaml");
+          if (name === "steps") assert.strictEqual(workflowStep?.name, "child");
+          if (name === "root")
+            assert.deepStrictEqual(result.worktree, { mode: "managed" });
+        }
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("retains inline sub-workflow definitions verbatim through parse and save shape", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-inline-subworkflow-")
+      );
+      try {
+        const inline = {
+          prompt: "Implement the requested change",
+          name: "Implementation lane",
+          worktree: true,
+        };
+        const filePath = path.join(tempDir, "parent.ctrlyoke.json");
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            steps: [{ type: "workflow", workflow: inline }],
+          }),
+          "utf8"
+        );
+        const result = await parser.parsePromptFile(filePath);
+        assert.ok(result, parser.lastParseError?.message ?? "Parse failed");
+        const parsedStep = result.steps?.[0];
+        assert.ok(parsedStep && isSubWorkflowStep(parsedStep));
+        assert.deepStrictEqual(parsedStep.workflow, inline);
+        assert.deepStrictEqual(
+          JSON.parse(JSON.stringify(result.steps?.[0])).workflow,
+          inline
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("rejects inline references that cross the child run boundary", async () => {
+      const cases = [
+        { prompt: "child", sessionId: 2 },
+        { prompt: "child", sessionId: FINAL_STEP_PHASES.FINAL_STEP },
+        { prompt: "child", priorContext: [1] },
+        { prompt: "child", priorContext: PRIOR_CONTEXT_KEYWORDS.ALL },
+        { prompt: "child", priorContext: PRIOR_CONTEXT_KEYWORDS.PREVIOUS },
+        {
+          prompt: "child",
+          priorContext: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
+        },
+        {
+          prompt: "child",
+          priorContext: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
+        },
+        { prompt: "child", priorContext: { previous: 2 } },
+        {
+          prompt: `use $previous and $step:1 and $all and $${FINAL_STEP_PHASES.FINAL_STEP} and $allFinalStep`,
+        },
+        { prompt: "child", endCondition: { retryPrompt: "again $previous" } },
+        {
+          prompt: "child",
+          endCondition: { passRetryPrompt: "again $allFinalStep" },
+        },
+      ];
+      for (const workflow of cases) {
+        const result = parser.validateWorkflowText(
+          JSON.stringify({ steps: [{ type: "workflow", workflow }] }),
+          CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+        );
+        assert.ok(
+          result.issues.some((issue) => /run boundary/i.test(issue.message)),
+          JSON.stringify(result.issues)
+        );
+      }
+      const allowedRunAddress = parser.validateWorkflowText(
+        JSON.stringify({
+          steps: [
+            {
+              type: "workflow",
+              workflow: {
+                prompt: "child",
+                priorContext: { workflow: "release", run: 2 },
+              },
+            },
+          ],
+        }),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+      );
+      assert.ok(
+        !allowedRunAddress.issues.some((issue) =>
+          /run boundary/i.test(issue.message)
+        )
+      );
+      const ignoredReferences = parser.validateWorkflowText(
+        JSON.stringify({
+          steps: [
+            {
+              type: "workflow",
+              workflow: {
+                prompt: "price$previous ` $step:1 `\n```\n$all\n```",
+                endCondition: {
+                  retryPrompt: "price$allFinalStep ` $previous `",
+                },
+              },
+            },
+          ],
+        }),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+      );
+      assert.ok(
+        !ignoredReferences.issues.some((issue) =>
+          /run boundary/i.test(issue.message)
+        ),
+        JSON.stringify(ignoredReferences.issues)
+      );
+    });
+
+    test("editor validation names a malformed inline definition first", () => {
+      for (const workflow of [null, {}, { name: "lane" }]) {
+        const result = parser.validateWorkflowText(
+          JSON.stringify({
+            steps: [{ prompt: "one" }, { type: "workflow", workflow }],
+          }),
+          CTRLYOKE_FILE_KINDS.WORKFLOW_JSON
+        );
+        assert.strictEqual(
+          result.issues[0]?.instancePath,
+          "/steps/1/workflow",
+          JSON.stringify(result.issues)
+        );
+        assert.match(
+          result.issues[0].message,
+          /^Step 2: (A workflow step needs a workflow file path|Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text)/
+        );
+      }
+    });
+
+    test("reports a missing sub-workflow file", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-subworkflow-missing-")
+      );
+      try {
+        const filePath = path.join(tempDir, "parent.ctrlyoke.json");
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            steps: [{ type: "workflow", workflow: "missing.ctrlyoke.yaml" }],
+          }),
+          "utf8"
+        );
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+        assert.match(
+          parser.lastParseError?.message ?? "",
+          /workflow|file|resolve/i
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("preserves a script step shell override", async () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-script-shell-")
@@ -579,9 +809,7 @@ suite("PromptFileParser Tests", () => {
 
         assert.ok(result);
         assert.deepStrictEqual(
-          result.steps?.map((step) =>
-            "prompt" in step ? step.prompt : step.script
-          ),
+          result.steps?.map((step) => executionStepText(step)),
           ["before", "parallel prompt", "echo parallel script", "after"]
         );
         assert.strictEqual(result.parallelGroups?.length, 1);
@@ -623,6 +851,81 @@ suite("PromptFileParser Tests", () => {
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
+    });
+
+    test("accepts file and inline workflow members (P1)", async () => {
+      const { tempDir, filePath } = await writeWorkflow(
+        ".ctrlyoke.yaml",
+        [
+          "steps:",
+          "  - parallel:",
+          "      - type: workflow",
+          "        workflow: child.ctrlyoke.yaml",
+          "        onFail: continue",
+          "      - type: workflow",
+          "        name: lane",
+          "        workflow:",
+          "          type: script",
+          "          script: echo lane",
+          "          worktree: { mode: managed }",
+          "    failFast: false",
+        ].join("\n")
+      );
+      await fs.writeFile(
+        path.join(tempDir, "child.ctrlyoke.yaml"),
+        "prompt: child\n",
+        "utf8"
+      );
+
+      try {
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result, String(parser.lastParseError));
+        assert.deepStrictEqual(result.steps?.[0], {
+          type: "workflow",
+          workflow: "child.ctrlyoke.yaml",
+          onFail: "continue",
+        });
+        assert.deepStrictEqual(result.steps?.[1], {
+          type: "workflow",
+          name: "lane",
+          workflow: {
+            type: "script",
+            script: "echo lane",
+            worktree: { mode: "managed" },
+          },
+        });
+        assert.deepStrictEqual(result.parallelGroups?.[0], {
+          id: result.parallelGroups?.[0].id,
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        });
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("reports inline boundary errors on a parallel member at its own pointer", () => {
+      const result = parser.validateWorkflowText(
+        [
+          "steps:",
+          "  - prompt: first",
+          "  - parallel:",
+          "      - prompt: sibling",
+          "      - type: workflow",
+          "        workflow:",
+          "          prompt: Fix $previous",
+        ].join("\n"),
+        CTRLYOKE_FILE_KINDS.WORKFLOW_YAML
+      );
+
+      const issue = result.issues.find(
+        (candidate) => candidate.instancePath === "/steps/1/parallel/1/workflow"
+      );
+      assert.ok(issue, JSON.stringify(result.issues));
+      assert.strictEqual(issue.severity, "error");
+      assert.match(issue.message, /^Step 3: Inline sub-workflow/);
     });
 
     test("merges YAML step defaults and lets explicit step values override them", async () => {
@@ -802,7 +1105,59 @@ suite("PromptFileParser Tests", () => {
             },
           ],
         },
-        message: /parallel member 2 must be a prompt or script step/i,
+        message: /parallel member 2 must be a prompt, script or workflow step/i,
+      },
+      {
+        name: "workflow member with a missing file",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one" },
+                { type: "workflow", workflow: "missing-child.ctrlyoke.yaml" },
+              ],
+            },
+          ],
+        },
+        message:
+          /Sub-workflow file reference "missing-child.ctrlyoke.yaml" could not be found/i,
+      },
+      {
+        name: "inline workflow member addressing the parent run",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one" },
+                {
+                  type: "workflow",
+                  workflow: { prompt: "two", sessionId: 1 },
+                },
+              ],
+            },
+          ],
+        },
+        message: /Step 2: Inline sub-workflow starts a new run boundary/i,
+      },
+      {
+        name: "null inline workflow",
+        workflow: { steps: [{ type: "workflow", workflow: null }] },
+        message:
+          /^Error: Validation failed: \/steps\/0\/workflow: Step 1: A workflow step needs a workflow file path or an inline definition/,
+      },
+      {
+        name: "empty inline workflow",
+        workflow: { steps: [{ type: "workflow", workflow: {} }] },
+        message:
+          /^Error: Validation failed: \/steps\/0\/workflow: Step 1: Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text, or type: script with a script/,
+      },
+      {
+        name: "name-only inline workflow",
+        workflow: {
+          steps: [{ type: "workflow", workflow: { name: "lane" } }],
+        },
+        message:
+          /^Error: Validation failed: \/steps\/0\/workflow: Step 1: Inline workflow definition must be a single prompt or script step: it needs non-empty prompt text/,
       },
     ];
 

@@ -1,3 +1,4 @@
+import type { SubWorkflowParentLink } from "@root/types/SubWorkflowTypes";
 import React, {
   useState,
   useRef,
@@ -32,6 +33,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_DELETE_SCOPES,
   RUN_SUMMARY_CACHE_STATUSES,
+  SUB_WORKFLOW_DASHBOARD_LABELS,
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
@@ -61,6 +63,7 @@ import type {
   RunRef,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
+import { assertNever } from "@root/types/CtrlYokeTypes";
 import {
   DateRangeFilterControls,
   LiveDot,
@@ -123,10 +126,6 @@ interface PendingDelete {
 const RECENTLY_DELETED_DETAIL =
   "It moves to Recently deleted, where you can restore it from Settings → General → Run History.";
 
-function assertNever(value: never): never {
-  throw new Error(`Unexpected pending delete scope: ${String(value)}`);
-}
-
 function roundMetric(value: number): number {
   return Math.round(value * 10) / 10;
 }
@@ -177,6 +176,15 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
   const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
   const recentWorkflows = useUiStore((s) => s.recentWorkflows);
   const recentWorkflowsLoaded = useUiStore((s) => s.recentWorkflowsLoaded);
+  /** "Started by" label target; undefined when the parent lineage is not in this project. */
+  const parentWorkflowNameFor = (
+    parentRun: SubWorkflowParentLink | undefined
+  ): string | undefined =>
+    parentRun
+      ? recentWorkflows.find(
+          (workflow) => workflow.address.workflowKey === parentRun.workflowKey
+        )?.workflowName
+      : undefined;
   const setRecentWorkflows = useUiStore((s) => s.setRecentWorkflows);
   const openDuplicateWorkflowDialog = useUiStore(
     (s) => s.openDuplicateWorkflowDialog
@@ -1669,6 +1677,7 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
         ...runPanelSummaries.map((summary) => ({
           kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary,
+          parentWorkflowName: parentWorkflowNameFor(summary.parentRun),
         })),
       ]
     : [];
@@ -1704,6 +1713,13 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
       recentWorkflows,
       runSummaries
     );
+  const displayedParentRun =
+    displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+      ? runSummaries.find(
+          (summary) => summary.runRef === displayedViewAddress.runRef
+        )?.parentRun
+      : undefined;
+  const displayedParentWorkflowName = parentWorkflowNameFor(displayedParentRun);
 
   const workflowFilterControls = (
     <div className="flex min-w-0 items-start gap-2">
@@ -1877,6 +1893,32 @@ export const WorkflowSwitcher: React.FC<WorkflowSwitcherProps> = ({
               )}
             </div>
           </button>
+
+          {displayedParentRun && (
+            <button
+              type="button"
+              className="shrink-0 px-2 text-xxs text-link-fg bg-cmd-bg hover:bg-cmd-active-bg"
+              aria-label={`${SUB_WORKFLOW_DASHBOARD_LABELS.startedBy} ${displayedParentWorkflowName ?? SUB_WORKFLOW_DASHBOARD_LABELS.unavailable}`}
+              title={`${SUB_WORKFLOW_DASHBOARD_LABELS.startedBy} ${displayedParentWorkflowName ?? SUB_WORKFLOW_DASHBOARD_LABELS.unavailable}`}
+              onClick={() => {
+                if (!displayedParentWorkflowName) return;
+                navigateToWorkflowAddress(
+                  vscode,
+                  {
+                    workflowKey: displayedParentRun.workflowKey,
+                    kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+                    runRef: displayedParentRun.runRef,
+                  },
+                  displayedParentWorkflowName
+                );
+              }}
+              disabled={!displayedParentWorkflowName}
+            >
+              {SUB_WORKFLOW_DASHBOARD_LABELS.startedBy}{" "}
+              {displayedParentWorkflowName ??
+                SUB_WORKFLOW_DASHBOARD_LABELS.unavailable}
+            </button>
+          )}
 
           {/* Run identity badge — third segment, only when the displayed
               lineage has more than one addressable target. A single-run

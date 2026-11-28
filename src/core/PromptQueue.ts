@@ -1,4 +1,5 @@
 import { extractWorkflowName } from "../utils/WorkflowName";
+import { getWorkflowStepText } from "../types/CtrlYokeTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import { isDeepStrictEqual } from "util";
 import { isUnlimited } from "../utils/LimitUtils";
@@ -15,6 +16,9 @@ import {
   EXECUTION_STATES,
   WorkflowStep,
   isScriptStep,
+  isSubWorkflowStep,
+  isExecutionStep,
+  getExecutionRuntime,
   PromptRuntimeMetadata,
   ActiveParallelGroupRuntime,
   ParallelGroupDefinition,
@@ -24,6 +28,8 @@ import {
   type RunRef,
   type WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
+import type { SubWorkflowRuntimeMetadata } from "../types/CtrlYokeTypes";
+import type { SubWorkflowParentLink } from "../types/SubWorkflowTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -421,7 +427,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: [...prompts],
       parallelGroups: topology.parallelGroups,
       results: prompts.map((step) => ({
-        prompt: isScriptStep(step) ? step.script : step.prompt,
+        prompt: getWorkflowStepText(step),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       })),
@@ -632,7 +638,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // Rebuild results array with proper status based on completion state
       this.state.results = prompts.map((prompt, index) => {
         return {
-          prompt: isScriptStep(prompt) ? prompt.script : prompt.prompt,
+          prompt: getWorkflowStepText(prompt),
           status: this.getResultStatusFromRuntime(
             prompt,
             index,
@@ -689,7 +695,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     // Reset all results to pending
     this.state.results = this.state.steps.map((step) => ({
-      prompt: isScriptStep(step) ? step.script : step.prompt,
+      prompt: getWorkflowStepText(step),
       status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));
@@ -785,7 +791,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       Array.from({ length: boundary }, (_, index) => String(index))
     );
     this.state.results = this.state.steps.map((step, index) => ({
-      prompt: isScriptStep(step) ? step.script : step.prompt,
+      prompt: getWorkflowStepText(step),
       status: this.getResultStatusFromRuntime(step, index, boundary),
       timestamp: new Date(),
     }));
@@ -950,10 +956,97 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
+   * Return a stopped run's cancelled sequential step to pending, so continuing
+   * the run re-executes the step its stop interrupted.
+   *
+   * By default only a workflow step with a recorded child is rewound: it
+   * re-executes to reattach to that child run (D6). A cancelled prompt or
+   * script step stays settled and continuation resumes after it, but a
+   * stopped child is still mid-run, and skipping its parent step would orphan
+   * the rest of the child's work. `anyStepKind` is for that child itself when
+   * D6 continues it: its interrupted step is the work the parent step is
+   * waiting on, so it re-runs whatever its kind. A finalStep pass needs no
+   * rewind; a stopped pass is re-entered at the same `loopIndex`.
+   *
+   * A parallel group is re-entered when the run stopped at its join (the
+   * step before `currentIndex` is its last member) or inside it (a host
+   * restart settles every in-flight member CANCELLED and leaves the head
+   * within the group). Either way the decision is read from persisted state
+   * alone: the group's cancelled members that the rule above re-runs return
+   * to pending — every cancelled member under `anyStepKind`, otherwise only
+   * workflow members with a recorded child — and the run re-enters the group
+   * at its start, whose settled members are recovered as they are.
+   */
+  public async rewindCancelledStepForContinuation(
+    options: { anyStepKind?: boolean } = {}
+  ): Promise<boolean> {
+    if (this.stateMachine.status !== EXECUTION_STATES.STOPPED) {
+      return false;
+    }
+    const head = this.state.currentIndex;
+    const index = head - 1;
+    const isRewound = (candidate: number): boolean =>
+      options.anyStepKind
+        ? this.state.results[candidate]?.status === STEP_STATUS.CANCELLED
+        : this.isCancelledChildRunStep(candidate);
+    const joinedGroup = this.state.parallelGroups.find(
+      (candidate) => candidate.endIndex === index
+    );
+    const openGroup = this.state.parallelGroups.find(
+      (candidate) => head >= candidate.startIndex && head <= candidate.endIndex
+    );
+    // The group open at the head first: when it starts right after a joined
+    // group, the run had already advanced past that join into it.
+    for (const group of [openGroup, joinedGroup]) {
+      if (!group) continue;
+      const members: number[] = [];
+      for (let member = group.startIndex; member <= group.endIndex; member++) {
+        if (isRewound(member)) members.push(member);
+      }
+      if (members.length === 0) continue;
+      this.state.currentIndex = group.startIndex;
+      for (const member of members) this.resetStepForRetry(member, false);
+      this.emitStateChange();
+      await this.updateWorkingFile();
+      return true;
+    }
+    const step = this.state.steps[index];
+    if (
+      !step ||
+      this.state.parallelGroups.some(
+        (group) => index >= group.startIndex && index <= group.endIndex
+      ) ||
+      !isRewound(index)
+    ) {
+      return false;
+    }
+    this.state.currentIndex = index;
+    this.resetStepForRetry(index, false);
+    this.emitStateChange();
+    await this.updateWorkingFile();
+    return true;
+  }
+
+  /**
+   * Whether the queue step at `index` is a workflow step whose recorded child
+   * run was cancelled: the persisted shape a top-level continue reattaches
+   * through D6 instead of moving past it.
+   */
+  public isCancelledChildRunStep(index: number): boolean {
+    const step = this.state.steps[index];
+    return (
+      step !== undefined &&
+      isSubWorkflowStep(step) &&
+      !!step._runtime?.childRunRef &&
+      this.state.results[index]?.status === STEP_STATUS.CANCELLED
+    );
+  }
+
+  /**
    * Return one settled step to pending for a retry, keeping its identity and
    * attempt history. Its next dispatch records a new attempt.
    */
-  private resetStepForRetry(index: number): void {
+  private resetStepForRetry(index: number, markRewoundFailure = true): void {
     this.state.completedIndices.delete(String(index));
     const result = this.state.results[index];
     if (result) {
@@ -976,7 +1069,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...remainingRuntime
       } = step._runtime;
       step._runtime = remainingRuntime;
-      if (hadAttempts) {
+      if (hadAttempts && markRewoundFailure) {
         step._runtime.rewoundFailure = true;
       }
     }
@@ -1461,33 +1554,37 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     metadata?: Partial<PromptRuntimeMetadata>
   ): void {
     const prompt = this.state.steps[index];
-    if (prompt) {
-      const now = Date.now();
-      const startedAt =
-        prompt._runtime?.startedAt ?? metadata?.startedAt ?? now;
-      const outcome: PromptTerminalStatus =
-        terminalStatus ??
-        metadata?.terminalStatus ??
-        PROMPT_TERMINAL_STATUS.COMPLETED;
-      prompt._runtime = {
-        ...prompt._runtime,
-        ...metadata,
-        startedAt,
-        completedAt: now,
-        terminalStatus: outcome,
-      };
-
+    if (!prompt) {
+      this.state.completedIndices.add(String(index));
+      return;
+    }
+    const now = Date.now();
+    const startedAt = prompt._runtime?.startedAt ?? metadata?.startedAt ?? now;
+    const outcome: PromptTerminalStatus =
+      terminalStatus ??
+      metadata?.terminalStatus ??
+      PROMPT_TERMINAL_STATUS.COMPLETED;
+    // Every step kind records its terminal lifecycle. A workflow step that
+    // kept only `startedAt` reloaded as PENDING behind an advanced head.
+    prompt._runtime = {
+      ...prompt._runtime,
+      ...metadata,
+      startedAt,
+      completedAt: now,
+      terminalStatus: outcome,
+    };
+    if (isExecutionStep(prompt)) {
       const workflowFile = this.getWorkflowFile();
       const isScript = isScriptStep(prompt);
       reportPromptCompleted({
         harness: SettingsPropertyResolver.resolveHarnessValue(
-          prompt._runtime.harness ?? (isScript ? undefined : prompt.harness),
+          prompt._runtime?.harness ?? (isScript ? undefined : prompt.harness),
           workflowFile.harness
         ),
         executionMode: SettingsPropertyResolver.resolveExecutionMode(
           {
             executionMode:
-              prompt._runtime.executionMode ??
+              prompt._runtime?.executionMode ??
               (isScript ? undefined : prompt.executionMode),
           },
           workflowFile
@@ -1497,14 +1594,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         outcome,
         failureKind:
           outcome === PROMPT_TERMINAL_STATUS.FAILED
-            ? prompt._runtime.failureKind
+            ? prompt._runtime?.failureKind
             : undefined,
         endConditionUsed:
           !isScript &&
           prompt.endCondition != null &&
           outcome !== PROMPT_TERMINAL_STATUS.NO_TURN_STARTED,
         resumeSession: Boolean(
-          prompt._runtime.resumeSession ??
+          prompt._runtime?.resumeSession ??
           (isScript ? false : prompt.resumeSession)
         ),
         reuseRunningTerminal:
@@ -1674,7 +1771,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   async persistRuntimeMetadata(
     promptIndex: number,
-    updates: Partial<PromptRuntimeMetadata>
+    updates: Partial<PromptRuntimeMetadata & SubWorkflowRuntimeMetadata>
   ): Promise<void> {
     const step = this.getRuntimeStep(promptIndex);
     if (!step) {
@@ -1807,7 +1904,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     sessionId: string
   ): Promise<void> {
     const step = this.getRuntimeStep(promptIndex);
-    if (!step || step._runtime?.sessionId === sessionId) {
+    if (!step || getExecutionRuntime(step)?.sessionId === sessionId) {
       return;
     }
     await this.persistRuntimeMetadata(promptIndex, { sessionId });
@@ -1928,10 +2025,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         if (memoryMatch?.result && !options.authoritativeRuntime) {
           return {
             ...memoryMatch.result,
-            prompt: isScriptStep(step) ? step.script : step.prompt,
+            prompt: getWorkflowStepText(step),
           };
         }
-        const content = isScriptStep(step) ? step.script : step.prompt;
+        const content = getWorkflowStepText(step);
         return {
           prompt: content,
           status: STEP_STATUS.PENDING,
@@ -2057,7 +2154,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.activeParallelGroupRuntime = runtime?.activeParallelGroup;
     this.restoreStateMachineFromRuntime(executionState, runtime);
     this.state.results = this.state.steps.map((step, index) => ({
-      prompt: isScriptStep(step) ? step.script : step.prompt,
+      prompt: getWorkflowStepText(step),
       status: this.getResultStatusFromRuntime(step, index, currentIndex),
       timestamp: new Date(),
     }));
@@ -2203,7 +2300,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
       // Create new results for the inserted steps
       const newResults: PromptResult[] = steps.map((step) => ({
-        prompt: isScriptStep(step) ? step.script : step.prompt,
+        prompt: getWorkflowStepText(step),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       }));
@@ -2361,9 +2458,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
-        prompt: isScriptStep(identifiedStep)
-          ? identifiedStep.script
-          : identifiedStep.prompt,
+        prompt: getWorkflowStepText(identifiedStep),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       });
@@ -2473,9 +2568,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
-        prompt: isScriptStep(identifiedStep)
-          ? identifiedStep.script
-          : identifiedStep.prompt,
+        prompt: getWorkflowStepText(identifiedStep),
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       });
@@ -2583,7 +2676,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   public async promoteToNewRun(
     workspaceFolderPath: string,
-    startedAt: number
+    startedAt: number,
+    parentRun?: SubWorkflowParentLink
   ): Promise<{
     workingFilePath: string;
     runRef: RunRef;
@@ -2608,7 +2702,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const result = await this.workingFileManager.promoteToNewRun(
       workspaceFolderPath,
       workflowKey,
-      startedAt
+      startedAt,
+      parentRun
     );
 
     this.state.workingFilePath = result.workingFilePath;
@@ -3490,7 +3585,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
 
       this.state.results = this.state.steps.map((step, index) => ({
-        prompt: isScriptStep(step) ? step.script : step.prompt,
+        prompt: getWorkflowStepText(step),
         status: this.getResultStatusFromRuntime(
           step,
           index,
@@ -3651,7 +3746,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private getStepIdentityKey(step: WorkflowStep): string {
     const type = step.type ?? "prompt";
     const name = step.name ?? "";
-    const text = isScriptStep(step) ? step.script : step.prompt;
+    // An inline child's identity is its whole definition, not only its text.
+    const text =
+      isSubWorkflowStep(step) && typeof step.workflow !== "string"
+        ? JSON.stringify(step.workflow)
+        : getWorkflowStepText(step);
     return `${type}\0${name}\0${text}`;
   }
 

@@ -67,7 +67,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     if (!promptText) {
       return undefined;
     }
-    const { escape } = promptText;
+    const { escape, stepOutputs } = promptText;
     const triggerContext = findPromptTriggerContext(
       textBeforeCursor,
       escape,
@@ -104,7 +104,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     } else if (triggerChar === "/") {
       return this.getSlashCompletions(afterTrigger, escape, position);
     } else {
-      return this.getDollarCompletions(afterTrigger, escape);
+      return this.getDollarCompletions(afterTrigger, escape, stepOutputs);
     }
   }
 
@@ -208,10 +208,13 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
   private getDollarCompletions(
     filterText: string,
-    escape: InsertTextEscape | undefined
+    escape: InsertTextEscape | undefined,
+    stepOutputs: boolean
   ): vscode.CompletionList {
-    const plainItems =
-      getCompletionCore().getPriorContextCompletions(filterText);
+    const plainItems = getCompletionCore().getPriorContextCompletions(
+      filterText,
+      { stepOutputs }
+    );
     const range = this.calculateCompletionRange("$");
     const items = plainItems.map((item) =>
       toVSCodeCompletionItem(item, "$", range, escape)
@@ -282,7 +285,14 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   private locatePromptText(
     document: vscode.TextDocument,
     position: vscode.Position
-  ): { escape: InsertTextEscape | undefined; jsonStyleEscapes: boolean } | undefined {
+  ):
+    | {
+        escape: InsertTextEscape | undefined;
+        jsonStyleEscapes: boolean;
+        /** False in an inline sub-workflow prompt, which cannot read parent steps (D13). */
+        stepOutputs: boolean;
+      }
+    | undefined {
     const kind = getCtrlYokeFileKind(document.fileName);
     if (kind) {
       const location = getWorkflowLocation(
@@ -294,12 +304,13 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
         ? {
             escape: getWorkflowInsertEscape(location),
             jsonStyleEscapes: usesJsonStyleEscapes(location),
+            stepOutputs: !location.inlineDefinition,
           }
         : undefined;
     }
     return document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
       document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT
-      ? { escape: undefined, jsonStyleEscapes: false }
+      ? { escape: undefined, jsonStyleEscapes: false, stepOutputs: true }
       : undefined;
   }
 

@@ -37,6 +37,7 @@ import {
   type StepType,
   type WorkflowTokenCoverage,
 } from "@root/types/DashboardConstants";
+import { getStepType } from "@root/types/CtrlYokeTypes";
 import type {
   StepOutput,
   UndoRecord,
@@ -109,6 +110,10 @@ import {
 } from "./outputLineMetrics";
 import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
+import {
+  indexSubWorkflowRanWith,
+  resolveEffectiveStepHarness,
+} from "./subWorkflowDisplay";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import {
@@ -628,9 +633,7 @@ export function getStepName(
  * classification used by the core `isScriptStep` guard.
  */
 function getStepKind(step: WorkflowStep | null | undefined): StepType {
-  return step?.type === STEP_TYPES.SCRIPT
-    ? STEP_TYPES.SCRIPT
-    : STEP_TYPES.PROMPT;
+  return step ? getStepType(step) : STEP_TYPES.PROMPT;
 }
 
 /** How an output target names itself: its step, label and authored name. */
@@ -674,17 +677,6 @@ function getActivityAttribution(
     activityName: identity.stepName,
     activityStepType: getStepKind(identity.workflowStep),
   };
-}
-
-function getEffectiveStepHarness(
-  step: WorkflowStep,
-  effectiveHarness: HarnessId | undefined
-): HarnessId | undefined {
-  // Runtime metadata is authoritative for started steps: changing workflow
-  // defaults while viewing a run must not recolor its existing output.
-  if (step.type === STEP_TYPES.SCRIPT) return undefined;
-  return (step._runtime?.harness ?? step.harness ?? effectiveHarness) as
-    HarnessId | undefined;
 }
 
 export function getStepOutputArtifacts(
@@ -2414,6 +2406,13 @@ export function buildOutputRows(
       )
       .map((message) => getTargetKey(message.target))
   );
+  // A settled lane is coloured by the harness its child recorded, as in the
+  // steps list and the chip rail.
+  const recordedRanWith = indexSubWorkflowRanWith(
+    input.allMessages.flatMap((message) =>
+      message.subWorkflowOutput ? [message.subWorkflowOutput] : []
+    )
+  );
   const getStepOutputColor = (
     target: OutputMessageTarget
   ): string | undefined => {
@@ -2437,16 +2436,21 @@ export function buildOutputRows(
             .slice(group.startIndex, group.endIndex + 1)
             .map((member, offsetInGroup) => ({
               step: member,
-              harnessId: getEffectiveStepHarness(
+              harnessId: resolveEffectiveStepHarness(
                 member,
-                input.effectiveHarness
+                input.effectiveHarness,
+                recordedRanWith
               ),
               offsetInGroup,
             }))
         : undefined;
     const color = resolveStepColor({
       step,
-      harnessId: getEffectiveStepHarness(step, input.effectiveHarness),
+      harnessId: resolveEffectiveStepHarness(
+        step,
+        input.effectiveHarness,
+        recordedRanWith
+      ),
       stepIndex:
         target.kind === FINAL_STEP_PHASES.FINAL_STEP
           ? input.steps.length
@@ -2642,7 +2646,12 @@ export function buildOutputRows(
     if (input.hiddenTargetKeys?.has(targetKey)) continue;
 
     if (message.type === OUTPUT_MESSAGE_TYPES.STATUS) {
-      if (!message.isActivity && activityStatusTargets.has(targetKey)) continue;
+      if (
+        !message.isActivity &&
+        !message.isSubWorkflowSettlement &&
+        activityStatusTargets.has(targetKey)
+      )
+        continue;
       const activityFirst =
         message.isActivity && previousActivityTargetKey !== targetKey;
       // A status has no header of its own, so the CLI path's leading-chrome

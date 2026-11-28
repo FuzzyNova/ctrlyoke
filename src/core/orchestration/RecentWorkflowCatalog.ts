@@ -6,7 +6,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import {
-  isScriptStep,
+  isPromptStep,
   frozenActiveExecutionMs,
   type PromptStep,
   type WorkingFile,
@@ -320,8 +320,8 @@ export class RecentWorkflowCatalog {
       }
 
       const steps = Array.isArray(workingFile.steps) ? workingFile.steps : [];
-      const firstAiStepHarness = steps.find(
-        (s): s is PromptStep => !isScriptStep(s)
+      const firstAiStepHarness = steps.find((s): s is PromptStep =>
+        isPromptStep(s)
       )?.harness;
       const harness = SettingsPropertyResolver.resolveHarnessValue(
         firstAiStepHarness,

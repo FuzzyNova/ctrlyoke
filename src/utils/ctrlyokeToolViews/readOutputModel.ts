@@ -64,12 +64,7 @@ export function parseReadOutputResultText(
         (o) =>
           isRecord(o) &&
           Number.isInteger(o.index) &&
-          (o.type === undefined ||
-            o.type === STEP_TYPES.PROMPT ||
-            o.type === STEP_TYPES.SCRIPT) &&
-          (o.type === STEP_TYPES.SCRIPT
-            ? typeof o.script === "string"
-            : typeof o.prompt === "string") &&
+          hasOutputContent(o) &&
           typeof o.status === "string" &&
           (typeof o.responseText === "string" || o.responseText === null) &&
           (o.nextCursor === undefined || typeof o.nextCursor === "string")
@@ -79,6 +74,18 @@ export function parseReadOutputResultText(
     return value as unknown as ReadOutputResult;
   } catch {
     return undefined;
+  }
+}
+
+function hasOutputContent(output: Record<string, unknown>): boolean {
+  switch (output.type) {
+    case STEP_TYPES.SCRIPT:
+      return typeof output.script === "string";
+    case undefined:
+    case STEP_TYPES.PROMPT:
+      return typeof output.prompt === "string";
+    default:
+      return false;
   }
 }
 
@@ -111,9 +118,14 @@ export function readOutputHeading(output: ReadOutputItem): string {
 }
 
 function readOutputItemText(output: ReadOutputItem): string {
-  return output.type === STEP_TYPES.SCRIPT
-    ? (output.script ?? "")
-    : (output.prompt ?? "");
+  switch (output.type ?? STEP_TYPES.PROMPT) {
+    case STEP_TYPES.SCRIPT:
+      return output.script ?? "";
+    case STEP_TYPES.PROMPT:
+      return output.prompt ?? "";
+    default:
+      return "";
+  }
 }
 
 export function readOutputItemSearchText(

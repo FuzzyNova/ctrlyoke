@@ -153,7 +153,7 @@ Pass either a file or `--prompt`, not both.
 | `-m, --model <model>`        | Model override at workflow level; step-level `model` values still take precedence. Add `--force model` to apply to every step                                                                                                                                                                              |
 | `--force <flags>`            | Repeatable, comma-separated flag names (including `script-timeout`) or `all`; apply the named passed flags to every step                                                                                                                                                                                   |
 | `-p, --prompt <text>`        | Run an inline prompt instead of a file                                                                                                                                                                                                                                                                     |
-| `--var <key=value>`          | Set a workflow variable (repeatable). CLI values override the workflow's own `vars`                                                                                                                                                                                                                        |
+| `--var <key=value>`          | Set a workflow variable (repeatable). CLI values override the workflow's own `vars`, including those of every sub-workflow file it launches                                                                                                                                                                |
 | `--session-id <id>`          | Resume this harness session by default (implies `--resume-session`); workflow level, add `--force session-id` to apply to every step                                                                                                                                                                       |
 | `--resume-session`           | Resume the existing session by default; workflow level, add `--force resume-session` to apply to every step                                                                                                                                                                                                |
 | `--no-resume-session`        | Start a new session by default, ignoring any existing session; workflow level, add `--force resume-session` to apply to every step                                                                                                                                                                         |
@@ -185,6 +185,12 @@ passes the harness's own terminal UI through with minimal ctrlyoke framing.
 Headless mode streams formatted output: step headers, streamed text, tool
 calls, diffs, script verdicts, and per-step statistics. Subagent output is
 indented and labeled beneath its spawn, including when child work interleaves.
+A sub-workflow child's progress is reported like the parent's (step headers
+with harness and model, final step pass labels, parallel group headers and
+retry totals), prefixed with the nearest child workflow's name, such as
+`[Build] Step 1/2 — compile`. A child without a `name` is labelled with its
+file name minus the `.ctrlyoke.*` extension. The run summary is printed once,
+for the workflow you started.
 
 ### Tool permissions
 
@@ -214,7 +220,9 @@ to stdout when the run ends. It is a versioned envelope (`schemaVersion: 1`)
 with the overall `success`, `status`, `workflowKey`, `runRef`, `harness`,
 `model`, timing, a `summary` of step counts, a `steps` array (status, attempts,
 session ID, pre/end-condition results, files changed, script output, error),
-the `finalStep` result, and a top-level `error`. The `workflowKey` and `runRef`
+the `finalStep` result, `subWorkflowRuns` for direct child runs, and a top-level
+`error`. Queue children use `stepId`; a final-step child uses its 1-based
+`pass`. This field is additive within schema version 1. The `workflowKey` and `runRef`
 feed directly into `history show`, `rerun`, `append`, `continue`, and the
 `step` commands. Diagnostics go to `.ctrlyoke/logs/ctrlyoke-cli-<timestamp>.log`,
 never to stdout.

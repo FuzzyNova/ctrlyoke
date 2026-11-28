@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { asPromptStep, asScriptStep } from "../helpers/stepAssertions";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -117,7 +118,11 @@ suite("SecretReferenceParser", () => {
 
     assert.ok(parsed);
     assert.deepStrictEqual(parsed.secrets, ["WORKFLOW_SECRET"]);
-    assert.deepStrictEqual(parsed.steps?.[0].secrets, ["PROMPT_SECRET"]);
-    assert.deepStrictEqual(parsed.steps?.[1].secrets, ["SCRIPT_SECRET"]);
+    assert.deepStrictEqual(asPromptStep(parsed.steps![0]).secrets, [
+      "PROMPT_SECRET",
+    ]);
+    assert.deepStrictEqual(asScriptStep(parsed.steps![1]).secrets, [
+      "SCRIPT_SECRET",
+    ]);
   });
 });

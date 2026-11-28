@@ -12,10 +12,16 @@ import {
   type SplitButtonOption,
 } from "@components/shared/SplitButton";
 import { WorkflowFilePickerModal } from "@components/workflow/WorkflowFilePickerModal";
-import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import {
+  useQueueFilePicker,
+  useSubWorkflowFilePicker,
+} from "@hooks/useSubWorkflowFilePicker";
 import { startNewBlankWorkflow } from "../../utils/newWorkflow";
 import {
   BUTTON_VARIANTS,
+  QUEUE_POSITION,
+  SUB_WORKFLOW_QUEUE_LABELS,
+  WORKFLOW_CONTROLS_MENU_VALUES,
   WORKFLOW_FILE_PICKER_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -38,6 +44,8 @@ interface WorkflowControlsProps {
  *   - From Template
  *   - Load from File
  *   - Queue File - only when queue exists
+ *   - Queue as Sub-workflow (Append and Continue as Sub-workflow on a run)
+ *     - only when queue exists
  *
  * Ctrl+N (new blank workflow) and Ctrl+Shift+N (new workflow from template)
  * are handled by the webview-level `useNewWorkflowKeyHandler` hook — see
@@ -62,10 +70,17 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   const openDuplicateWorkflowDialog = useUiStore(
     (state) => state.openDuplicateWorkflowDialog
   );
+  // Load and Import Run pick through this component's own modal; the queue
+  // actions through their hooks, which capture the target view when the
+  // item is chosen.
   const [filePickerMode, setFilePickerMode] = useState<
-    | (typeof WORKFLOW_FILE_PICKER_MODES)[keyof typeof WORKFLOW_FILE_PICKER_MODES]
+    | typeof WORKFLOW_FILE_PICKER_MODES.LOAD
+    | typeof WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
     | null
   >(null);
+  const { requestSubWorkflowFile, subWorkflowPickerModal } =
+    useSubWorkflowFilePicker();
+  const { requestQueueFile, queueFilePickerModal } = useQueueFilePicker();
 
   const hasQueue = fileName !== null;
   const isViewingRun =
@@ -110,12 +125,14 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   // Handle queue file action
   const handleQueueFile = useCallback(() => {
     if (!hasQueue) return;
-    if (isStandalone) {
-      setFilePickerMode(WORKFLOW_FILE_PICKER_MODES.QUEUE);
-      return;
-    }
-    postWorkflowDefinitionMutation(vscode, { type: MESSAGE_TYPES.APPEND_FILE });
-  }, [vscode, hasQueue]);
+    requestQueueFile();
+  }, [requestQueueFile, hasQueue]);
+
+  // Queue a file as one sub-workflow step instead of splicing its steps in
+  const handleQueueSubWorkflow = useCallback(() => {
+    if (!hasQueue) return;
+    requestSubWorkflowFile(QUEUE_POSITION.END);
+  }, [requestSubWorkflowFile, hasQueue]);
 
   const handleDuplicateWorkflow = useCallback(
     (invoker?: HTMLElement | null) => {
@@ -160,13 +177,6 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         vscode.postMessage({ type: MESSAGE_TYPES.LOAD_WORKFLOW, filePath });
         return;
       }
-      if (filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE) {
-        postWorkflowDefinitionMutation(vscode, {
-          type: MESSAGE_TYPES.APPEND_FILE,
-          filePath,
-        });
-        return;
-      }
       if (filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN) {
         vscode.postMessage({
           type: MESSAGE_TYPES.REQUEST_RUN_IMPORT_PREVIEW,
@@ -178,23 +188,26 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     [filePickerMode, vscode]
   );
 
+  const queueDisabled =
+    !hasQueue || isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
+
   // Build dropdown options
   const dropdownOptions: SplitButtonOption[] = [
     {
       label: "New From Template...",
-      value: "from-template",
+      value: WORKFLOW_CONTROLS_MENU_VALUES.FROM_TEMPLATE,
       icon: <LucideIcon icon={NotepadTextDashed} />,
       onClick: handleFromTemplate,
     },
     {
       label: "Load from File...",
-      value: "load-file",
+      value: WORKFLOW_CONTROLS_MENU_VALUES.LOAD_FILE,
       icon: <LucideIcon icon={FilePlusCorner} />,
       onClick: handleLoadFile,
     },
     {
       label: "Import Run...",
-      value: "import-run",
+      value: WORKFLOW_CONTROLS_MENU_VALUES.IMPORT_RUN,
       icon: <Icon name="folder-opened" />,
       onClick: handleImportRun,
     },
@@ -202,17 +215,27 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       label: isViewingRun
         ? "Append and Continue from File..."
         : "Queue from File...",
-      value: "queue-file",
+      value: WORKFLOW_CONTROLS_MENU_VALUES.QUEUE_FILE,
       icon: <LucideIcon icon={ListEnd} />,
       onClick: handleQueueFile,
-      disabled:
-        !hasQueue || isViewingDeletedWorkflow || isSystemGeneratedWorkflow,
+      disabled: queueDisabled,
+    },
+    {
+      // A run continues with the step, as it does with the inline sibling's.
+      label: isViewingRun
+        ? SUB_WORKFLOW_QUEUE_LABELS.appendAndContinueAsSubWorkflow
+        : SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflow,
+      value: WORKFLOW_CONTROLS_MENU_VALUES.QUEUE_SUB_WORKFLOW,
+      icon: <Icon name="list-ordered" />,
+      title: SUB_WORKFLOW_QUEUE_LABELS.queueAsSubWorkflowTitle,
+      onClick: handleQueueSubWorkflow,
+      disabled: queueDisabled,
     },
     {
       label: isViewingRun
         ? "Duplicate This Run as New Workflow…"
         : "Duplicate Workflow…",
-      value: "duplicate-workflow",
+      value: WORKFLOW_CONTROLS_MENU_VALUES.DUPLICATE_WORKFLOW,
       icon: <Icon name="copy" />,
       onClick: handleDuplicateWorkflow,
       disabled: !displayedViewAddress || isViewingDeletedWorkflow,
@@ -251,23 +274,21 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       <WorkflowFilePickerModal
         isOpen={filePickerMode !== null}
         title={
-          filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE
-            ? "Queue Workflow File"
-            : filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
-              ? "Import Run"
-              : "Load Workflow File"
+          filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
+            ? "Import Run"
+            : "Load Workflow File"
         }
         actionLabel={
-          filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE
-            ? "Queue File"
-            : filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
-              ? "Preview Import"
-              : "Load File"
+          filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN
+            ? "Preview Import"
+            : "Load File"
         }
         directoryMode={filePickerMode === WORKFLOW_FILE_PICKER_MODES.IMPORT_RUN}
         onClose={() => setFilePickerMode(null)}
         onSelect={handlePickerSelect}
       />
+      {queueFilePickerModal}
+      {subWorkflowPickerModal}
     </div>
   );
 };

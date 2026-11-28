@@ -1,4 +1,5 @@
 import * as path from "path";
+import { getExecutionRuntime } from "../types/CtrlYokeTypes";
 import { relativePathEscapes } from "../utils/PathSecurity";
 
 import {
@@ -16,20 +17,31 @@ import {
   type CliValidateStrictPolicy,
   type CliValidateTargetKind,
   type HarnessId,
+  type WorktreeLandingOutcome,
+  type WorktreeMergeOutcome,
+  type WorktreeMode,
 } from "../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
   FinalStepRuntimeState,
   PromptFile,
+  PromptRuntimeMetadata,
   PromptResult,
   QueueState,
   RunRef,
+  SubWorkflowOutput,
   WorkflowKey,
   WorkflowStep,
   WorkflowStopReason,
   WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
-import { getFinalStepPassCount } from "../types/CtrlYokeTypes";
+import {
+  assertNever,
+  getFinalStepPassCount,
+  getStepType,
+  isScriptStep,
+  isSubWorkflowStep,
+} from "../types/CtrlYokeTypes";
 import { queueTargetKey } from "../utils/OutputTargetKeys";
 import {
   type RunAttemptProjection,
@@ -47,6 +59,11 @@ import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { selectTerminalFailure } from "./CliExitCode";
+import {
+  attributeSubWorkflowSettlements,
+  subWorkflowChildKey,
+  type SubWorkflowSettlement,
+} from "../core/orchestration/SubWorkflowSettlements";
 
 /** Redact again at the standalone CLI serialization boundary. */
 export function buildCliPreviewJsonResult(
@@ -229,6 +246,36 @@ export interface CliJsonError {
   attempt: number | null;
 }
 
+/**
+ * A settled child's worktree, as `run --json` publishes it. Its own interface,
+ * mapped field by field from the settlement, so a field later added to the
+ * internal worktree record never reaches the public contract by accident.
+ */
+export interface CliJsonSubWorkflowWorktree {
+  mode: WorktreeMode;
+  branchName: string;
+  baseCommit: string;
+  finalBranchTip?: string;
+  changedFileCount?: number;
+  landingOutcome?: WorktreeLandingOutcome;
+  /** Present only for a child with `merge: true` that reached its merge. */
+  mergeOutcome?: WorktreeMergeOutcome;
+  conflictFiles?: string[];
+}
+
+/**
+ * Direct child runs launched by this workflow. Final-step links use pass.
+ * `worktree` is the settled child's worktree metadata (branch, base, tip,
+ * files changed, landing and merge result), present only once a child that
+ * ran in a worktree has settled.
+ */
+export type CliJsonSubWorkflowRun = {
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  status: string | null;
+  worktree?: CliJsonSubWorkflowWorktree;
+} & ({ stepId: string; pass?: never } | { pass: number; stepId?: never });
+
 export interface CliJsonResult {
   schemaVersion: 1;
   success: boolean;
@@ -246,6 +293,7 @@ export interface CliJsonResult {
   summary: CliJsonSummary;
   steps: CliJsonStepResult[];
   finalStep: CliJsonFinalStep | null;
+  subWorkflowRuns?: CliJsonSubWorkflowRun[];
   error: CliJsonError | null;
 }
 
@@ -291,6 +339,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
       summary: emptySummary(),
       steps: [],
       finalStep: null,
+      subWorkflowRuns: [],
       error: createSetupError(input.error),
     });
   }
@@ -310,6 +359,12 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     input.outputProjection?.finalStep,
     input
   );
+  const subWorkflowRuns = buildSubWorkflowRuns(
+    state.steps,
+    input.outputProjection?.subWorkflowRuns ?? [],
+    promptFile?.finalStep,
+    input.finalStepRuntime
+  );
   const startedAt = toIso(state.startTime);
   const completedAt = toIso(state.executionEndTime);
 
@@ -324,8 +379,135 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     summary: buildSummary(state.steps, state.results),
     steps,
     finalStep,
+    subWorkflowRuns,
     error: selectTopLevelError(state, steps, finalStep, input.finalStepRuntime),
   });
+}
+
+/**
+ * One entry per direct child run: the latest current settlement for each
+ * queue `stepId` or finalStep `pass` and child (`workflowKey` + `runRef`; its
+ * status is the child's own outcome), then children whose address is in
+ * `_runtime` but that have no current settlement, with `status: null`. A
+ * continued child that is running again is one of those: its earlier
+ * settlement predates the execution in progress.
+ */
+function buildSubWorkflowRuns(
+  steps: readonly WorkflowStep[],
+  settlements: readonly SubWorkflowSettlement[],
+  finalStep: WorkflowStep | undefined,
+  finalStepRuntime: FinalStepRuntimeState | undefined
+): CliJsonSubWorkflowRun[] {
+  const children = new Map<string, CliJsonSubWorkflowRun>();
+  const settledChildren = new Set<string>();
+  for (const entry of attributeSubWorkflowSettlements(settlements, {
+    steps,
+    finalStep,
+    finalStepRuntime,
+  })) {
+    const { output } = entry.settlement;
+    // This list addresses child runs; a step that failed before one existed
+    // has none to address (its failure is in the step's own result).
+    if (
+      output.childWorkflowKey === undefined ||
+      output.childRunRef === undefined
+    )
+      continue;
+    const child = subWorkflowChildKey({
+      childWorkflowKey: output.childWorkflowKey,
+      childRunRef: output.childRunRef,
+    });
+    const address = {
+      workflowKey: output.childWorkflowKey,
+      runRef: output.childRunRef,
+      status: output.outcome.status,
+      ...(output.worktree
+        ? { worktree: toCliJsonSubWorkflowWorktree(output.worktree) }
+        : {}),
+    };
+    if (entry.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      settledChildren.add(child);
+      children.set(`final:${entry.passNumber}:${child}`, {
+        pass: entry.passNumber,
+        ...address,
+      });
+      continue;
+    }
+    // The result addresses a queue child by its parent's stepId.
+    if (!entry.stepId) continue;
+    settledChildren.add(child);
+    children.set(`queue:${entry.stepId}:${child}`, {
+      stepId: entry.stepId,
+      ...address,
+    });
+  }
+  for (const step of steps) {
+    if (!isSubWorkflowStep(step)) continue;
+    const runtime = step._runtime;
+    if (!runtime?.childWorkflowKey || !runtime.childRunRef || !runtime.stepId)
+      continue;
+    const child = subWorkflowChildKey({
+      childWorkflowKey: runtime.childWorkflowKey,
+      childRunRef: runtime.childRunRef,
+    });
+    const key = `queue:${runtime.stepId}:${child}`;
+    if (!children.has(key) && !settledChildren.has(child))
+      children.set(key, {
+        stepId: runtime.stepId,
+        workflowKey: runtime.childWorkflowKey,
+        runRef: runtime.childRunRef,
+        status: null,
+      });
+  }
+  // The final step's `_runtime` holds only the latest pass's child. It is in
+  // flight only while a pass is running and it has no current settlement; a
+  // child from an earlier pass is never reported under the current one.
+  const finalRuntime =
+    finalStep && isSubWorkflowStep(finalStep) ? finalStep._runtime : undefined;
+  if (
+    finalRuntime?.childWorkflowKey &&
+    finalRuntime.childRunRef &&
+    finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP
+  ) {
+    const child = subWorkflowChildKey({
+      childWorkflowKey: finalRuntime.childWorkflowKey,
+      childRunRef: finalRuntime.childRunRef,
+    });
+    const pass = getFinalStepPassCount(finalStepRuntime);
+    if (!settledChildren.has(child))
+      children.set(`final:${pass}:${child}`, {
+        pass,
+        workflowKey: finalRuntime.childWorkflowKey,
+        runRef: finalRuntime.childRunRef,
+        status: null,
+      });
+  }
+  return [...children.values()];
+}
+
+function toCliJsonSubWorkflowWorktree(
+  worktree: NonNullable<SubWorkflowOutput["worktree"]>
+): CliJsonSubWorkflowWorktree {
+  return {
+    mode: worktree.mode,
+    branchName: worktree.branchName,
+    baseCommit: worktree.baseCommit,
+    ...(worktree.finalBranchTip !== undefined
+      ? { finalBranchTip: worktree.finalBranchTip }
+      : {}),
+    ...(worktree.changedFileCount !== undefined
+      ? { changedFileCount: worktree.changedFileCount }
+      : {}),
+    ...(worktree.landingOutcome !== undefined
+      ? { landingOutcome: worktree.landingOutcome }
+      : {}),
+    ...(worktree.mergeOutcome !== undefined
+      ? { mergeOutcome: worktree.mergeOutcome }
+      : {}),
+    ...(worktree.conflictFiles !== undefined
+      ? { conflictFiles: [...worktree.conflictFiles] }
+      : {}),
+  };
 }
 
 function buildStepResult(
@@ -335,10 +517,11 @@ function buildStepResult(
   input: CliJsonResultInput,
   projection: RunAttemptProjection | undefined
 ): CliJsonStepResult {
-  const isScript = step.type === STEP_TYPES.SCRIPT;
+  const stepType = getCliStepType(step);
+  const isScript = stepType === STEP_TYPES.SCRIPT;
   const enabled = step.enabled !== false;
   const status = result?.status ?? STEP_STATUS.PENDING;
-  const runtime = step._runtime;
+  const runtime = getExecutionRuntime(step);
   const hasRun =
     projection?.attempts !== undefined
       ? projection.attempts > 0
@@ -358,7 +541,7 @@ function buildStepResult(
       input.promptFile?.parallelGroups?.find(
         (group) => index >= group.startIndex && index <= group.endIndex
       )?.id ?? null,
-    type: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
+    type: stepType,
     enabled,
     ...metadata,
     status,
@@ -383,7 +566,7 @@ function buildStepResult(
     ...(isScript
       ? {
           script: buildScriptOutput(
-            step.script,
+            isScriptStep(step) ? step.script : "",
             scriptOutput?.stdout ?? result?.scriptOutput,
             scriptOutput?.stderr,
             scriptOutput?.exitCode
@@ -393,6 +576,22 @@ function buildStepResult(
     failureKind: runtime?.failureKind ?? null,
     error: getStepError(result, runtime),
   };
+}
+
+function getCliStepType(
+  step: WorkflowStep
+): (typeof STEP_TYPES)[keyof typeof STEP_TYPES] {
+  const stepType = getStepType(step);
+  switch (stepType) {
+    case STEP_TYPES.SCRIPT:
+      return STEP_TYPES.SCRIPT;
+    case STEP_TYPES.PROMPT:
+      return STEP_TYPES.PROMPT;
+    case STEP_TYPES.WORKFLOW:
+      return STEP_TYPES.WORKFLOW;
+    default:
+      return assertNever(stepType);
+  }
 }
 
 function buildFinalStep(
@@ -405,8 +604,9 @@ function buildFinalStep(
     return null;
   }
 
-  const isScript = step.type === STEP_TYPES.SCRIPT;
-  const stepRuntime = step._runtime;
+  const stepType = getCliStepType(step);
+  const isScript = stepType === STEP_TYPES.SCRIPT;
+  const stepRuntime = getExecutionRuntime(step);
   const status = runtime?.status ?? null;
   const passCount = projection?.passCount ?? getFinalStepPassCount(runtime);
   const filesChanged = shapeFileChanges(
@@ -426,7 +626,7 @@ function buildFinalStep(
   const latestScriptOutput = projection?.latestPass?.scriptOutput;
 
   return {
-    type: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
+    type: stepType,
     ...metadata,
     status,
     success: getNullableStepSuccess(status),
@@ -442,7 +642,7 @@ function buildFinalStep(
     ...(isScript
       ? {
           script: buildScriptOutput(
-            step.script,
+            isScriptStep(step) ? step.script : "",
             latestScriptOutput?.stdout,
             latestScriptOutput?.stderr,
             latestScriptOutput?.exitCode
@@ -460,8 +660,9 @@ function buildFinalPass(
   runtime: FinalStepRuntimeState | undefined,
   projection: RunAttemptProjection
 ): CliJsonFinalPass {
-  const isScript = step.type === STEP_TYPES.SCRIPT;
-  const stepRuntime = step._runtime;
+  const stepType = getCliStepType(step);
+  const isScript = stepType === STEP_TYPES.SCRIPT;
+  const stepRuntime = getExecutionRuntime(step);
   const status = runtime?.status ?? null;
   const scriptOutput = projection.scriptOutput;
   return {
@@ -483,7 +684,7 @@ function buildFinalPass(
     ...(isScript
       ? {
           script: buildScriptOutput(
-            step.script,
+            isScriptStep(step) ? step.script : "",
             scriptOutput?.stdout,
             scriptOutput?.stderr,
             scriptOutput?.exitCode
@@ -494,7 +695,7 @@ function buildFinalPass(
 }
 
 function getEffectiveMetadata(
-  runtime: WorkflowStep["_runtime"],
+  runtime: PromptRuntimeMetadata | undefined,
   input: CliJsonResultInput,
   hasRun: boolean,
   isScript: boolean
