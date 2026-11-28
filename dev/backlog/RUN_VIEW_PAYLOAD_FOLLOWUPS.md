@@ -26,6 +26,20 @@ Do not re-derive them here.
 > loads (`45a330a96`), hosted reconnects reload the run view (`ad5da660b`), and multi-message
 > replays go out as one `MESSAGE_BATCH` (`be267f781`).
 
+> **2026-11-27 phone measurement (item 1 answered):** The iPhone PWA repeatedly
+> refreshed while it was viewing `workflow-step-plan-2026-11-26T16-01-37-491`. The
+> refreshes stopped as soon as it stopped viewing that run. The session log shows
+> `hosted send runViewLoaded` at **74.6–86.5 MB** for that run on each socket open,
+> with the extension-host heap jumping about +1.2 GB (to ~1.8 GB) per delivery. The
+> shim logged repeated `inbound watchdog timed out` and
+> `application-heartbeat-ack-timeout` closes. Each one was followed by a reconnect
+> and the same ~86 MB send. Right after a socket opens, `[PanelMemory]` reports
+> `liveEntries=0 historyEntries=0`, which fits a fresh page load rather than a
+> socket-only reconnect. The most likely cause is iOS killing the WebContent
+> process for memory while it parses the payload, so the page reloads and the
+> cycle repeats. The missing shim logging from item 1 would confirm this; it has
+> not been added. The run-view payload is therefore the trigger, and 1A is needed.
+
 ## Where the payload stands
 
 The `bug-backlog` run (`run-2026-09-30T13-41-01-546Z`) serialized to 42.7 MB
@@ -44,27 +58,33 @@ blanked the pane, and lost its result on collapse. The plan's "Rolled back"
 note under Proposal 1C has the details and the conditions for trying it again.
 
 Either figure is well over the ~5 MB threshold the plan set for starting 1A.
-The iPhone reload-loop criterion has not been re-measured.
+Real runs have since grown far past it: the 2026-11-27 phone measurement above
+saw 74.6–86.5 MB for a single run, and that run drove the iPhone reload loop.
 
 ## Open items, in suggested order
 
-1. **Re-measure on the phone first.** Open the `bug-backlog` run from the
-   iPhone PWA, background and foreground it several times, and read the
-   `[MemoryWatchdog]`/`[PanelMemory]` samplers. Also add the missing hosted-shim
-   logging that tells an iOS page kill apart from a network drop (Problem 4,
-   second paragraph). The result decides whether 1A is needed.
+1. ~~**Re-measure on the phone first.**~~ Answered 2026-11-27 (see the note
+   above): the reload loop reproduces with an ~86 MB `RUN_VIEW_LOADED`, and 1A is
+   needed. Still open from this item: add the hosted-shim logging that tells an
+   iOS page kill apart from a network drop (Problem 4, second paragraph), so the
+   fix can be verified from the session log alone.
 2. **Problem 4: amortize repeat deliveries.** Cache the redacted, serialized
    snapshot by run address plus timeline `nextSequence`, and collapse
-   overlapping builds for the same address. This is cheap relative to 1A and
-   aimed directly at the reconnect loop.
-3. **Proposal 1B, narrower form.** Drop only structured activity payloads. This
-   needs the aggregate to be made lossless first (it currently loses fields such
-   as `callerType`), then a fresh row-equivalence proof against the production
-   projection. The committed Vitest equivalence harness pins the current
-   counterexamples. About 19.4 MB of structured activity was measured before 1C.
-4. **Problem 1A: windowing and paging.** Only if items 1–3 leave the payload
-   over ~5 MB or the phone criterion still fails. Design the
+   overlapping builds for the same address. Do this first: it is cheap and
+   removes the ~1.2 GB extension-host heap spike per reconnect. It does **not**
+   fix the phone. The client still receives and parses the full payload on every
+   load, so iOS can still kill the page.
+3. **Problem 1A: windowing and paging.** This is the actual fix for the phone
+   reload loop. The client only ever holds a bounded window of the run, so the
+   payload no longer grows with the run's length. Design the
    skeleton/minimap/range story first.
+4. **Proposal 1B, narrower form (optional).** Drop only structured activity
+   payloads. Activity entries were about half of the measured payload, so this
+   alone would still leave an ~86 MB run near 40 MB, far over 5 MB. It is
+   worth doing only as a size reduction alongside 1A. It needs the aggregate to
+   be made lossless first (it currently loses fields such as `callerType`),
+   then a fresh row-equivalence proof against the production projection. The
+   committed Vitest equivalence harness pins the current counterexamples.
 5. **Problem 3: redaction at the source.** An investigation, independent of the
    rest.
 
@@ -74,7 +94,9 @@ The iPhone reload-loop criterion has not been re-measured.
   unresponsive-extension dialog in the panel or the hosted dashboard. Its files
   now project to 12.97 MB, not the original 54.5 MB, so re-establish a
   reproduction before judging this one.
-- The `bug-backlog` run opened from the iPhone PWA no longer drives a reload
-  loop, and the extension-host heap stays well below 1 GB.
+- The `bug-backlog` run, and the 2026-11-27 reproduction
+  `workflow-step-plan-2026-11-26T16-01-37-491` (~86 MB), opened from the iPhone
+  PWA no longer drive a reload loop, and the extension-host heap stays well
+  below 1 GB.
 - If 1A lands: no placeholders in the viewport at normal scroll speed, and the
   scrollbar and minimap cover the whole run from the first paint.
