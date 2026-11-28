@@ -168,6 +168,74 @@ suite("CLI sub-workflow runs", () => {
     assert.ok(result.subWorkflowRuns[0]?.stepId);
   });
 
+  test("--var overrides a file child's own vars, nested children too, and inline children inherit it (D11)", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-vars-");
+    const env = { CTRLYOKE_HOME: path.join(root, "state") };
+    // The grandchild does not declare `extra`, which only the command line sets.
+    await writeWorkflow(root, "grandchild.ctrlyoke.json", {
+      vars: { name: "grandchild-default" },
+      steps: [{ type: "script", script: varScript("grandchild") }],
+    });
+    await writeWorkflow(root, "child.ctrlyoke.json", {
+      vars: { name: "child-default" },
+      steps: [
+        { type: "script", script: varScript("child") },
+        { type: "workflow", workflow: "grandchild.ctrlyoke.json" },
+        {
+          type: "workflow",
+          workflow: { type: "script", script: varScript("inline") },
+        },
+      ],
+    });
+    const parent = await writeWorkflow(root, "parent.ctrlyoke.json", {
+      vars: { name: "parent-default" },
+      steps: [
+        { type: "script", script: varScript("parent") },
+        { type: "workflow", workflow: "child.ctrlyoke.json" },
+      ],
+    });
+
+    const defaults = await runCli(
+      ["run", parent, "--headless", "--cwd", root],
+      root,
+      env
+    );
+    assert.strictEqual(defaults.code, 0, defaults.stderr);
+    assert.deepStrictEqual(varLines(defaults.stdout), [
+      "parent=parent-default",
+      "child=child-default",
+      "grandchild=grandchild-default",
+      "inline=child-default",
+    ]);
+
+    const overridden = await runCli(
+      ["run", parent, "--headless", "--cwd", root, "--var", "name=x"],
+      root,
+      env
+    );
+    assert.strictEqual(overridden.code, 0, overridden.stderr);
+    assert.deepStrictEqual(varLines(overridden.stdout), [
+      "parent=x",
+      "child=x",
+      "grandchild=x",
+      "inline=x",
+    ]);
+
+    // A name no child declares is accepted, as it is for the root: no error,
+    // and no per-child "unused" warning (the root warns once for the run).
+    const undeclared = await runCli(
+      ["run", parent, "--headless", "--cwd", root, "--var", "extra=y"],
+      root,
+      env
+    );
+    assert.strictEqual(undeclared.code, 0, undeclared.stderr);
+    assert.strictEqual(
+      countMatches(undeclared.stderr, /--var extra=\.\.\. is unused/g),
+      1
+    );
+  });
+
   test("reports a child's prompt headers and final-step pass label under its prefix", async function () {
     this.timeout(CLI_RUN_TIMEOUT_MS);
     const root = await makeRoot("ctrlyoke-cli-child-final-");
@@ -309,6 +377,18 @@ function scriptHeaderBeforeMarker(stdout: string, marker: string): string {
 
 function countMatches(text: string, pattern: RegExp): number {
   return text.match(pattern)?.length ?? 0;
+}
+
+/** Prints `<label>=<value of {{name}}>`, substituted by the run. */
+function varScript(label: string): string {
+  return `node -e "console.log('VAR:${label}={{name}}')"`;
+}
+
+function varLines(stdout: string): string[] {
+  return stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("VAR:"))
+    .map((line) => line.slice("VAR:".length));
 }
 
 function markerScript(marker: string): string {

@@ -21,6 +21,7 @@ import {
   createCliSubWorkflowInstance,
   createCliWorkflowInstance,
 } from "./cli/CliWorkflowInstanceFactory";
+import { mergeCliVarsIntoWorkflow } from "./cli/CliVarOverrides";
 import { rebaseWorkflowStepPaths } from "./core/WorkflowStepPathRebaser";
 import {
   EXECUTION_STATES,
@@ -96,7 +97,6 @@ import {
   type CliValidationJsonHarness,
 } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
-import { getVariableKeyErrors } from "./utils/KeyValueKeyKinds";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import {
   ensureCtrlyokeShimsExecutable,
@@ -1241,6 +1241,7 @@ async function runCommand(
     userFeedbackSink,
     runnerHostIdentity: cliRunnerHostIdentity,
     workflowSessionIdFromOverride: options.sessionId !== undefined,
+    cliVarOverrides: config.vars,
   };
   let subWorkflowLauncher: SubWorkflowLauncher;
   let registerChildProgressReporter = (
@@ -1733,23 +1734,6 @@ async function warnUnusedCliVariables(
       );
     }
   }
-}
-
-function mergeCliVarsIntoWorkflow(
-  workflow: PromptFile,
-  vars: Record<string, string>
-): void {
-  if (Object.keys(vars).length === 0) {
-    return;
-  }
-  const mergedVars = { ...(workflow.vars ?? {}), ...vars };
-  const variableKeyErrors = getVariableKeyErrors(Object.keys(mergedVars));
-  if (variableKeyErrors.length > 0) {
-    throw new Error(
-      `Invalid workflow variables: ${variableKeyErrors.join(", ")}`
-    );
-  }
-  workflow.vars = mergedVars;
 }
 
 /**

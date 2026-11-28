@@ -92,7 +92,12 @@ steps. Workflow steps can also be members of a `parallel` group; see
 
 A file-referenced child is its own workflow. It uses its own harness, variables,
 and `finalStep`; these are not inherited from the parent. Host-level `--var`
-overrides still apply to the child. The `workflow` path is resolved like a
+overrides still apply to the child: `ctrlyoke run --var name=x` replaces the
+default of `name` in every file the run launches, at any depth, as it does in
+the top-level workflow, and a name the child does not declare is added to its
+variables. An [inline definition](#inline-definitions) sees the same values
+through the parent's effective variables. VS Code has no host-level `--var`.
+The `workflow` path is resolved like a
 prompt file reference and is not variable-substituted. A relative path is
 resolved using the same workflow and workspace locations as a prompt file path.
 

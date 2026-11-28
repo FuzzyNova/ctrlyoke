@@ -104,6 +104,43 @@ suite("createCliSubWorkflowInstance", () => {
     );
   });
 
+  test("a file child applies the CLI's --var overrides over its own vars (D11)", () => {
+    const config = resolveCliSubWorkflowInstanceConfig(
+      { ...makeDependencies(), cliVarOverrides: { name: "x", extra: "y" } },
+      { concurrent: false, ancestorPaths: [], delegationChain: [] },
+      new UnusedSubWorkflowHost()
+    );
+    const prepare = config.executionOptions.prepareParsedWorkflow;
+    assert.ok(prepare);
+    const workflow = { steps: [], vars: { name: "own", keep: "k" } };
+    prepare(workflow);
+    assert.deepStrictEqual(workflow.vars, {
+      name: "x",
+      keep: "k",
+      extra: "y",
+    });
+    assert.throws(
+      () =>
+        resolveCliSubWorkflowInstanceConfig(
+          { ...makeDependencies(), cliVarOverrides: { "bad name": "x" } },
+          { concurrent: false, ancestorPaths: [], delegationChain: [] },
+          new UnusedSubWorkflowHost()
+        ).executionOptions.prepareParsedWorkflow?.({ steps: [] }),
+      /Invalid workflow variables/
+    );
+  });
+
+  test("without overrides a file child keeps its own vars untouched", () => {
+    const config = resolveCliSubWorkflowInstanceConfig(
+      makeDependencies(),
+      { concurrent: false, ancestorPaths: [], delegationChain: [] },
+      new UnusedSubWorkflowHost()
+    );
+    const workflow = { steps: [] };
+    config.executionOptions.prepareParsedWorkflow?.(workflow);
+    assert.deepStrictEqual(workflow, { steps: [] });
+  });
+
   test("a concurrent child launched through the CLI factory runs its interactive step headless (R5)", async () => {
     const workspace = makeTempDir("ctrlyoke-cli-concurrent-child-");
     const children: WorkflowInstance[] = [];

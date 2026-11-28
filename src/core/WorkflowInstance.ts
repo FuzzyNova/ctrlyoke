@@ -353,6 +353,12 @@ function managedWorktreeSettlement(
 }
 
 export interface WorkflowInstanceExecutionOptions {
+  /**
+   * Host-level changes to a workflow file after it parses and before its
+   * working file is written (the CLI's `--var` overrides, D11). Runs only for
+   * a file load, never for an inline definition. A throw fails the load.
+   */
+  prepareParsedWorkflow?: (workflow: PromptFile) => void;
   subWorkflowHost?: SubWorkflowHost;
   ancestorPaths?: readonly string[];
   delegationChain?: readonly string[];
@@ -1937,6 +1943,13 @@ export class WorkflowInstance
     // Track the source file path for summaries and state sync
     this.filePath = filePath;
     this.setSourceDefinition(filePath);
+
+    // Parse once when a host hook must change the file before it is written.
+    const prepare = this.executionOptions.prepareParsedWorkflow;
+    if (prepare && parsedPromptFile === undefined) {
+      parsedPromptFile = await this.promptFileParser.parsePromptFile(filePath);
+    }
+    if (prepare && parsedPromptFile) prepare(parsedPromptFile);
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,

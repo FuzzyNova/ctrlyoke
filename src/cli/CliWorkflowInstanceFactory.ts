@@ -8,6 +8,7 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { UserFeedbackSink } from "../core/UserFeedbackSink";
 import type { HarnessId, RunnerHostIdentity } from "../types/CtrlYokeTypes";
 import type { HarnessIntegration } from "../core/HarnessIntegration";
+import { mergeCliVarsIntoWorkflow } from "./CliVarOverrides";
 import type {
   SubWorkflowHost,
   SubWorkflowInstanceOptions,
@@ -23,6 +24,12 @@ export interface CliWorkflowInstanceDependencies {
   userFeedbackSink: UserFeedbackSink;
   runnerHostIdentity: RunnerHostIdentity;
   workflowSessionIdFromOverride: boolean;
+  /**
+   * The CLI's parsed `--var` overrides. Every file child applies them over its
+   * own `vars` (D11), as the root run does. An inline child never does: it
+   * inherits the parent's effective vars, which already include them.
+   */
+  cliVarOverrides?: Readonly<Record<string, string>>;
   compatibilityRegistry?: HarnessCapabilityRegistry;
 }
 
@@ -79,6 +86,7 @@ export function resolveCliSubWorkflowInstanceConfig(
   dependencies: CliWorkflowInstanceDependencies;
   executionOptions: WorkflowInstanceExecutionOptions;
 } {
+  const cliVarOverrides = dependencies.cliVarOverrides ?? {};
   return {
     dependencies: {
       ...dependencies,
@@ -88,6 +96,8 @@ export function resolveCliSubWorkflowInstanceConfig(
       workflowSessionIdFromOverride: false,
     },
     executionOptions: {
+      prepareParsedWorkflow: (workflow) =>
+        mergeCliVarsIntoWorkflow(workflow, cliVarOverrides),
       subWorkflowHost,
       ancestorPaths: options.ancestorPaths,
       delegationChain: options.delegationChain,
