@@ -2108,6 +2108,19 @@ suite("ExecutionPreviewService", () => {
       }
     });
 
+    test("names an inline child of an unnamed workflow after its file, as the launch does", async () => {
+      const preview = await createService().build({
+        workflow: {
+          steps: [{ type: "workflow", workflow: { prompt: "in place" } }],
+        },
+        sourcePath: path.join(os.tmpdir(), "release.ctrlyoke.yaml"),
+      });
+      assert.deepStrictEqual(preview.steps[0].subWorkflow, {
+        source: SUB_WORKFLOW_SOURCE_KINDS.INLINE,
+        childName: "release · step 1",
+      });
+    });
+
     test("previews workflow members of a parallel group with the group's issues", async () => {
       const preview = await createService().build({
         workflow: {

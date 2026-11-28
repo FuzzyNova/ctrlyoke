@@ -1078,7 +1078,8 @@ export class ExecutionPreviewService {
           ? { isFinalStep: true, passNumber: 1 }
           : { isFinalStep: false, stepIndex: target.stepIndex }
       ),
-      request.workflowName,
+      // The launch names an unnamed parent after its file, as this does.
+      this.resolveNamedWorkflow(request),
       outerName
     );
     const ownsCheckout = definition.worktree !== undefined;
@@ -1995,13 +1996,17 @@ export class ExecutionPreviewService {
   }
 
   private resolveWorkflowName(request: ExecutionPreviewRequest): string {
+    return this.resolveNamedWorkflow(request) || "Unnamed workflow";
+  }
+
+  /** The workflow's name, else its file's; undefined when it has neither. */
+  private resolveNamedWorkflow(
+    request: ExecutionPreviewRequest
+  ): string | undefined {
     return (
       request.workflowName?.trim() ||
       this.getWorkflowName(request.workflow) ||
-      (request.sourcePath
-        ? extractWorkflowName(request.sourcePath)
-        : undefined) ||
-      "Unnamed workflow"
+      (request.sourcePath ? extractWorkflowName(request.sourcePath) : undefined)
     );
   }
 
