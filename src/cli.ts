@@ -29,6 +29,7 @@ import {
   FINAL_STEP_PHASES,
   RUNNER_IDS,
   PROMPT_FILE_RESOLUTION_STATUSES,
+  STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
@@ -256,6 +257,10 @@ import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
 import { SettingsPropertyResolver } from "./utils/SettingsPropertyResolver";
 import { PromptFileResolver } from "./core/PromptFileResolver";
+import {
+  resolveSubWorkflowReference,
+  type SubWorkflowFileStep,
+} from "./core/SubWorkflowReferenceStep";
 import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
 import { repoToplevel } from "./utils/GitUtils";
 import {
@@ -1674,6 +1679,34 @@ function handleSecretCommand(
     });
 }
 
+/** A `type: workflow` step that names its child by file path (D13). */
+function isFileSubWorkflowStep(value: unknown): value is SubWorkflowFileStep {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === STEP_TYPES.WORKFLOW &&
+    "workflow" in value &&
+    typeof value.workflow === "string"
+  );
+}
+
+/** Every string in a parsed workflow, for finding `{{name}}` placeholders. */
+function collectStringValues(value: unknown, texts: string[]): void {
+  if (typeof value === "string") texts.push(value);
+  else if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, texts);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStringValues(item, texts);
+  }
+}
+
+/**
+ * Warn about each `--var` no workflow field references. `--var` also reaches
+ * every file child (D11), so the text of each `type: workflow` file child
+ * reachable from the root counts. Best effort: a child that cannot be
+ * resolved, read or parsed is skipped, because the run reports it.
+ */
 async function warnUnusedCliVariables(
   workflow: PromptFile,
   vars: Record<string, string>,
@@ -1682,14 +1715,8 @@ async function warnUnusedCliVariables(
 ): Promise<void> {
   if (Object.keys(vars).length === 0) return;
   const texts: string[] = [];
-  const collectTexts = (value: unknown): void => {
-    if (typeof value === "string") texts.push(value);
-    else if (Array.isArray(value)) value.forEach(collectTexts);
-    else if (value && typeof value === "object") {
-      Object.values(value).forEach(collectTexts);
-    }
-  };
-  collectTexts(workflow);
+  const parser = new PromptFileParser(platform);
+  collectStringValues(workflow, texts);
   if (sourceDefinitionPath) {
     const resolver = new PromptFileResolver({
       workspaceRoot: platform.getWorkspaceRoot(),
@@ -1699,29 +1726,85 @@ async function warnUnusedCliVariables(
         platform.getWorkspaceRoot()
       ),
     });
-    const resolvePromptReferences = async (value: unknown): Promise<void> => {
+    const resolvePromptReferences = async (
+      value: unknown,
+      definitionPath: string
+    ): Promise<void> => {
       if (typeof value === "string") {
         if (!resolver.looksLikePromptFilePath(value)) return;
-        const resolved = await resolver.resolve(value, sourceDefinitionPath);
+        const resolved = await resolver.resolve(value, definitionPath);
         if (resolved.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
           texts.push(resolved.content);
         }
       } else if (Array.isArray(value)) {
-        await Promise.all(value.map(resolvePromptReferences));
+        await Promise.all(
+          value.map((item) => resolvePromptReferences(item, definitionPath))
+        );
       } else if (value && typeof value === "object") {
-        await Promise.all(Object.values(value).map(resolvePromptReferences));
+        await Promise.all(
+          Object.values(value).map((item) =>
+            resolvePromptReferences(item, definitionPath)
+          )
+        );
       }
     };
-    await resolvePromptReferences(workflow);
+    await resolvePromptReferences(workflow, sourceDefinitionPath);
+
+    // A file may be reached twice (and may name an ancestor): visit it once.
+    const visited = new Set<string>([path.resolve(sourceDefinitionPath)]);
+    const visitFileChildren = async (
+      value: unknown,
+      definitionPath: string
+    ): Promise<void> => {
+      if (Array.isArray(value)) {
+        for (const item of value) await visitFileChildren(item, definitionPath);
+        return;
+      }
+      if (!value || typeof value !== "object") return;
+      if (isFileSubWorkflowStep(value)) {
+        await visitChildFile(value.workflow, definitionPath);
+        return;
+      }
+      for (const item of Object.values(value)) {
+        await visitFileChildren(item, definitionPath);
+      }
+    };
+    const visitChildFile = async (
+      workflowPath: string,
+      definitionPath: string
+    ): Promise<void> => {
+      try {
+        const resolution = await resolveSubWorkflowReference(
+          workflowPath,
+          resolver,
+          definitionPath
+        );
+        if (!resolution.ok) return;
+        const childPath = path.resolve(resolution.path);
+        if (visited.has(childPath)) return;
+        visited.add(childPath);
+        const child = await parser.parsePromptFile(childPath);
+        if (!child) return;
+        collectStringValues(child, texts);
+        await resolvePromptReferences(child, childPath);
+        await visitFileChildren(child, childPath);
+      } catch {
+        // Best effort: the run reports an unusable child itself.
+      }
+    };
+    await visitFileChildren(workflow, sourceDefinitionPath);
   }
   // Workflow loading resolves referenced prompt files into their text before
   // this check. Include the same effective settings defaults used by execution.
-  collectTexts(SettingsPropertyResolver.createContext().defaults);
-  collectTexts({
-    endCondition: ConfigurationUtils.getDefaultEndCondition(),
-    preCondition: ConfigurationUtils.getDefaultPreCondition(),
-    worktree: ConfigurationUtils.getDefaultWorktree(),
-  });
+  collectStringValues(SettingsPropertyResolver.createContext().defaults, texts);
+  collectStringValues(
+    {
+      endCondition: ConfigurationUtils.getDefaultEndCondition(),
+      preCondition: ConfigurationUtils.getDefaultPreCondition(),
+      worktree: ConfigurationUtils.getDefaultWorktree(),
+    },
+    texts
+  );
   const referenced = new Set(
     texts.flatMap((text) =>
       findVariablePlaceholders(text).map(({ name }) => name)

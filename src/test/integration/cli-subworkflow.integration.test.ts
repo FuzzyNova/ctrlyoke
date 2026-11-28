@@ -236,6 +236,101 @@ suite("CLI sub-workflow runs", () => {
     );
   });
 
+  test("does not warn about a --var only a file child references, however it is reached", async function () {
+    this.timeout(CLI_RUN_TIMEOUT_MS);
+    const root = await makeRoot("ctrlyoke-cli-var-warning-");
+    const env = {
+      CTRLYOKE_HOME: path.join(root, "state"),
+      FORCE_COLOR: "0",
+    };
+    const placeholder = (name: string) =>
+      `node -e "console.log('USES:{{${name}}}')"`;
+    const unused = (stderr: string, name: string) =>
+      countMatches(
+        stderr,
+        new RegExp(`--var ${name}=\\.\\.\\. is unused`, "g")
+      );
+    // `deep` is referenced only by a grandchild; the grandchild also names
+    // its own parent, so the walk must not loop.
+    await writeWorkflow(root, "grandchild.ctrlyoke.json", {
+      steps: [
+        { type: "script", script: placeholder("deep") },
+        { type: "workflow", workflow: "child.ctrlyoke.json" },
+      ],
+    });
+    await writeWorkflow(root, "child.ctrlyoke.json", {
+      steps: [
+        { type: "script", script: placeholder("child") },
+        { type: "workflow", workflow: "grandchild.ctrlyoke.json" },
+      ],
+    });
+    await writeWorkflow(root, "member.ctrlyoke.json", {
+      steps: [{ type: "script", script: placeholder("member") }],
+    });
+    await writeWorkflow(root, "last.ctrlyoke.json", {
+      steps: [{ type: "script", script: placeholder("last") }],
+    });
+    // An unparseable child is skipped silently by the warning.
+    await fs.writeFile(
+      path.join(root, "broken.ctrlyoke.json"),
+      "{ nope",
+      "utf8"
+    );
+    const parent = await writeWorkflow(root, "parent.ctrlyoke.json", {
+      steps: [
+        {
+          type: "workflow",
+          workflow: "child.ctrlyoke.json",
+          onFail: "continue",
+        },
+        {
+          parallel: [
+            { type: "workflow", workflow: "member.ctrlyoke.json" },
+            {
+              type: "workflow",
+              workflow: { type: "script", script: placeholder("inline") },
+            },
+          ],
+        },
+        {
+          type: "workflow",
+          workflow: "broken.ctrlyoke.json",
+          onFail: "continue",
+        },
+      ],
+      finalStep: { type: "workflow", workflow: "last.ctrlyoke.json" },
+    });
+
+    const run = await runCli(
+      [
+        "run",
+        parent,
+        "--headless",
+        "--cwd",
+        root,
+        "--var",
+        "child=1",
+        "--var",
+        "deep=2",
+        "--var",
+        "member=3",
+        "--var",
+        "inline=4",
+        "--var",
+        "last=5",
+        "--var",
+        "nobody=6",
+      ],
+      root,
+      env
+    );
+
+    for (const name of ["child", "deep", "member", "inline", "last"]) {
+      assert.strictEqual(unused(run.stderr, name), 0, run.stderr);
+    }
+    assert.strictEqual(unused(run.stderr, "nobody"), 1, run.stderr);
+  });
+
   test("a parallel group of two inline lanes builds and completes both child runs", async function () {
     this.timeout(CLI_RUN_TIMEOUT_MS);
     const root = await makeRoot("ctrlyoke-cli-lanes-");

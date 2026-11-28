@@ -1990,6 +1990,120 @@ suite("Sub-workflow host end to end", () => {
     }
   });
 
+  test("continuing a parent whose stopped step's workflow path was edited launches the new file as a new child run and leaves the old one stopped", async () => {
+    const workspace = makeTempDir("ctrlyoke-subworkflow-edited-path-");
+    const { createInstance, instances, childAt } =
+      makeInstanceFactory(workspace);
+    try {
+      // The first file's child waits for a sentinel that never appears, so
+      // continuing it would hang rather than finish.
+      await writeJson(path.join(workspace, "first.ctrlyoke.json"), {
+        steps: [{ type: "script", script: startFinishScript("sentinel") }],
+      });
+      await writeJson(path.join(workspace, "second.ctrlyoke.json"), {
+        steps: [
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').appendFileSync('second-marker','ran\\n')\"",
+          },
+        ],
+      });
+      const parentPath = path.join(workspace, "parent.ctrlyoke.json");
+      await writeJson(parentPath, {
+        steps: [{ type: "workflow", workflow: "first.ctrlyoke.json" }],
+      });
+      const parent = createInstance();
+      instances.push(parent);
+      assert.strictEqual(await parent.loadPromptFile(parentPath), true);
+      const execution = parent.executeLoadedPromptFile();
+      await waitForFile(path.join(workspace, "marker"));
+      await withoutStopFallback(async () => {
+        await parent.stop();
+        await execution;
+      });
+      assert.strictEqual(parent.promptQueue.getState().status, "stopped");
+      const stoppedChild = childAt(1);
+      const firstChildKey = stoppedChild.promptQueue.getState().workflowKey!;
+      const firstChildRunRef = stoppedChild.promptQueue.getState().runRef!;
+      assert.strictEqual(stoppedChild.promptQueue.getState().status, "stopped");
+      const stoppedStep = parent.promptQueue.getState().steps[0];
+      assert.ok(isSubWorkflowStep(stoppedStep));
+      assert.strictEqual(stoppedStep._runtime?.childRunRef, firstChildRunRef);
+
+      // The run-addressed edit keeps the step's recorded `_runtime`, so only
+      // the executor's file comparison can stop a reattach to the first child.
+      const state = parent.promptQueue.getState();
+      const edited = await WorkingFileManager.updateStepAtRun(
+        workspace,
+        state.workflowKey!,
+        state.runRef!,
+        0,
+        { updates: { type: "workflow", workflow: "second.ctrlyoke.json" } },
+        state.definitionRevision
+      );
+      const onDisk = edited.workingFile.steps?.[0];
+      assert.ok(onDisk && isSubWorkflowStep(onDisk));
+      assert.strictEqual(onDisk.workflow, "second.ctrlyoke.json");
+      assert.strictEqual(
+        onDisk._runtime?.childRunRef,
+        firstChildRunRef,
+        "the edit kept the recorded child run, so the test reaches the rule"
+      );
+
+      await parent.executeContinuationAtRun(
+        state.workflowKey!,
+        state.runRef!,
+        edited.definitionRevision
+      );
+
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        "completed",
+        JSON.stringify(parent.promptQueue.getState().results)
+      );
+      const secondChild = childAt(1, 1);
+      assert.notStrictEqual(secondChild, stoppedChild);
+      assert.notStrictEqual(
+        secondChild.promptQueue.getState().runRef,
+        firstChildRunRef
+      );
+      assert.strictEqual(
+        secondChild.promptQueue.getState().status,
+        "completed"
+      );
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "second-marker"), "utf8"),
+        "ran\n"
+      );
+      // The first child was neither continued nor re-run.
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "marker"), "utf8"),
+        "start\n"
+      );
+      assert.strictEqual(instances.length, 3, "no third child instance");
+      const completedStep = parent.promptQueue.getState().steps[0];
+      assert.ok(isSubWorkflowStep(completedStep));
+      assert.strictEqual(
+        completedStep._runtime?.childRunRef,
+        secondChild.promptQueue.getState().runRef
+      );
+      assert.strictEqual(
+        path.basename(completedStep._runtime?.resolvedWorkflowPath ?? ""),
+        "second.ctrlyoke.json"
+      );
+      const firstManifest = await new TimelineRecorder().readManifest(
+        parent.outputHistoryManager.getHistoryFilePath(
+          firstChildKey,
+          firstChildRunRef
+        )
+      );
+      assert.strictEqual(firstManifest.executionState, "stopped");
+    } finally {
+      await disposeAll(instances, workspace);
+    }
+  });
+
   test("a finalStep pass stopped mid-child reattaches to that pass's child when continued", async () => {
     const workspace = makeTempDir("ctrlyoke-subworkflow-final-continue-");
     const { createInstance, instances, childAt } =
