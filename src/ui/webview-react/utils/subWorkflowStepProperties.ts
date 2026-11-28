@@ -11,7 +11,10 @@ import {
 } from "@root/types/CtrlYokeTypes";
 import type { PropertyValues } from "@store/editorStore";
 import { buildPropertyUpdateValues } from "./promptPropertyValues";
-import { getScriptStepPropertyUpdate } from "./scriptStepProperties";
+import {
+  getScriptStepEditorValues,
+  getScriptStepPropertyUpdate,
+} from "./scriptStepProperties";
 import { stepEnabledPatch, type StepEnabledValue } from "./wholeValueVariables";
 
 /** The step editor's Workflow-mode values for a sub-workflow step. */
@@ -55,12 +58,32 @@ export interface InlineSubWorkflowEditorShell {
   preserved: Record<string, unknown>;
 }
 
+/** The kind a freshly chosen Inline form wraps. */
+export const DEFAULT_INLINE_SUB_WORKFLOW_KIND: InlineSubWorkflowStepKind =
+  STEP_TYPES.PROMPT;
+
 /** Start an inline shell for `kind`, carrying `worktree` over. */
 export function createInlineSubWorkflowShell(
-  kind: InlineSubWorkflowStepKind,
+  kind: InlineSubWorkflowStepKind = DEFAULT_INLINE_SUB_WORKFLOW_KIND,
   worktree: WorktreeConfig | undefined = undefined
 ): InlineSubWorkflowEditorShell {
   return { kind, worktree, preserved: {} };
+}
+
+/**
+ * Whether `shell` holds anything a fresh Inline form does not: another
+ * wrapped kind, a worktree, or preserved fields. A new-step draft holding
+ * such a shell is dirty even with empty prompt and script text.
+ */
+export function isInlineSubWorkflowShellEdited(
+  shell: InlineSubWorkflowEditorShell | null
+): boolean {
+  return (
+    shell !== null &&
+    (shell.kind !== DEFAULT_INLINE_SUB_WORKFLOW_KIND ||
+      shell.worktree !== undefined ||
+      Object.keys(shell.preserved).length > 0)
+  );
 }
 
 /** The kind an inline definition wraps. */
@@ -160,18 +183,7 @@ export function buildInlineSubWorkflowDefinition(
     }
     case STEP_TYPES.SCRIPT: {
       const { properties } = getScriptStepPropertyUpdate({
-        env: editor.scriptEnv,
-        secrets: editor.properties.secrets,
-        errorBehavior: editor.properties.errorBehavior,
-        timeoutSec: editor.scriptTimeoutSec,
-        onPass: editor.scriptOnPass,
-        onFail: editor.scriptOnFail,
-        compareSource: editor.scriptCompareSource,
-        operator: editor.scriptOperator,
-        expected: editor.scriptExpected,
-        ignoreCase: editor.scriptIgnoreCase,
-        executionMode: editor.scriptExecutionMode,
-        shell: editor.scriptShell,
+        ...getScriptStepEditorValues(editor),
         color: undefined,
         enabled: true,
         promptName: "",

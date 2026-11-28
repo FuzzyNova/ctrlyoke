@@ -47,6 +47,7 @@ import {
 } from "@utils/stepDraftContent";
 import {
   createInlineSubWorkflowShell,
+  isInlineSubWorkflowShellEdited,
   splitInlineSubWorkflowDefinition,
   type InlineSubWorkflowEditorShell,
 } from "@utils/subWorkflowStepProperties";
@@ -255,16 +256,39 @@ export function selectionTargetKey(target: EditorSelectionTarget): string {
   return "";
 }
 
+/** Prefixes an `editorTargetKey` that names a queue step by its stable id. */
+const STEP_ID_TARGET_KEY_PREFIX = "step:";
+
 /**
  * A key naming any editor target, the new-step draft included (which
  * `selectionTargetKey` leaves empty). A picker request carries it and its
  * reply echoes it, so a reply that returns after the editor moved to another
  * target is dropped instead of landing there.
+ *
+ * A queue step is named by its `_runtime.stepId`, not its index: the editor
+ * follows a step it is editing across a reorder (`remapStepTargets`), and a
+ * positional key would then drop the reply for the step the pick was made for,
+ * or land it on whichever step moved into that slot. A step without an id
+ * (none has once the queue has loaded) falls back to its position.
  */
-export function editorTargetKey(target: EditorSelectionTarget): string {
-  return target.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
-    ? EDITOR_TARGET_KINDS.NEW_PROMPT
-    : selectionTargetKey(target);
+export function editorTargetKey(
+  target: EditorSelectionTarget,
+  steps: readonly WorkflowStep[]
+): string {
+  switch (target.kind) {
+    case EDITOR_TARGET_KINDS.NEW_PROMPT:
+      return EDITOR_TARGET_KINDS.NEW_PROMPT;
+    case FINAL_STEP_PHASES.FINAL_STEP:
+      return FINAL_STEP_PHASES.FINAL_STEP;
+    case FINAL_STEP_PHASES.QUEUE: {
+      const stepId = steps[target.index]?._runtime?.stepId;
+      return stepId
+        ? `${STEP_ID_TARGET_KEY_PREFIX}${stepId}`
+        : selectionTargetKey(target);
+    }
+    default:
+      return assertNever(target);
+  }
 }
 
 export type EditorSelectionTarget =
@@ -411,6 +435,7 @@ function isNewStepDraftDirty(draft: SavedNewStepState): boolean {
     draft.promptText.length > 0 ||
     draft.scriptCommand.length > 0 ||
     draft.subWorkflowPath.length > 0 ||
+    isInlineSubWorkflowShellEdited(draft.subWorkflowInline) ||
     draft.replyContext !== null
   );
 }
@@ -1481,8 +1506,7 @@ export const useEditorStore = create<
         if (state.subWorkflowInline !== null) return;
         set({
           subWorkflowInline:
-            state.subWorkflowSetAsideInline ??
-            createInlineSubWorkflowShell(STEP_TYPES.PROMPT),
+            state.subWorkflowSetAsideInline ?? createInlineSubWorkflowShell(),
           subWorkflowSetAsideInline: null,
           isDirty: true,
           validationErrors: {},
@@ -1742,8 +1766,18 @@ export const useEditorStore = create<
     // to promptText/pendingPromptEditorInserts regardless of whether the
     // editor is creating a new step or editing an existing one, so the
     // pending insert should land wherever the user is currently editing.
-    if (!isPromptEditorStepType(getEditorContentKind(get()))) {
-      get().setStepType(STEP_TYPES.PROMPT);
+    const state = get();
+    if (!isPromptEditorStepType(getEditorContentKind(state))) {
+      // An inline workflow step (D13) stays a workflow step: only the step
+      // it wraps becomes the prompt, as `convertShellEscapeToScript` does.
+      if (
+        state.stepType === STEP_TYPES.WORKFLOW &&
+        state.subWorkflowInline !== null
+      ) {
+        state.setSubWorkflowInlineKind(STEP_TYPES.PROMPT);
+      } else {
+        state.setStepType(STEP_TYPES.PROMPT);
+      }
     }
 
     // Ensure CodeMirrorEditor is mounted and can receive the pending insert.

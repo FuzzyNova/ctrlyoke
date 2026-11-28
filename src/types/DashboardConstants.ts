@@ -5510,11 +5510,6 @@ export const SUB_WORKFLOW_DASHBOARD_LABELS = {
     "The lane's conflicting merge could not be aborted. Check the parent's checkout.",
 } as const;
 
-/**
- * The step editor's Workflow mode: a file-reference sub-workflow step
- * (`type: workflow`, `workflow: <path>`). Inline definitions are shown
- * read-only until the editor gains an inline form.
- */
 /** The step editor's Prompt / Script / Workflow switch: each kind's label and tooltip. */
 export const STEP_EDITOR_MODE_LABELS = {
   [STEP_TYPES.PROMPT]: {
@@ -5527,13 +5522,19 @@ export const STEP_EDITOR_MODE_LABELS = {
   },
   [STEP_TYPES.WORKFLOW]: {
     label: "Workflow",
-    title: "Workflow step — runs another workflow file as a child run",
+    title:
+      "Workflow step — runs another workflow, from a file or defined inline, as a child run",
   },
 } as const satisfies Record<
   (typeof STEP_TYPES)[keyof typeof STEP_TYPES],
   { label: string; title: string }
 >;
 
+/**
+ * The step editor's Workflow mode (`type: workflow`): its File form
+ * (`workflow: <path>`) and its Inline form (an inline single-step definition,
+ * D13, edited in the prompt or script editor of the step it wraps).
+ */
 export const SUB_WORKFLOW_EDITOR_LABELS = {
   newStep: "New Workflow Step",
   editing: "Editing: Workflow Step",
@@ -5953,7 +5954,6 @@ export const WORKFLOW_DROPDOWN_VIEWS = {
   RUNS: "runs",
 } as const;
 
-/** File-picker modes used by workflow load and queue actions. */
 /** The New split button's menu items (`SplitButtonOption.value`, also their React key). */
 export const WORKFLOW_CONTROLS_MENU_VALUES = {
   FROM_TEMPLATE: "from-template",
@@ -5964,6 +5964,7 @@ export const WORKFLOW_CONTROLS_MENU_VALUES = {
   DUPLICATE_WORKFLOW: "duplicate-workflow",
 } as const;
 
+/** File-picker modes used by workflow load and queue actions. */
 export const WORKFLOW_FILE_PICKER_MODES = {
   LOAD: "load",
   IMPORT_RUN: "import-run",

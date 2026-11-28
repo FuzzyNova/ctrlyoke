@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Choosing a Managed or Named worktree in Workflow Properties, or toggling one of its checkboxes, no longer writes an empty `base` or `setup` into the workflow file. An empty `base` is refused by the schema, so the workflow then failed `ctrlyoke validate`. A blank Base, Setup or Directory field is now left out of the file.
 - In the steps panel, steps that have not run yet now use your `ui.harnessColors` overrides for their colour rail, as the chip rail, the output pane and already-run steps do. Before, they always showed the built-in colours.
 - Stopping a long-running script now waits for its process runner to shut down instead of waiting for the detector's 10-second fallback.
 - Stopping a run that is paused inside a parallel group now stops it. Before, it stayed in Cancelling, waiting for a group that had already paused. Continue still resumes the group at its unstarted steps.

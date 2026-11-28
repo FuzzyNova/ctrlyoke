@@ -196,9 +196,10 @@ export function toForwardSlashPath(filePath: string): string {
 }
 
 /**
- * A workflow file path as a picker or field submits it: trimmed, with
- * forward slashes. The hosted workflow-file modal and the step editor's
- * workflow-file field share it, so a typed and a picked path are spelled alike.
+ * A workflow file path as the hosted workflow-file modal lists and submits
+ * it: trimmed, with forward slashes. The step editor's workflow-file field
+ * spells a typed path with `toForwardSlashPath` as it changes (trimming it
+ * on save), so a typed and a picked path are spelled alike.
  */
 export function normalizeWorkflowFilePath(filePath: string): string {
   return toForwardSlashPath(filePath.trim());

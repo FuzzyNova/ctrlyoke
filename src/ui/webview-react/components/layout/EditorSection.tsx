@@ -462,8 +462,11 @@ const EditorSectionInner: React.FC = () => {
             <Icon name={promptFileAction.icon} className="codicon-lg" />
           </button>
         )}
-        {/* A file sub-workflow runs with its child's own execution mode. */}
-        {!isExternallyManaged && !isSubWorkflowMode && (
+        {/* A workflow step has no execution mode of its own: a file child
+            runs with the mode its own file resolves, so the picker is hidden.
+            An inline prompt is the step it wraps and keeps its own
+            `executionMode`, which this picker edits. */}
+        {!isExternallyManaged && (!isSubWorkflowMode || isPromptContent) && (
           <ExecutionModeQuickPicker />
         )}
         {!isExternallyManaged && (

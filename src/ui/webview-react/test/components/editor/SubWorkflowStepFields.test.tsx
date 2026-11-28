@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SUB_WORKFLOW_EDITOR_CONTROL_IDS,
@@ -6,10 +13,12 @@ import {
   SubWorkflowStepFields,
 } from "@components/editor/SubWorkflowStepFields";
 import { useEditorStore } from "@store/editorStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { hostedFetch } from "@utils/hostedApi";
 import { createMessageHandlers } from "@/messaging/inboundMessageRouter";
 import {
   EDITOR_TARGET_KINDS,
+  FINAL_STEP_PHASES,
   MESSAGE_TYPES,
   STEP_TYPES,
   SUB_WORKFLOW_EDITOR_FORMS,
@@ -39,6 +48,7 @@ vi.mock("@utils/hostedApi", async (importOriginal) => {
 const postMessage = vi.fn();
 
 beforeEach(() => {
+  useWorkflowStore.getState().resetWorkflow();
   useEditorStore.getState().resetEditor();
   useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
   (
@@ -50,6 +60,19 @@ beforeEach(() => {
 afterEach(() => {
   host.standalone = false;
 });
+
+/** Replace a CodeMirror field's text and commit it with a blur. */
+function setCodeMirrorField(label: string, value: string): void {
+  const field = screen.getByLabelText(label);
+  const view = EditorView.findFromDOM(field);
+  if (!view) throw new Error(`${label} CodeMirror view was not rendered`);
+  act(() => {
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+    });
+  });
+  fireEvent.blur(field);
+}
 
 /** Answer a pick as the extension does (`SUB_WORKFLOW_STEP_FILE_SELECTED`). */
 function replyWithReference(path: string, targetKey: string | undefined) {
@@ -140,9 +163,40 @@ describe("SubWorkflowStepFields", () => {
     render(<SubWorkflowStepFields disabled={false} />);
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Merge" }));
-    expect(useEditorStore.getState().subWorkflowInline?.worktree).toMatchObject(
-      { mode: "managed", merge: true }
+    expect(useEditorStore.getState().subWorkflowInline?.worktree).toEqual({
+      mode: "managed",
+      merge: true,
+      keep: false,
+    });
+  });
+
+  // A stored `base: ""` fails the schema's `minLength: 1`, so the file no
+  // longer validates; blank optional fields are omitted instead.
+  it("never stores an empty base or setup on an inline managed worktree", () => {
+    useEditorStore
+      .getState()
+      .setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+    render(<SubWorkflowStepFields disabled={false} />);
+    const worktree = () =>
+      useEditorStore.getState().subWorkflowInline?.worktree;
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: new RegExp(`^${SUB_WORKFLOW_EDITOR_LABELS.worktree}`),
+      })
     );
+    fireEvent.click(screen.getByRole("button", { name: /^Managed/ }));
+    expect(worktree()).toEqual({ mode: "managed", merge: false, keep: false });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Keep directory" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Merge" }));
+    const toggled = { mode: "managed", merge: true, keep: true };
+    expect(worktree()).toEqual(toggled);
+
+    setCodeMirrorField("Worktree base", "main");
+    expect(worktree()).toEqual({ ...toggled, base: "main" });
+    setCodeMirrorField("Worktree base", "");
+    expect(worktree()).toEqual(toggled);
   });
 
   it("sends a hosted modal list pick to the extension and stores the reference it returns", async () => {
@@ -206,6 +260,53 @@ describe("SubWorkflowStepFields", () => {
       type: MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE,
       targetKey: "queue:2",
     });
+  });
+
+  it("lands a pick on the step it was asked for after a reorder moves it", () => {
+    const step = (name: string) => ({
+      type: STEP_TYPES.WORKFLOW,
+      workflow: `workflows/${name}.ctrlyoke.yaml`,
+      _runtime: { stepId: `id-${name}` },
+    });
+    const [a, b, c] = [step("a"), step("b"), step("c")];
+    useWorkflowStore.getState().setPrompts([a, b, c] as never);
+    useEditorStore.getState().enterEditMode(2, c as never);
+    render(<SubWorkflowStepFields disabled={false} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: SUB_WORKFLOW_EDITOR_LABELS.browse })
+    );
+    const request = postMessage.mock.calls
+      .map(([message]) => message as { type: string; targetKey: string })
+      .find(
+        (message) =>
+          message.type === MESSAGE_TYPES.SELECT_SUB_WORKFLOW_STEP_FILE
+      );
+    if (!request) throw new Error("No picker request was posted");
+    expect(request.targetKey).toBe("step:id-c");
+
+    // Step c moves to the front while the picker is open; the editor follows
+    // it, and step b now sits where c was.
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED]({
+        steps: [c, a, b],
+      } as never);
+    });
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 0,
+    });
+
+    act(() => replyWithReference("workflows/picked.ctrlyoke.yaml", "queue:2"));
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/c.ctrlyoke.yaml"
+    );
+    act(() =>
+      replyWithReference("workflows/picked.ctrlyoke.yaml", request.targetKey)
+    );
+    expect(useEditorStore.getState().subWorkflowPath).toBe(
+      "workflows/picked.ctrlyoke.yaml"
+    );
   });
 
   it("spells a typed path with forward slashes", () => {

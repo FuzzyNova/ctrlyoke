@@ -4,6 +4,7 @@ import {
   classifyWorktreeDirectoryValue,
   effectiveWorktreeObjectConfig,
   toWorktreeObjectConfig,
+  withoutBlankOptionalWorktreeFields,
 } from "@root/utils/WorktreeConfigShape";
 
 describe("toWorktreeObjectConfig", () => {
@@ -79,5 +80,41 @@ describe("effectiveWorktreeObjectConfig", () => {
     const effective = effectiveWorktreeObjectConfig(config, undefined);
     expect(effective).toEqual(config);
     expect(effective).not.toBe(config);
+  });
+});
+
+describe("withoutBlankOptionalWorktreeFields", () => {
+  it("drops blank directory, base and setup and keeps the rest", () => {
+    expect(
+      withoutBlankOptionalWorktreeFields({
+        mode: WORKTREE_MODES.NAMED,
+        branch: "feature",
+        directory: " ",
+        base: "",
+        setup: "npm ci",
+      })
+    ).toEqual({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature",
+      setup: "npm ci",
+    });
+    expect(
+      withoutBlankOptionalWorktreeFields({
+        mode: WORKTREE_MODES.MANAGED,
+        base: "",
+        setup: "",
+        merge: false,
+        keep: true,
+      })
+    ).toEqual({ mode: WORKTREE_MODES.MANAGED, merge: false, keep: true });
+  });
+
+  it("leaves a named worktree's empty branch for its own refusal", () => {
+    expect(
+      withoutBlankOptionalWorktreeFields({
+        mode: WORKTREE_MODES.NAMED,
+        branch: "",
+      })
+    ).toEqual({ mode: WORKTREE_MODES.NAMED, branch: "" });
   });
 });

@@ -26,6 +26,20 @@ vi.mock("@components/shared/HarnessIcon", () => ({
   HarnessIcon: () => null,
 }));
 
+// A pass-through EditorFooter that records its latest `onUpdate`, so a test
+// can drive the Update handler's own guards, which a disabled button hides.
+const footer = vi.hoisted(() => ({ onUpdate: null as null | (() => void) }));
+vi.mock("@components/editor/EditorFooter", async (importOriginal) => {
+  const React = await import("react");
+  const actual =
+    await importOriginal<typeof import("@components/editor/EditorFooter")>();
+  const RecordingFooter: typeof actual.EditorFooter = (props) => {
+    footer.onUpdate = props.onUpdate;
+    return React.createElement(actual.EditorFooter, props);
+  };
+  return { ...actual, EditorFooter: RecordingFooter };
+});
+
 vi.mock("../../../hooks/useCompatibilityDiagnostics", () => ({
   useCompatibilityDiagnostics: () => ({
     isChecking: false,
@@ -80,6 +94,7 @@ import {
   TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_VALIDATION_WARNING_CODES,
+  SUB_WORKFLOW_EDITOR_FORMS,
   SUB_WORKFLOW_EDITOR_LABELS,
 } from "@root/types/DashboardConstants";
 
@@ -1271,6 +1286,64 @@ describe("StepEditor — prompt-file action", () => {
     expect(useEditorStore.getState().promptText).toBe("keep this text");
   });
 
+  it("offers no prompt-file action for an inline workflow step's prompt", async () => {
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Implement the lane" },
+    });
+    const getAction = renderWithAction();
+
+    await waitFor(() =>
+      expect(useEditorStore.getState().promptText).toBe("Implement the lane")
+    );
+    expect(getAction()).toBeNull();
+  });
+
+  // Saving the reference is an `UPDATE_PROMPT` with no `type`, which would
+  // replace the workflow step with a plain prompt step.
+  it("does not save a conversion reply once the step became an inline workflow step", async () => {
+    useEditorStore.getState().enterEditMode(0, { prompt: "convert me" });
+    const getAction = renderWithAction();
+    await waitFor(() =>
+      expect(getAction()?.tooltip).toBe("Convert to prompt file")
+    );
+    getAction()?.onClick();
+    const request = postMessageSpy.mock.calls.find(
+      ([message]) =>
+        (message as { type?: string }).type ===
+        MESSAGE_TYPES.CONVERT_PROMPT_TO_FILE
+    )?.[0] as { seq: number };
+
+    act(() => {
+      useEditorStore.getState().setStepType(STEP_TYPES.WORKFLOW);
+      useEditorStore
+        .getState()
+        .setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+    });
+    expect(getAction()).toBeNull();
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
+            seq: request.seq,
+            reference: "./.ctrlyoke/prompts/convert-me.prompt.md",
+            resolvedPath: "C:/workspace/.ctrlyoke/prompts/convert-me.prompt.md",
+          },
+        })
+      )
+    );
+
+    expect(useEditorStore.getState().promptText).toBe("convert me");
+    expect(
+      postMessageSpy.mock.calls.some(
+        ([message]) =>
+          (message as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+      )
+    ).toBe(false);
+  });
+
   it("applies a successful conversion reply after the waiting deadline", async () => {
     useEditorStore.getState().setPromptText("convert me");
     const getAction = renderWithAction();
@@ -1881,7 +1954,11 @@ describe("StepEditor — Workflow (sub-workflow step) mode", () => {
     const update = screen.getByRole("button", { name: "Update" });
     expect(update).toBeDisabled();
     fireEvent.click(update);
+    // The handler refuses too, not only the disabled button.
+    if (!footer.onUpdate) throw new Error("EditorFooter was not rendered");
+    act(() => footer.onUpdate?.());
     expect(findMessage(MESSAGE_TYPES.UPDATE_PROMPT)).toBeUndefined();
+    expect(findMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT)).toBeUndefined();
   });
 
   it("queues a new inline prompt workflow step", async () => {

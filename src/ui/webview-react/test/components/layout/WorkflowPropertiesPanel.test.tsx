@@ -933,6 +933,76 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     );
   });
 
+  /** Replace a CodeMirror field's text and commit it with a blur. */
+  function setCodeMirrorField(label: string, value: string): void {
+    const field = screen.getByLabelText(label);
+    const view = EditorView.findFromDOM(field);
+    if (!view) throw new Error(`${label} CodeMirror view was not rendered`);
+    act(() => {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: value },
+      });
+    });
+    fireEvent.blur(field);
+  }
+
+  function lastPostedWorktree(): unknown {
+    const updates = postMessage.mock.calls
+      .map(([message]) => message as Record<string, unknown>)
+      .filter(
+        (message) =>
+          message.type === MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES ||
+          (message.type === MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY &&
+            message.property === "worktree")
+      );
+    const posted = updates[updates.length - 1];
+    if (!posted) throw new Error("No worktree update was posted");
+    return posted.type === MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY
+      ? posted.value
+      : (posted.properties as { worktree: unknown }).worktree;
+  }
+
+  it("never posts an empty base or setup for a Managed worktree with no defaults", () => {
+    // `resetSettings` keeps an earlier case's global worktree default.
+    useSettingsStore.getState().updateGlobalSetting("worktree", false);
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Managed");
+    const managed = { mode: WORKTREE_MODES.MANAGED, merge: false, keep: false };
+    expect(lastPostedWorktree()).toEqual(managed);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Keep directory" }));
+    expect(lastPostedWorktree()).toEqual({ ...managed, keep: true });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Merge" }));
+    const toggled = { ...managed, keep: true, merge: true };
+    expect(lastPostedWorktree()).toEqual(toggled);
+    expect(useSettingsStore.getState().workflowProperties.worktree).toEqual(
+      toggled
+    );
+
+    setCodeMirrorField("Worktree base", "main");
+    expect(lastPostedWorktree()).toEqual({ ...toggled, base: "main" });
+    setCodeMirrorField("Worktree base", "");
+    expect(lastPostedWorktree()).toEqual(toggled);
+    setCodeMirrorField("Worktree setup", "  ");
+    expect(lastPostedWorktree()).toEqual(toggled);
+  });
+
+  it("never posts an empty base, setup or directory for a Named worktree", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature",
+    });
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Named");
+    const named = { mode: WORKTREE_MODES.NAMED, branch: "feature" };
+    expect(lastPostedWorktree()).toEqual(named);
+
+    setCodeMirrorField("Worktree base", "main");
+    expect(lastPostedWorktree()).toEqual({ ...named, base: "main" });
+    setCodeMirrorField("Worktree base", "");
+    expect(lastPostedWorktree()).toEqual(named);
+  });
+
   it("keeps worktree setup single-line and blurs on Enter", async () => {
     const user = userEvent.setup();
     useSettingsStore.getState().updateGlobalSetting("worktree", {

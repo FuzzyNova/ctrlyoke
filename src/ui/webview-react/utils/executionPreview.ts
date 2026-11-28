@@ -22,7 +22,7 @@ import {
   isSubWorkflowStep,
 } from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
-import { getScriptStepPropertyUpdate } from "@utils/scriptStepProperties";
+import { getScriptStepUpdateFromEditor } from "@utils/scriptStepProperties";
 import {
   getSubWorkflowEditorWorkflow,
   getSubWorkflowStepUpdateFromEditor,
@@ -97,26 +97,9 @@ export function getExecutionPreviewEditorSnapshot():
         existingStep && isScriptStep(existingStep)
           ? existingStep
           : { type: STEP_TYPES.SCRIPT, script: "" };
-      const { properties, clearProperties } = getScriptStepPropertyUpdate({
-        env: editor.scriptEnv,
-        secrets: editor.properties.secrets,
-        errorBehavior: editor.properties.errorBehavior,
-        timeoutSec: editor.scriptTimeoutSec,
-        onPass: editor.scriptOnPass,
-        onFail: editor.scriptOnFail,
-        compareSource: editor.scriptCompareSource,
-        operator: editor.scriptOperator,
-        expected: editor.scriptExpected,
-        ignoreCase: editor.scriptIgnoreCase,
-        executionMode: editor.scriptExecutionMode,
-        shell: editor.scriptShell,
-        color: editor.properties.color,
-        enabled: editor.stepEnabled,
-        promptName: editor.promptName,
-      });
       const step = overlayStepUpdate(
         base,
-        { properties, clearProperties },
+        getScriptStepUpdateFromEditor(editor),
         { script: editor.scriptCommand },
         editor.promptName
       );

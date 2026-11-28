@@ -272,6 +272,29 @@ describe("EditorSection", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows the execution-mode picker for an inline prompt and hides it for a file child", () => {
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    });
+    const { unmount } = render(<EditorSection />);
+    expect(
+      screen.queryByRole("button", { name: "Execution mode" })
+    ).not.toBeInTheDocument();
+    unmount();
+
+    // The wrapped prompt keeps its own `executionMode`, which the picker edits.
+    useEditorStore.getState().resetEditor();
+    useEditorStore.getState().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { prompt: "Implement the lane" },
+    });
+    render(<EditorSection />);
+    expect(
+      screen.getByRole("button", { name: "Execution mode" })
+    ).toBeInTheDocument();
+  });
+
   it("labels an existing workflow step and its final-step form", () => {
     useEditorStore.getState().enterEditMode(0, {
       type: STEP_TYPES.WORKFLOW,

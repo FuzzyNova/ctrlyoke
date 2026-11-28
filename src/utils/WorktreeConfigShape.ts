@@ -112,6 +112,33 @@ export function withWorktreeField<T extends object>(
   return next;
 }
 
+/**
+ * The optional string fields of an object worktree config. An empty one means
+ * "not set", and the schema refuses some of them empty (`base` has
+ * `minLength: 1`), so an editor omits them rather than storing `""`.
+ */
+const OPTIONAL_WORKTREE_STRING_FIELDS = [
+  WORKTREE_DIRECTORY_FIELD,
+  "base",
+  "setup",
+] as const;
+
+/**
+ * `config` without its blank optional string fields (`directory`, `base`,
+ * `setup`). A named worktree's required `branch` is left as it is, so its own
+ * refusal (`namedWorktreeBranchError`) still applies.
+ */
+export function withoutBlankOptionalWorktreeFields<
+  T extends WorktreeObjectConfig,
+>(config: T): T {
+  const next: Record<string, unknown> = { ...config };
+  for (const field of OPTIONAL_WORKTREE_STRING_FIELDS) {
+    const value = next[field];
+    if (typeof value === "string" && !value.trim()) delete next[field];
+  }
+  return next as T;
+}
+
 /** Classify a child definition's `worktree` key by the D4 table. */
 export function classifySubWorkflowWorktree(
   worktree: WorktreeConfig | undefined

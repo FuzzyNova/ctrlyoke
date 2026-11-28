@@ -100,3 +100,61 @@ export function getScriptStepPropertyUpdate(
 
   return { properties, clearProperties };
 }
+
+/**
+ * The editor fields a script step is built from. `EditorState` satisfies it,
+ * so callers pass the store's state.
+ */
+export interface ScriptStepEditorContent {
+  scriptEnv: ScriptStepEditorValues["env"];
+  properties: {
+    secrets?: ScriptStepEditorValues["secrets"];
+    errorBehavior?: ScriptStepEditorValues["errorBehavior"];
+    color?: ScriptStepEditorValues["color"];
+  };
+  scriptTimeoutSec: ScriptStepEditorValues["timeoutSec"];
+  scriptOnPass: string;
+  scriptOnFail: string;
+  scriptCompareSource: string;
+  scriptOperator: string;
+  scriptExpected: string;
+  scriptIgnoreCase: boolean;
+  scriptExecutionMode: ScriptStepEditorValues["executionMode"];
+  scriptShell: ScriptStepEditorValues["shell"];
+  stepEnabled: StepEnabledValue;
+  promptName: string;
+}
+
+/**
+ * The single mapping from editor fields to a script step's values, shared by
+ * the editor's save and dispatch paths, the execution preview, and an inline
+ * workflow step's wrapped script.
+ */
+export function getScriptStepEditorValues(
+  editor: ScriptStepEditorContent
+): ScriptStepEditorValues {
+  return {
+    env: editor.scriptEnv,
+    secrets: editor.properties.secrets,
+    errorBehavior: editor.properties.errorBehavior,
+    timeoutSec: editor.scriptTimeoutSec,
+    onPass: editor.scriptOnPass,
+    onFail: editor.scriptOnFail,
+    compareSource: editor.scriptCompareSource,
+    operator: editor.scriptOperator,
+    expected: editor.scriptExpected,
+    ignoreCase: editor.scriptIgnoreCase,
+    executionMode: editor.scriptExecutionMode,
+    shell: editor.scriptShell,
+    color: editor.properties.color,
+    enabled: editor.stepEnabled,
+    promptName: editor.promptName,
+  };
+}
+
+/** The script step property update for the editor's current content. */
+export function getScriptStepUpdateFromEditor(
+  editor: ScriptStepEditorContent
+): ScriptStepPropertyUpdate {
+  return getScriptStepPropertyUpdate(getScriptStepEditorValues(editor));
+}

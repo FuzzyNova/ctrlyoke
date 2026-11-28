@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
-import type {
-  WorktreeConfig,
-  WorktreeObjectConfig,
+import {
+  assertNever,
+  type WorktreeConfig,
+  type WorktreeObjectConfig,
 } from "@root/types/CtrlYokeTypes";
 import {
   WORKTREE_KEEP_HELP_TEXT,
@@ -11,6 +12,7 @@ import {
 import {
   NAMED_WORKTREE_BRANCH_REQUIRED,
   toWorktreeObjectConfig,
+  withoutBlankOptionalWorktreeFields,
   withWorktreeField,
 } from "@root/utils/WorktreeConfigShape";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
@@ -41,9 +43,19 @@ export type WorktreeConfigChange =
 
 /**
  * The object a newly selected mode starts from, seeded from `defaults` (the
- * settings default) where they describe the same mode.
+ * settings default) where they describe the same mode. Blank optional fields
+ * are omitted, never stored as `""`.
  */
 export function worktreeConfigForMode(
+  mode: WorktreeMode,
+  defaults: WorktreeConfig | undefined
+): WorktreeObjectConfig {
+  return withoutBlankOptionalWorktreeFields(
+    seededWorktreeConfig(mode, defaults)
+  );
+}
+
+function seededWorktreeConfig(
   mode: WorktreeMode,
   defaults: WorktreeConfig | undefined
 ): WorktreeObjectConfig {
@@ -83,7 +95,10 @@ export function worktreeConfigForMode(
   };
 }
 
-/** `current` in the full object shape a field edit is applied to. */
+/**
+ * `current` in the full object shape a field edit is applied to. Its blank
+ * fields are dropped once the edit is applied (`commitField`).
+ */
 function editableWorktreeConfig(
   current: WorktreeConfig | undefined
 ): WorktreeObjectConfig {
@@ -200,7 +215,8 @@ export const WorktreeConfigEditor: React.FC<WorktreeConfigEditorProps> = ({
 
   const handleModeChange = useCallback(
     (selected: string) => {
-      switch (selected as WorktreeSelection) {
+      const selection = selected as WorktreeSelection;
+      switch (selection) {
         case WORKTREE_MODE_SELECTIONS.INHERIT:
           onChange(undefined, WORKTREE_CONFIG_CHANGES.MODE);
           return;
@@ -210,10 +226,12 @@ export const WorktreeConfigEditor: React.FC<WorktreeConfigEditorProps> = ({
         case WORKTREE_MODE_SELECTIONS.MANAGED:
         case WORKTREE_MODE_SELECTIONS.NAMED:
           onChange(
-            worktreeConfigForMode(selected as WorktreeMode, seedDefaults),
+            worktreeConfigForMode(selection, seedDefaults),
             WORKTREE_CONFIG_CHANGES.MODE
           );
           return;
+        default:
+          assertNever(selection, "worktree mode selection");
       }
     },
     [onChange, seedDefaults]
@@ -222,11 +240,9 @@ export const WorktreeConfigEditor: React.FC<WorktreeConfigEditorProps> = ({
   const commitField = useCallback(
     (field: WorktreeField, fieldValue: string | boolean) => {
       onChange(
-        withWorktreeField(
-          editableWorktreeConfig(value),
-          field,
-          fieldValue
-        ) as WorktreeConfig,
+        withoutBlankOptionalWorktreeFields(
+          withWorktreeField(editableWorktreeConfig(value), field, fieldValue)
+        ),
         WORKTREE_CONFIG_CHANGES.FIELD
       );
     },

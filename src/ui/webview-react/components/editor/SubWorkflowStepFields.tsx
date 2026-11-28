@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import { editorTargetKey, useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useWorkflowFilePicker } from "@hooks/useSubWorkflowFilePicker";
 import {
@@ -238,7 +239,10 @@ export const SubWorkflowStepFields: React.FC<SubWorkflowStepFieldsProps> = ({
           size="sm"
           onClick={() =>
             requestWorkflowFile(
-              editorTargetKey(useEditorStore.getState().selectionTarget)
+              editorTargetKey(
+                useEditorStore.getState().selectionTarget,
+                useWorkflowStore.getState().steps
+              )
             )
           }
           disabled={disabled}

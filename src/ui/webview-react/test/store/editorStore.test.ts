@@ -15,6 +15,7 @@ import {
 import {
   PROMPT_HISTORY_KINDS,
   STEP_TYPES,
+  SUB_WORKFLOW_EDITOR_FORMS,
 } from "@root/types/DashboardConstants";
 import { usePromptHistoryStore } from "@store/promptHistoryStore";
 import type { PromptStep } from "@/types/messages";
@@ -676,6 +677,33 @@ describe("prompt editor inserts", () => {
     expect(store().stepType).toBe(STEP_TYPES.PROMPT);
   });
 
+  it("switches only the wrapped step of an inline script workflow step", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: { script: "npm test", worktree: { mode: "managed" } },
+    } as never);
+
+    store().preparePromptEditorForInsert();
+
+    expect(store().stepType).toBe(STEP_TYPES.WORKFLOW);
+    expect(store().subWorkflowInline).toEqual({
+      kind: STEP_TYPES.PROMPT,
+      worktree: { mode: "managed" },
+      preserved: {},
+    });
+  });
+
+  it("switches a file workflow step to a prompt step before inserting", () => {
+    store().enterEditMode(0, {
+      type: STEP_TYPES.WORKFLOW,
+      workflow: "workflows/verify.ctrlyoke.yaml",
+    } as never);
+
+    store().preparePromptEditorForInsert();
+
+    expect(store().stepType).toBe(STEP_TYPES.PROMPT);
+  });
+
   it("keeps edit mode active so an insert lands in the edited step", () => {
     store().setPromptText("Draft before editing");
     store().enterEditMode(0, makePromptStep({ prompt: "Existing prompt" }));
@@ -912,6 +940,45 @@ describe("getPromptProperties", () => {
 // ---------------------------------------------------------------------------
 // Reset
 // ---------------------------------------------------------------------------
+
+describe("new-step draft dirty tracking", () => {
+  /** Leave the draft for a queued step and come back to it. */
+  function roundTripDraft(): void {
+    store().enterEditMode(0, makePromptStep({ prompt: "Existing prompt" }));
+    store().cancelEdit();
+  }
+
+  it("counts an inline worktree on an otherwise empty draft as dirty", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+    store().setSubWorkflowWorktree({ mode: "managed" });
+
+    roundTripDraft();
+
+    expect(store().subWorkflowInline?.worktree).toEqual({ mode: "managed" });
+    expect(store().isDirty).toBe(true);
+  });
+
+  it("counts a changed inline kind on an otherwise empty draft as dirty", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+    store().setSubWorkflowInlineKind(STEP_TYPES.SCRIPT);
+
+    roundTripDraft();
+
+    expect(store().isDirty).toBe(true);
+  });
+
+  it("leaves a fresh inline form with nothing in it clean", () => {
+    store().setStepType(STEP_TYPES.WORKFLOW);
+    store().setSubWorkflowForm(SUB_WORKFLOW_EDITOR_FORMS.INLINE);
+
+    roundTripDraft();
+
+    expect(store().subWorkflowInline).not.toBeNull();
+    expect(store().isDirty).toBe(false);
+  });
+});
 
 describe("resetEditor", () => {
   it("clears all editor state back to defaults", () => {

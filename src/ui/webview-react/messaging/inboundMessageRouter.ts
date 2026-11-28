@@ -2006,7 +2006,11 @@ export function createMessageHandlers(
     if (typeof message.path !== "string") return;
     const editor = useEditorStore.getState();
     if (
-      message.targetKey !== editorTargetKey(editor.selectionTarget) ||
+      message.targetKey !==
+        editorTargetKey(
+          editor.selectionTarget,
+          useWorkflowStore.getState().steps
+        ) ||
       !isSubWorkflowEditorStepType(editor.stepType) ||
       editor.subWorkflowInline !== null
     ) {
