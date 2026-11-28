@@ -1,11 +1,11 @@
 # Workflow Step Plan
 
-## Status (2026-11-26)
+## Status (2026-11-27)
 
-**In progress. The prerequisites and the step-kind-agnostic prior-context work shipped, and
-the sequential sub-workflow step works end to end, including as a `finalStep`, with D6 reattach
-and D12c descendant reads (rounds 1–4; see [Progress](#progress)).
-Every open question is settled (see [Revision 5](#revision-5-decisions)).**
+**Nearly complete. Every section is implemented (rounds 1–16; see [Progress](#progress)); a
+requirement-by-requirement audit after round 16 found a handful of gaps, queued as round 17.
+Every open question is settled (see [Revision 5](#revision-5-decisions)), apart from the two
+questions for Nathan under Decisions.**
 
 Shipped:
 
@@ -21,7 +21,7 @@ Shipped:
   `CtrlYokeTypes.ts`, `summarizePriorContextItem` (`HarnessIntegration.ts`) applies
   `PRIOR_CONTEXT_LIMITS` (`DashboardConstants.ts`; `SUMMARY_BUDGET_BYTES: 409600` already
   caps all the summary steps in one prompt), and the editor, completions,
-  diagnostics, renumbering (`src/core/StepReferenceShifts.ts`) and docs support it. Since
+  diagnostics, reference-shift reporting (`src/core/StepReferenceShifts.ts`) and docs support it. Since
   `5dbca60d7` the budget omits by chronology, not position: imported-run items first, then queue
   steps before `finalStep` passes, then ascending index; the last summary is never omitted, and an
   omitted step renders `<step … omitted="all" omittedBytes="N"/>`
@@ -735,8 +735,8 @@ Rejected.
   `HistoryRunDocumentBuilder` and `RunBundleReader`, which all switch on event type.
 - **Missing child history** (run directory deleted): the metadata renders with a
   `<childRunUnavailable/>` marker instead of child steps. This is not an error.
-- **The script verdict** is already rendered for every script step (shipped 2026-10-13). Still to
-  do here: `PriorContextItem.subWorkflow?: { output, children }` and its rendering.
+- **The script verdict** is already rendered for every script step (shipped 2026-10-13).
+  `PriorContextItem.subWorkflow?: { output, children }` and its rendering are done (round 3).
 
 ```xml
 <step index="2" type="workflow" name="f1-location" workflow="waves/f1-location.ctrlyoke.yaml"
@@ -810,7 +810,7 @@ find the child run.
   inside a worktree. It keys the project on the cwd's realpath, so the guide always passes
   `-d <main checkout>`. It requires a shell tool and the CLI on `PATH`.
 
-- **MCP `read_output` needs one addition (not yet done).** It is scoped to the agent's own attached run
+- **MCP `read_output` needs one addition (done in round 4; `workflow_status` takes the same `run`).** It is scoped to the agent's own attached run
   (`mcp-server.ts`: `resolveRun` → that run's manifest), and `indices` select that
   run's steps. `resolveRun` (`mcp-server.ts:2328`) takes the address from the session
   (`requireRunAddress`), never from the arguments. On a workflow step it would return only the
@@ -954,8 +954,8 @@ The orchestrator guidance (`workflow-orchestrator.agent.md`, `<parallelSteps>`) 
   `worktreePresets: { lane: { mode: managed, merge: true, setup: "{laneSetup}" } }` with a new
   `laneSetup` text entry in `_templateMeta.variables` (the template has no root `vars`; R13).
   It defaults to `npm ci` and is described as "Installs dependencies in each parallel lane's
-  fresh worktree; leave blank if none are needed". Blank renders `setup: ""`, which
-  `WorktreeManager` already treats as no setup. The comment above `conditions:`
+  fresh worktree; leave blank if none are needed". As built, a blank uses the default (Decisions, round 11),
+  so the description tells the author to set the created workflow's `setup: ""` instead. The comment above `conditions:`
   (`spec-driven-loop.ctrlyoke.yaml:109-113`), which says the gate isn't workflow-level because
   parallel steps share one tree, changes to say that applies only to shared-tree parallel members.
   `large-spec-loop` is unchanged in v1 (R12).
@@ -1218,7 +1218,7 @@ resolved path, child keys, outcome, and the `SubWorkflowResult.worktree` project
   prompt, with a message naming the run boundary.
 - `buildSubWorkflowStep` keeps an inline object as authored. Materializing it (D13) happens only
   at launch, so Save round-trips the authored form.
-- Step-reference renumbering (`StepReferenceShifts.ts`) and the completions that offer step
+- Step-reference shift reporting (`StepReferenceShifts.ts`; it reports, never rewrites) and the completions that offer step
   numbers skip the inside of an inline definition, because its references could only ever address
   the child run.
 - The root `type: "script"` single-step branch (`:1034-1043`) gets a sibling for root
@@ -1598,9 +1598,9 @@ The dropdown needs no other change.
   second copy. (An earlier revision also gave the workflow-properties editor a
   `worktreePresets` list "next to `conditions`". There is no `conditions` editor: both catalogs
   are author-only YAML, preserved but not edited by the dashboard; see Decisions, round 15.)
-- **Building properties:** `buildScriptProperties` (`StepEditor.tsx:931`) is now a thin
-  `useCallback` over `getScriptStepPropertyUpdate` (`utils/scriptStepProperties.ts:34`), which
-  `utils/executionPreview.ts` shares. The duplication earlier revisions flagged is gone. Add
+- **Building properties:** `StepEditor`'s `buildScriptUpdate` reads the editor through
+  `getScriptStepEditorValues`/`getScriptStepUpdateFromEditor` (`utils/scriptStepProperties.ts`),
+  which `utils/executionPreview.ts` and the inline builder share (round 16). The duplication earlier revisions flagged is gone. Add
   `getSubWorkflowStepPropertyUpdate` in a sibling `utils/subWorkflowStepProperties.ts`, used the
   same way by the editor and the preview. `editorStore` still repeats script-field resets in four
   places (`:590-597`, `:698-731`, `:1036-1138`, `:1843-1877`). Fold them into one
@@ -2863,7 +2863,7 @@ summaries instead.
     edit; inline steps editable and movable; two inline `schemaUiPropertyRoundTrip` surfaces
     from the schema's `inlineSubWorkflowDefinition` (no opt-outs); preview through the shared
     builder; docs and CHANGELOG.
-  - **Found in review, not yet fixed** (round 16 steps 1–2):
+  - **Found in review** (all but the "Low, left" items fixed in round 16):
     - Inline worktree writes schema-invalid empty strings (bug, **confirmed live**): toggling
       Keep Directory on a lane saved `{ mode: managed, base: "", setup: "", merge: true,
 keep: true }`; `managedWorktreeConfig.base` has `minLength: 1`, so the file no longer
@@ -2901,28 +2901,85 @@ keep: true }`; `managedWorktreeConfig.base` has `minLength: 1`, so the file no l
       outer step's); saving an inline prompt does not run D13's boundary check (fails at
       launch under `onFail`).
 
+- **Round 16** (reviewed 2026-11-27; `npm test` green: 8953 extension, 5065 UI):
+  - `d830e4ead`: settlement always finishes (`finishExecutionHistory` in a `finally`; each
+    integration, target, retained integration and artifact cleanup settles on its own, and a
+    failure blocks a worktree's landing as an unproven cleanup); a settlement throw is logged and
+    reported, never rethrown. `pauseConfirmed` is cleared on the in-place carry-on and by
+    `WorkflowExecutor.beginExecution()`; a resume whose start throws while RUNNING fails through
+    `failResumeSetup`. A stop waiting on a paused run's unwind (`stopAwaitingExecutionSettlement`)
+    makes a worktree settlement that starts meanwhile begin aborted. The carry-on reset has no
+    dedicated test (round 17 step 1).
+  - `3f2ce4070`: `withoutBlankOptionalWorktreeFields` (`src/utils/WorktreeConfigShape.ts`)
+    drops blank `base`/`setup`/`directory` in `WorktreeConfigEditor`; the workflow panel had the
+    same bug in 0.2.0 (CHANGELOG **Fixed**). Inline guards (prompt-file conversion, insert into
+    an inline script, execution-mode picker for an inline prompt); picker `targetKey` is
+    `step:<stepId>` (falls back to `queue:N` without an id); one script-field mapping
+    (`getScriptStepEditorValues`/`getScriptStepUpdateFromEditor`) at all four sites; inline shell
+    counts as dirty.
+  - `e6b23064e`: a file child previews as one "Runs <path>" entry; an inline child previews as its
+    wrapped step through `materializeInlineSubWorkflow`, with the lane badge's own-worktree
+    wording; `ctrlyoke run --dry-run` prints the same; the redactor covers an inline child's
+    worktree setup. Review fix `dbd97df2f`: an unnamed parent's inline child is named after the
+    file, as at launch.
+  - `47949ef06`: `SUB_WORKFLOW_STEP` outline kind and detection (queue, members, `finalStep`,
+    root), inline definitions classified as prompt/script with `worktree` as the only
+    workflow-only key, `workflow` path role (VS Code only; the hosted editor gets none), session
+    candidates prompt-only, no step numbers inside an inline definition, D13 boundary checks
+    shared through `isParentRunSessionId`/`isParentRunPriorContext`, `type` detail from
+    `STEP_TYPES`, a `workflow` key snippet (no inline lane snippet: one snippet per key).
+  - `e8bf17d2c`: `StepReferenceShifts` already skipped inline definitions (tests added; it
+    reports, never rewrites); the `ctrlyoke-syntax` skill, tech-support agent and docs page say
+    what a workflow step contributes to `$previous`/`$step` and that inline references cannot
+    cross the boundary.
+  - **Whole-spec audit** (after round 16, four read-only passes over D1–D14, the core sections
+    and the dashboard/CLI/tests sections). Everything else is met. Gaps, all queued in round 17:
+    - **D10 misses a cycle through a worktree parent** (read, not yet reproduced): the root's
+      ancestor entry is its authored path (`WorkflowInstance` `ancestorPaths` getter), while a
+      child is resolved inside the execution checkout (`buildPromptFileResolutionOptions`), so
+      `a.yaml` (managed worktree) → `b.yaml` → `a.yaml` compares `<main>/a.yaml` with
+      `<wt>/a.yaml` and recurses, each `a` creating a new worktree.
+    - **D11: CLI `--var` never reaches a file child** (`mergeCliVarsIntoWorkflow` runs on the
+      root only; `createCliSubWorkflowInstance` carries no vars). D11 says a file child uses its
+      own `vars` plus host-level `--var` overrides.
+    - **D12a: a workflow step that fails before a child run exists has no output**: no
+      `subWorkflowSettled` is written (it needs a child identity), so under `onFail: continue`
+      `$previous` skips the step and the failure never reaches later prompts. D12a: "always has
+      output and is never skipped by `$previous`".
+    - **D12c: only the whole-step omission stub names the `read_output` call**; field-level
+      truncation markers inside child steps carry no hint.
+    - **D6 reattach ignores an edited `workflow` path**: `resolveRecordedChildRun` matches on
+      the `parentRun` link only, so a Continue after the path changed continues the old child
+      (spec silent; low).
+    - **Tests the Tests section lists but nobody wrote**: lane metadata through `$step:a-b` and
+      `$step:summary:a-b`; a schema accept test for a workflow `parallel` member; an end-to-end
+      merge conflict that leaves the parent step COMPLETED; a CLI group of two lanes building both
+      children; the `ctrlyoke.queueAsSubWorkflowFromContext` command and the Run Workflow
+      Alongside append path (verify; may exist).
+    - Small: stale `SubWorkflowTypes.ts` comment that `ancestorPaths` is "ignored by this
+      launcher round"; completions treat a typeless step with a `workflow` key as undecided; a
+      preview of an inline child whose wrapped step is disabled drops it silently; the "parent's
+      checkout" preview test loops over `false`, which is the main checkout, and never asserts
+      the child's checkout.
+
 ### Next
 
 Coarse roadmap; re-planned every pass.
 
-- **Round 16 (queued 2026-11-27): round-15 gaps, preview, completions, leftovers.** All on
-  `claude-cli`/`opus`, sequential, each gated by the `committed` preset.
-  1. Core settlement robustness: settlement always finishes (try/finally), `pauseConfirmed`
-     reset on carry-on and at `beginExecution`, a stop aborts a worktree settlement wait
-     queued after it.
-  2. Editor fixes: no empty `base`/`setup` from `WorktreeConfigEditor` (both surfaces),
-     inline guards (prompt-file conversion, insert into inline script, execution-mode
-     picker), `targetKey` by step id, one script-field mapping, inline dirty tracking, test
-     and comment fixes.
-  3. Execution preview: "Runs <file>" for a file child; an inline child as its materialized
-     wrapped step plus "in its own worktree".
-  4. Completions (whole "Completions" section): `SUB_WORKFLOW_STEP` object kind and outline,
-     `workflow` path role, `subWorkflowOnly` root keys, snippet, session-candidate exclusion,
-     step-number completions skipping inline definitions.
-  5. `StepReferenceShifts` skipping inline definitions (verify first), `ctrlyoke-syntax` skill
-     and tech-support agent: what `$previous`/`$step` mean for a workflow step.
-- **Round 17:** whatever round 16's review leaves, then the whole-spec requirement-by-
-  requirement audit (Tests section included), then mark complete and move the spec.
+- **Round 17 (queued 2026-11-27): audit gaps.** On `claude-cli`, `sonnet` for the core steps and
+  `haiku` for tests and polish (Nathan asked for cheaper models), sequential, each gated by the
+  `committed` preset.
+  1. D10 cycle identity across checkouts, D6 reattach on an edited path, the carry-on
+     `pauseConfirmed` test, the stale `SubWorkflowTypes.ts` comment.
+  2. D11 CLI `--var` reaching file children.
+  3. D12a output for a workflow step that fails before its child exists; D12c hints on
+     field-level truncation markers inside child steps.
+  4. Missing unit/schema tests (lane ranges, schema parallel member) and small polish
+     (completions undecided step, disabled inline preview, preview test).
+  5. Missing integration tests (merge conflict end to end, CLI two-lane group, queue-as-sub-workflow
+     command, Run Workflow Alongside).
+- **Round 18:** review round 17; if nothing is left, mark the spec complete and `git mv` it to
+  `dev/implemented/`.
 
 ### Decisions
 
@@ -3159,3 +3216,27 @@ Coarse roadmap; re-planned every pass.
 - **Hosted and native picks both go through the backend** (round 15): the editor stores what
   `buildSubWorkflowStepReferenceForClient` returns, relative to the workspace even when picked
   inside the run's worktree. A typed path is still saved unchecked.
+- **A settlement failure is logged and reported, never rethrown** (round 16): the run's outcome
+  is already recorded, and rethrowing would fail it in the pipeline's catch while a stop settles
+  the same worktree. The execution's own error still propagates.
+- **Only a stop waiting on a paused run's unwind pre-aborts a settlement wait** (round 16). A stop
+  that has returned before settlement starts still queues the lane behind its siblings, as the
+  round-11 Decision says.
+- **Completions classify steps themselves, not with `isPromptStep`** (round 16): the shared
+  helper calls a typeless step with a `script` a prompt step, which a half-typed document often
+  is. No inline lane snippet (snippets are one per key), and the hosted editor gets no `workflow`
+  path list (it has Browse).
+- **D10 compares workflow identity across checkouts** (round 17; the spec was silent on
+  worktrees). A file in a linked worktree and the same repo-relative file in its source
+  checkout are the same workflow for cycle detection, so the comparison maps every path into one
+  frame (the main checkout) before `pathsEqual`.
+- **D6 reattaches a file child only if the step still resolves to the recorded file** (round 17;
+  the spec was silent). If the `workflow` path was edited since the stop, Continue launches the
+  new file fresh, as it would for a step that never ran. An inline child keeps reattaching.
+- **CLI `--var` reaches every file child** (round 17, D11): it overrides the child's own `vars`
+  as it overrides the root's. VS Code has no host-level vars. An inline child already sees them
+  through the parent's effective vars.
+- **A workflow step that fails before its child exists still has output** (round 17, D12a): its
+  `subWorkflowSettled` is written without a child identity, with outcome `failed` and the
+  failure message, and renders as metadata with that message and no children. Sub-workflow steps
+  are unreleased, so the event change needs no format bump; read it tolerantly anyway.
