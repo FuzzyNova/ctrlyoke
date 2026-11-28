@@ -9,15 +9,15 @@
     "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test compositions/edit.test.ts"
   },
   "devDependencies": {
-    "@remotion/bundler": "4.0.544",
-    "@remotion/cli": "4.0.544",
-    "@remotion/renderer": "4.0.544",
+    "@remotion/bundler": "4.0.545",
+    "@remotion/cli": "4.0.545",
+    "@remotion/renderer": "4.0.545",
     "@types/node": "^26.6.6",
     "@types/react": "19.3.0",
     "playwright": "^1.65.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "remotion": "4.0.544",
+    "remotion": "4.0.545",
     "typescript": "^6.0.3"
   }
 }
