@@ -177,6 +177,45 @@ class GatedCleanupIntegration extends ArtifactLeavingIntegration {
   }
 }
 
+/** A harness whose next `dispose()` throws once armed, as a failing PTY teardown would. */
+class DisposeThrowingIntegration extends MockHarnessIntegration {
+  static readonly FAILURE = "the terminal could not be torn down";
+  throwOnNextDispose = false;
+  disposeFailures = 0;
+
+  override dispose(): void {
+    if (this.throwOnNextDispose) {
+      this.throwOnNextDispose = false;
+      this.disposeFailures++;
+      throw new Error(DisposeThrowingIntegration.FAILURE);
+    }
+    super.dispose();
+  }
+}
+
+/**
+ * A harness that keeps a reusable terminal, so a pause in a worktree retains
+ * it for Continue, and whose restore at the next start throws once armed.
+ */
+class RestoreFailingIntegration extends MockHarnessIntegration {
+  static readonly FAILURE = "the retained terminal could not be restored";
+  failNextRestore = false;
+  restoreFailures = 0;
+
+  override canReuseRunningTerminal(): boolean {
+    return true;
+  }
+
+  override resetForNewRun(): void {
+    if (this.failNextRestore) {
+      this.failNextRestore = false;
+      this.restoreFailures++;
+      throw new Error(RestoreFailingIntegration.FAILURE);
+    }
+    super.resetForNewRun();
+  }
+}
+
 suite("Sub-workflow host end to end", () => {
   /**
    * Per child: whether anything subscribed to its queue state while it was
@@ -277,7 +316,8 @@ suite("Sub-workflow host end to end", () => {
 
   function makeInstanceFactory(
     workspace: string,
-    executionIntegration?: MockHarnessIntegration,
+    executionIntegration?:
+      MockHarnessIntegration | (() => MockHarnessIntegration),
     /** Awaited inside `host.launch`, before the child loads its definition. */
     beforeChildLoad?: () => Promise<void>,
     /** Called with each child instance the launcher creates. */
@@ -7959,11 +7999,15 @@ suite("Sub-workflow host end to end", () => {
    * A managed merge run paused inside a gated group, with `press` run the
    * moment the group confirms PAUSED, while the executor is still unwinding
    * from it: whatever `press` does, the run ends STOPPED with its worktree
-   * landed and its lease and runner lock released.
+   * landed and its lease and runner lock released. With
+   * `siblingHoldsMutationLock`, a sibling's settlement holds the worktree
+   * mutation lock throughout, so the stop ends the settlement's wait for
+   * it instead: merge `blocked`, the branch and worktree kept.
    */
   async function stopsManagedGroupMidUnwind(
     prefix: string,
-    press: (parent: WorkflowInstance) => Promise<void>[]
+    press: (parent: WorkflowInstance) => Promise<void>[],
+    options: { siblingHoldsMutationLock?: boolean } = {}
   ): Promise<void> {
     const restoreGitTimeouts = setGitTimeoutOverridesForTests({
       shortTimeoutMs: 60_000,
@@ -7973,6 +8017,7 @@ suite("Sub-workflow host end to end", () => {
     const control = makeTempDir(`${prefix}control-`);
     const { createInstance, instances } = makeInstanceFactory(workspace);
     configService.setCliOverlay({ queue: { maxParallelSteps: 2 } });
+    let releaseLock: (() => Promise<void>) | undefined;
     try {
       initGitRepository(workspace);
       await writeGateScript(control);
@@ -8016,6 +8061,26 @@ suite("Sub-workflow host end to end", () => {
         }
       );
 
+      if (options.siblingHoldsMutationLock) {
+        // Nothing before the run's own end settlement takes this lock: the
+        // worktree exists, and the pause keeps it.
+        const commonDirectory = await gitCommonDir(workspace);
+        assert.ok(commonDirectory);
+        let openGate!: () => void;
+        const gate = new Promise<void>((resolve) => (openGate = resolve));
+        let signalHeld!: () => void;
+        const held = new Promise<void>((resolve) => (signalHeld = resolve));
+        const holder = withWorktreeMutationLock(commonDirectory, async () => {
+          signalHeld();
+          await gate;
+        });
+        releaseLock = async () => {
+          openGate();
+          await holder;
+        };
+        await held;
+      }
+
       let presses: Promise<void>[] | undefined;
       let unsettledAtPress: boolean | undefined;
       parent.promptQueue.onDidChangeState((state) => {
@@ -8049,14 +8114,29 @@ suite("Sub-workflow host end to end", () => {
         }
       );
       const settled = await worktreeRuntimeOf(parent);
-      assert.strictEqual(settled.landingOutcome, "landed");
-      assert.strictEqual(settled.mergeOutcome, "fast-forward");
-      await fs.access(path.join(workspace, "lane.txt"));
+      if (options.siblingHoldsMutationLock) {
+        // Without the abort the settlement waits out the lock's timeout and
+        // records that instead (a lane would wait the 120 s merge budget).
+        assert.strictEqual(settled.landingOutcome, "blocked");
+        assert.strictEqual(settled.mergeOutcome, "blocked");
+        assert.strictEqual(
+          settled.message,
+          STOPPED_WAITING_FOR_SETTLEMENT_MESSAGE
+        );
+        assert.ok(settled.worktreePath, "the run recorded its worktree");
+        await fs.access(path.join(settled.worktreePath, "lane.txt"));
+        await assert.rejects(fs.access(path.join(workspace, "lane.txt")));
+      } else {
+        assert.strictEqual(settled.landingOutcome, "landed");
+        assert.strictEqual(settled.mergeOutcome, "fast-forward");
+        await fs.access(path.join(workspace, "lane.txt"));
+      }
       await assert.rejects(fs.access(path.join(control, "c-runs")));
       // The manifest ends as the run does, not on the CANCELLING a stop
       // pressed after a Continue passes through.
       await waitForManifestState(parent, EXECUTION_STATES.STOPPED);
     } finally {
+      await releaseLock?.();
       configService.setCliOverlay({});
       for (const name of ["a", "b", "c"]) {
         await fs
@@ -8087,6 +8167,16 @@ suite("Sub-workflow host end to end", () => {
     await stopsManagedGroupMidUnwind(
       "ctrlyoke-paused-managed-group-continue-stop-",
       (parent) => [parent.resume(), parent.stop()]
+    );
+  });
+
+  test("a stop pressed after a Continue while a paused managed run unwinds ends the settlement's wait behind a sibling's mutation lock", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    await stopsManagedGroupMidUnwind(
+      "ctrlyoke-paused-managed-group-locked-stop-",
+      (parent) => [parent.resume(), parent.stop()],
+      { siblingHoldsMutationLock: true }
     );
   });
 
@@ -8480,6 +8570,172 @@ suite("Sub-workflow host end to end", () => {
       );
     } finally {
       log.restore();
+      await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(control);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+  test("a stop pressed while a paused managed run's settlement throws still ends the run, and nothing is left waiting on that settlement", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-paused-throwing-settle-");
+    const control = makeTempDir("ctrlyoke-paused-throwing-settle-control-");
+    const integration = new DisposeThrowingIntegration(undefined, false);
+    const { createInstance, instances } = makeInstanceFactory(
+      workspace,
+      integration
+    );
+    const log = captureLog();
+    try {
+      let leasesRoot: string | undefined;
+      let stop: Promise<void> | undefined;
+      const { parent, execution } = await pausingWorktreeRun(
+        workspace,
+        control,
+        { mode: "managed", merge: true },
+        createInstance,
+        instances,
+        {
+          leadingSteps: [{ prompt: "open a terminal" }],
+          beforeRelease: async (pausing) => {
+            leasesRoot = await worktreeLeasesRoot(pausing);
+            // The pause's settlement, which runs once the executor has
+            // unwound, disposes the integration: that throws, and the stop
+            // pressed at the pause waits for that settlement.
+            pausing.promptQueue.onDidChangeState((state) => {
+              if (stop || state.status !== EXECUTION_STATES.PAUSED) return;
+              integration.throwOnNextDispose = true;
+              stop = pausing.stop();
+            });
+          },
+        }
+      );
+      await settlesWithin("the paused execution", execution, 60_000);
+      await waitFor("the stop", () => stop !== undefined);
+      // Before the fix the settlement never resolved, so this never did.
+      await settlesWithin("the stop", stop!, 60_000);
+
+      assert.strictEqual(
+        integration.disposeFailures,
+        1,
+        "the settlement's dispose threw"
+      );
+      assert.ok(
+        log.lines.some(
+          (line) =>
+            line.message.includes("Settling execution integration") &&
+            line.message.includes("failed")
+        ),
+        "the failure was logged"
+      );
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.strictEqual(parent.startPending, false);
+      assert.ok(leasesRoot);
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: false, leases: 0 },
+        "the stop settled the reservation the pause kept"
+      );
+      assert.ok(
+        (await worktreeRuntimeOf(parent)).landingOutcome,
+        "the stop settled the worktree"
+      );
+      await waitForManifestState(parent, EXECUTION_STATES.STOPPED);
+      // Nothing is left waiting on a settlement that never finished: a
+      // later stop, a Continue or a launcher waits on this.
+      await settlesWithin(
+        "the execution's settlement",
+        parent.whenExecutionSettled()
+      );
+      assert.deepStrictEqual(
+        log.lines.filter((line) =>
+          line.message.includes(STOP_FALLBACK_WARNING)
+        ),
+        [],
+        "stop settled without the fallback"
+      );
+    } finally {
+      log.restore();
+      await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
+      restoreGitTimeouts();
+      await disposeAll(instances, workspace);
+      removeTempDir(control);
+      removeTempDir(`${workspace}.worktrees`);
+    }
+  });
+
+  test("a Continue of a paused managed run whose start fails before execution settles the worktree, lease and runner lock as an ending run does", async function () {
+    // Real git under a loaded `npm test` (see WorktreeManager.test.ts).
+    this.timeout(180_000);
+    const restoreGitTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 60_000,
+      mutationTimeoutMs: 120_000,
+    });
+    const workspace = makeTempDir("ctrlyoke-paused-failed-continue-");
+    const control = makeTempDir("ctrlyoke-paused-failed-continue-control-");
+    const integrations: RestoreFailingIntegration[] = [];
+    const { createInstance, instances } = makeInstanceFactory(workspace, () => {
+      const integration = new RestoreFailingIntegration(undefined, false);
+      integrations.push(integration);
+      return integration;
+    });
+    const restoreFailures = () =>
+      integrations.reduce((sum, each) => sum + each.restoreFailures, 0);
+    try {
+      const parent = await pausedWorktreeRun(
+        workspace,
+        control,
+        { mode: "managed", merge: true },
+        createInstance,
+        instances,
+        [{ prompt: "open a terminal" }]
+      );
+      const leasesRoot = await worktreeLeasesRoot(parent);
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: true, leases: 1 },
+        "the pause keeps the reservation for Continue"
+      );
+
+      // The pause retained the integration's terminal; restoring it is the
+      // first thing the Continue's start does after it begins execution,
+      // before `execute()`.
+      for (const integration of integrations)
+        integration.failNextRestore = true;
+      await withoutStopFallback(() =>
+        settlesWithin("the continue", parent.resume(), 60_000)
+      );
+
+      assert.strictEqual(restoreFailures(), 1, "the restore threw");
+      // The start ended the run: it settles as an ending run, not as the
+      // pause the previous execution ended on.
+      assert.deepStrictEqual(
+        await runReservations(parent, workspace, leasesRoot),
+        { runnerLock: false, leases: 0 }
+      );
+      const settled = await worktreeRuntimeOf(parent);
+      assert.strictEqual(settled.landingOutcome, "landed");
+      assert.strictEqual(
+        await fs.readFile(path.join(workspace, "lane.txt"), "utf8"),
+        "ran\n"
+      );
+      await assert.rejects(fs.access(path.join(control, "second-ran")));
+      // Failed as a failed resume setup is, rather than left RUNNING.
+      assert.strictEqual(
+        parent.promptQueue.getState().status,
+        EXECUTION_STATES.ERROR
+      );
+      assert.strictEqual(parent.startPending, false);
+    } finally {
       await fs.writeFile(path.join(control, "a-go"), "").catch(() => {});
       restoreGitTimeouts();
       await disposeAll(instances, workspace);

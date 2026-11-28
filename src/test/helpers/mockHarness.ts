@@ -186,17 +186,24 @@ export class HeldResponseHarnessIntegration extends MockHarnessIntegration {
 /**
  * IntegrationFactory whose execution integrations are always mocks.
  * Pass a specific `executionIntegration` to observe every prompt the
- * workflow sends through a single recording instance.
+ * workflow sends through a single recording instance, or a function to
+ * build a distinct one per call (one instance shared by every call is also
+ * the workflow's unkeyed default integration, which is never retained
+ * across a pause).
  */
 export class MockIntegrationFactory extends IntegrationFactory {
   constructor(
     platform: PlatformAdapter,
-    private readonly executionIntegration?: MockHarnessIntegration
+    private readonly executionIntegration?:
+      MockHarnessIntegration | (() => MockHarnessIntegration)
   ) {
     super(platform);
   }
 
   override createForExecution(_harness: HarnessId): HarnessIntegration {
+    if (typeof this.executionIntegration === "function") {
+      return this.executionIntegration();
+    }
     return (
       this.executionIntegration ?? new MockHarnessIntegration(undefined, false)
     );

@@ -322,6 +322,22 @@ interface StrictArtifactCleanup {
   readonly strictArtifactCleanupMessage: string | undefined;
 }
 
+/** `cleanup` with one more failure, which blocks the worktree's landing. */
+function withStrictCleanupFailure(
+  cleanup: StrictArtifactCleanup,
+  message: string | undefined
+): StrictArtifactCleanup {
+  return {
+    strictArtifactCleanupSucceeded: false,
+    strictArtifactCleanupMessage: [
+      cleanup.strictArtifactCleanupMessage,
+      message,
+    ]
+      .filter(Boolean)
+      .join("; "),
+  };
+}
+
 /** A managed worktree's `merge` and `keep`, as its settlement applies them. */
 interface ManagedWorktreeSettlement {
   readonly merge: boolean;
@@ -457,10 +473,22 @@ export class WorkflowInstance
    * Armed only while a managed worktree settles (`settleManagedWorktree`).
    * Stop aborts it so a lane queued behind a sibling's settlement or merge
    * ends that wait at once instead of after `WORKTREE_MERGE_LEASE_WAIT_MS`.
-   * A stop that arrived before settlement began leaves the settlement alone:
-   * a stopped managed run still lands its work.
+   * A stop that arrived before settlement began and has returned leaves the
+   * settlement alone: a stopped managed run still lands its work, queued
+   * behind its siblings. One still waiting for this execution to settle
+   * does not (`stopAwaitingExecutionSettlement`). Either way a free lock is
+   * still taken, so an aborted wait changes only a contended settlement.
    */
   private activeWorktreeSettlementAbort: AbortController | undefined;
+  /**
+   * A stop of a paused run is waiting for its execution to unwind and settle
+   * (`waitForPausedExecutionToSettle`). A managed worktree settlement that
+   * starts meanwhile (a Continue made the run RUNNING, so the stop's request
+   * ends it as terminal) starts with its wait already aborted: that stop
+   * would otherwise wait out a sibling's settlement or merge, and checked
+   * `activeWorktreeSettlementAbort` only on entry.
+   */
+  private stopAwaitingExecutionSettlement = false;
   /** Deduplicates overlapping eager working-file creation requests */
   private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
@@ -2634,6 +2662,7 @@ export class WorkflowInstance
       beginExecution: (historyFilePath) => {
         this.endPreDispatchStartup();
         this.startPending = true;
+        this.workflowExecutor.beginExecution();
         // An executing run cannot have a pending continuation.
         this.promptQueue.clearPendingRewind();
         this.executionSettledPromise = new Promise<void>((resolve) => {
@@ -3178,12 +3207,33 @@ export class WorkflowInstance
 
     Log.info("[WorkflowInstance] Resuming workflow from paused position");
     this.runStartView = runStart;
-    await this.startWorkflowExecution(
-      undefined,
-      resolvedHistoryFilePath,
-      workingFilePath,
-      targetRunIndices
-    );
+    try {
+      await this.startWorkflowExecution(
+        undefined,
+        resolvedHistoryFilePath,
+        workingFilePath,
+        targetRunIndices
+      );
+    } catch (error) {
+      // A start that throws before or out of `execute()` (the runner lock,
+      // the lease, restoring a retained integration) has already settled
+      // as an ending run, but leaves the runtime RUNNING with nothing
+      // dispatched. Fail it as a failed resume setup does, unless a stop
+      // ended it.
+      if (
+        this.workflowRuntime.stopRequestCount !== stopRequestBaseline ||
+        this.workflowRuntime.status !== EXECUTION_STATES.RUNNING
+      ) {
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Resumed execution threw after the run left RUNNING (${this.workflowRuntime.status}):`,
+          error
+        );
+        return;
+      }
+      await new WorkflowStartupPipeline(
+        this.createWorkflowStartupPipelinePort()
+      ).failResumeSetup(error);
+    }
   }
 
   /**
@@ -3291,14 +3341,24 @@ export class WorkflowInstance
         // Continue's resume waits for it rather than starting its own).
         // Requesting the stop now holds it at the step boundary it paused
         // at; nothing is in flight, so no attempt is cancelled.
-        if (
-          liveExecution &&
-          this.workflowRuntime.status === EXECUTION_STATES.RUNNING &&
-          this.workflowRuntime.requestStop()
-        ) {
-          await this.promptQueue.commitRuntimeTransition({ persist: false });
+        //
+        // That execution then settles as an ended run, and its managed
+        // worktree settlement may queue behind a sibling's (D4d), which
+        // this wait would sit out: a settlement starting while it waits
+        // ends that wait at once, as one already running did above.
+        this.stopAwaitingExecutionSettlement = true;
+        try {
+          if (
+            liveExecution &&
+            this.workflowRuntime.status === EXECUTION_STATES.RUNNING &&
+            this.workflowRuntime.requestStop()
+          ) {
+            await this.promptQueue.commitRuntimeTransition({ persist: false });
+          }
+          await this.waitForPausedExecutionToSettle();
+        } finally {
+          this.stopAwaitingExecutionSettlement = false;
         }
-        await this.waitForPausedExecutionToSettle();
       }
       if (
         this.activeTargetResources.size === 0 &&
@@ -5930,19 +5990,62 @@ export class WorkflowInstance
       status === EXECUTION_STATES.PAUSING ||
       (status === EXECUTION_STATES.RUNNING &&
         this.workflowExecutor.endedOnPause());
-    const reservation = this.resolveRunEndReservation(paused);
-    const integrationCleanup = await this.settleExecutionIntegrations(
-      options,
-      reservation.preserveWorktreeReservation,
-      reservation.terminalWorktreeRun,
-      this.executionWorkspace.stateRoot
-    );
-    await this.settleRunEndReservations(
-      options,
-      reservation,
-      integrationCleanup
-    );
-    await this.finishExecutionHistory(options.historyFilePath);
+    // Settlement always finishes: `finishExecutionHistory` is what clears
+    // `startPending` and resolves `whenExecutionSettled`, which a stop of a
+    // paused run, every later stop joining it, and a Continue all wait on.
+    // A throw here is the cleanup's own failure, not the run's: it is
+    // logged and reported, and never replaces the execution's own error
+    // (this runs in the startup pipeline's `finally`), nor fails a run
+    // whose outcome is already recorded.
+    try {
+      const reservation = this.resolveRunEndReservation(paused);
+      const integrationCleanup = await this.settleExecutionIntegrations(
+        options,
+        reservation.preserveWorktreeReservation,
+        reservation.terminalWorktreeRun,
+        this.executionWorkspace.stateRoot
+      );
+      await this.settleRunEndReservations(
+        options,
+        reservation,
+        integrationCleanup
+      );
+    } catch (error) {
+      Log.error(
+        `[inst:${this.id.slice(0, 8)}] Settling the execution failed:`,
+        error
+      );
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.WARNING,
+        `ctrlyoke: Cleaning up after the run failed: ${getErrorMessage(error)}`,
+        undefined,
+        error
+      );
+    } finally {
+      await this.finishExecutionHistory(options.historyFilePath);
+    }
+  }
+
+  /**
+   * Run one settlement action whose throw must not stop the rest of the
+   * settlement (one integration's dispose must not leave the others, the
+   * worktree and the runner lock unsettled). Returns whether it succeeded.
+   */
+  private trySettlementAction(
+    description: string,
+    action: () => void
+  ): boolean {
+    try {
+      action();
+      return true;
+    } catch (error) {
+      Log.error(
+        `[inst:${this.id.slice(0, 8)}] ${description} failed during settlement:`,
+        error
+      );
+      return false;
+    }
   }
 
   /**
@@ -6037,94 +6140,142 @@ export class WorkflowInstance
       ),
     ];
     for (const [harnessKey, execIntegration] of executionIntegrationEntries) {
-      const isUnkeyedIntegration =
-        this.unkeyedExecutionIntegrations.has(execIntegration);
-      const retainIntegration =
-        !isUnkeyedIntegration &&
-        ((preserveWorktreeReservation &&
-          execIntegration.canReuseRunningTerminal()) ||
-          (!this.executionWorkspace.worktree &&
-            (execIntegration.canReuseRunningTerminal() ||
-              execIntegration.shouldPersistForSessionActivity())));
-      if (retainIntegration) {
-        // Either the PTY is still alive with running-terminal context set (CLI), or the
-        // integration wants to stay alive for its own post-completion session
-        // watcher (non-PTY harness). Keep it alive for the next run rather
-        // than destroying it. Store under the same map key so the restore code
-        // can insert it where createIntegrationForMode looks. Register a
-        // one-shot exit callback so we dispose it if the terminal is killed
-        // between runs (no-op for non-PTY harnesses).
-        this.liveReusableIntegrations.set(harnessKey, execIntegration);
-        if (
-          workspaceRoot &&
-          execIntegration.shouldRetainWorkflowArtifactsForReuse()
-        ) {
-          this.retainedIntegrationArtifactContexts.set(execIntegration, {
-            workingFilePath: options.workingFilePath,
-            workspaceRoot: execIntegration.getExecutionRoot() ?? workspaceRoot,
-          });
-        } else {
-          await this.cleanupRetainedIntegrationArtifacts(
-            execIntegration,
-            options.workingFilePath,
-            workspaceRoot
-          );
-        }
-        execIntegration.onPtySessionEnded(() => {
-          // Look the integration up by identity: a fresh-session prompt may
-          // have moved it to a superseded key since it was parked.
-          this.forgetLiveReusableIntegration(execIntegration);
-          void this.cleanupRetainedIntegrationArtifacts(
-            execIntegration
-          ).finally(() => {
-            execIntegration.dispose();
-            void this.releaseNamedWorktreeRetentionAfterPtyExit();
-          });
-        });
-      } else {
-        // A worktree-targeted terminal run cannot park a PTY or watcher:
-        // cleanup is the barrier that makes the lease safe to release.
-        // Dispose first so no background reader can recreate an artifact
-        // while provider cleanup is proving the directory clean.
-        if (terminalWorktreeRun) {
-          execIntegration.closeTerminalGracefully(
-            TERMINAL_END_REASONS.WORKTREE_RELEASED
-          );
-          execIntegration.dispose();
-        }
-        cleanup = await this.settleIntegrationArtifacts(
+      try {
+        cleanup = await this.settleExecutionIntegration(
+          harnessKey,
           execIntegration,
-          options.workingFilePath,
-          workspaceRoot,
+          options,
+          preserveWorktreeReservation,
           terminalWorktreeRun,
+          workspaceRoot,
           cleanup
         );
-        // Normal path: terminal closed or terminal reuse not active — dispose now
-        // and save so the next run can close any VS Code terminal tab left open.
-        if (!terminalWorktreeRun) {
-          this.lastRunIntegrations.push(execIntegration);
-          execIntegration.dispose();
-        }
+      } catch (error) {
+        // The rest still settle; a worktree whose integration could not be
+        // settled is not proven clean, so it does not land.
+        Log.error(
+          `[inst:${this.id.slice(0, 8)}] Settling execution integration ${harnessKey} failed:`,
+          error
+        );
+        cleanup = withStrictCleanupFailure(
+          cleanup,
+          `Settling a harness integration failed: ${getErrorMessage(error)}`
+        );
       }
     }
     this.executionIntegrations.clear();
     this.unkeyedExecutionIntegrations.clear();
 
     for (const targetIntegration of this.targetExecutionIntegrations.values()) {
-      targetIntegration.closeTerminalGracefully(
-        terminalWorktreeRun
-          ? TERMINAL_END_REASONS.WORKTREE_RELEASED
-          : TERMINAL_END_REASONS.STEP_COMPLETE
+      const released = this.trySettlementAction(
+        "Releasing a target integration",
+        () => {
+          targetIntegration.closeTerminalGracefully(
+            terminalWorktreeRun
+              ? TERMINAL_END_REASONS.WORKTREE_RELEASED
+              : TERMINAL_END_REASONS.STEP_COMPLETE
+          );
+          targetIntegration.dispose();
+        }
       );
-      targetIntegration.dispose();
+      if (!released && terminalWorktreeRun) {
+        cleanup = withStrictCleanupFailure(
+          cleanup,
+          "A harness integration could not be released."
+        );
+      }
     }
     this.targetExecutionIntegrations.clear();
     for (const runner of this.targetScriptProcessRunners.values()) {
-      runner.dispose();
+      this.trySettlementAction("Disposing a script process runner", () =>
+        runner.dispose()
+      );
     }
     this.targetScriptProcessRunners.clear();
     this.activeTargetResources.clear();
 
+    return cleanup;
+  }
+
+  /** Settle one execution integration: park it for reuse, or clean it up. */
+  private async settleExecutionIntegration(
+    harnessKey: string,
+    execIntegration: HarnessIntegration,
+    options: { historyFilePath: string; workingFilePath: string | undefined },
+    preserveWorktreeReservation: boolean,
+    terminalWorktreeRun: boolean,
+    workspaceRoot: string,
+    cleanup: StrictArtifactCleanup
+  ): Promise<StrictArtifactCleanup> {
+    const isUnkeyedIntegration =
+      this.unkeyedExecutionIntegrations.has(execIntegration);
+    const retainIntegration =
+      !isUnkeyedIntegration &&
+      ((preserveWorktreeReservation &&
+        execIntegration.canReuseRunningTerminal()) ||
+        (!this.executionWorkspace.worktree &&
+          (execIntegration.canReuseRunningTerminal() ||
+            execIntegration.shouldPersistForSessionActivity())));
+    if (retainIntegration) {
+      // Either the PTY is still alive with running-terminal context set (CLI), or the
+      // integration wants to stay alive for its own post-completion session
+      // watcher (non-PTY harness). Keep it alive for the next run rather
+      // than destroying it. Store under the same map key so the restore code
+      // can insert it where createIntegrationForMode looks. Register a
+      // one-shot exit callback so we dispose it if the terminal is killed
+      // between runs (no-op for non-PTY harnesses).
+      this.liveReusableIntegrations.set(harnessKey, execIntegration);
+      if (
+        workspaceRoot &&
+        execIntegration.shouldRetainWorkflowArtifactsForReuse()
+      ) {
+        this.retainedIntegrationArtifactContexts.set(execIntegration, {
+          workingFilePath: options.workingFilePath,
+          workspaceRoot: execIntegration.getExecutionRoot() ?? workspaceRoot,
+        });
+      } else {
+        await this.cleanupRetainedIntegrationArtifacts(
+          execIntegration,
+          options.workingFilePath,
+          workspaceRoot
+        );
+      }
+      execIntegration.onPtySessionEnded(() => {
+        // Look the integration up by identity: a fresh-session prompt may
+        // have moved it to a superseded key since it was parked.
+        this.forgetLiveReusableIntegration(execIntegration);
+        void this.cleanupRetainedIntegrationArtifacts(execIntegration).finally(
+          () => {
+            execIntegration.dispose();
+            void this.releaseNamedWorktreeRetentionAfterPtyExit();
+          }
+        );
+      });
+    } else {
+      // A worktree-targeted terminal run cannot park a PTY or watcher:
+      // cleanup is the barrier that makes the lease safe to release.
+      // Dispose first so no background reader can recreate an artifact
+      // while provider cleanup is proving the directory clean.
+      if (terminalWorktreeRun) {
+        execIntegration.closeTerminalGracefully(
+          TERMINAL_END_REASONS.WORKTREE_RELEASED
+        );
+        execIntegration.dispose();
+      }
+      cleanup = await this.settleIntegrationArtifacts(
+        execIntegration,
+        options.workingFilePath,
+        workspaceRoot,
+        terminalWorktreeRun,
+        cleanup
+      );
+      // Normal path: terminal closed or terminal reuse not active — dispose now
+      // and save so the next run can close any VS Code terminal tab left open.
+      if (!terminalWorktreeRun) {
+        this.lastRunIntegrations.push(execIntegration);
+        execIntegration.dispose();
+      }
+    }
     return cleanup;
   }
 
@@ -6148,13 +6299,26 @@ export class WorkflowInstance
       this.lastRunIntegrations = [];
       for (const integration of parked) {
         // Already disposed by the pause; only its terminal is left.
-        integration.closeTerminal(TERMINAL_END_REASONS.WORKTREE_RELEASED);
+        this.trySettlementAction("Closing a parked terminal", () =>
+          integration.closeTerminal(TERMINAL_END_REASONS.WORKTREE_RELEASED)
+        );
       }
       for (const retained of this.liveReusableIntegrations.values()) {
-        retained.closeTerminalGracefully(
-          TERMINAL_END_REASONS.WORKTREE_RELEASED
+        const released = this.trySettlementAction(
+          "Releasing a retained integration",
+          () => {
+            retained.closeTerminalGracefully(
+              TERMINAL_END_REASONS.WORKTREE_RELEASED
+            );
+            retained.dispose();
+          }
         );
-        retained.dispose();
+        if (!released) {
+          cleanup = withStrictCleanupFailure(
+            cleanup,
+            "A retained harness integration could not be released."
+          );
+        }
       }
       for (const integration of [
         ...parked,
@@ -6187,24 +6351,27 @@ export class WorkflowInstance
     strict: boolean,
     cleanup: StrictArtifactCleanup
   ): Promise<StrictArtifactCleanup> {
-    const result = await this.cleanupIntegrationArtifactsForSettlement(
-      integration,
-      workingFilePath,
-      integration.getExecutionRoot() ?? workspaceRoot,
-      strict
-    );
-    if (result.cleaned) {
-      return cleanup;
+    let result: { cleaned: boolean; message?: string };
+    try {
+      result = await this.cleanupIntegrationArtifactsForSettlement(
+        integration,
+        workingFilePath,
+        integration.getExecutionRoot() ?? workspaceRoot,
+        strict
+      );
+    } catch (error) {
+      Log.error(
+        `[inst:${this.id.slice(0, 8)}] Workflow artifact cleanup failed during settlement:`,
+        error
+      );
+      result = {
+        cleaned: false,
+        message: `Workflow artifact cleanup failed: ${getErrorMessage(error)}`,
+      };
     }
-    return {
-      strictArtifactCleanupSucceeded: false,
-      strictArtifactCleanupMessage: [
-        cleanup.strictArtifactCleanupMessage,
-        result.message,
-      ]
-        .filter(Boolean)
-        .join("; "),
-    };
+    return result.cleaned
+      ? cleanup
+      : withStrictCleanupFailure(cleanup, result.message);
   }
 
   /**
@@ -6227,6 +6394,9 @@ export class WorkflowInstance
       ...cleanup,
     };
     const abort = new AbortController();
+    if (this.stopAwaitingExecutionSettlement) {
+      abort.abort();
+    }
     this.activeWorktreeSettlementAbort = abort;
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] Settling managed worktree ${worktree.branchName} (merge=${options.merge === true})`
@@ -6314,32 +6484,37 @@ export class WorkflowInstance
   }
 
   private async finishExecutionHistory(historyFilePath: string): Promise<void> {
-    await this.pendingRuntimeTransitionHistoryWrite;
+    try {
+      await this.pendingRuntimeTransitionHistoryWrite;
 
-    if (historyFilePath) {
-      const runStepCount = this.promptQueue.getProgress().total;
-      await this.outputHistoryManager
-        .finalizeRun(
-          historyFilePath,
-          this.getAuthoritativeExecutionState() as Parameters<
-            OutputHistoryManager["finalizeRun"]
-          >[1],
-          runStepCount,
-          this.promptQueue.getState().totalExecutionTime
-        )
-        .catch((err) =>
-          Log.warn(
-            `[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`,
-            err
+      if (historyFilePath) {
+        const runStepCount = this.promptQueue.getProgress().total;
+        await this.outputHistoryManager
+          .finalizeRun(
+            historyFilePath,
+            this.getAuthoritativeExecutionState() as Parameters<
+              OutputHistoryManager["finalizeRun"]
+            >[1],
+            runStepCount,
+            this.promptQueue.getState().totalExecutionTime
           )
-        );
+          .catch((err) =>
+            Log.warn(
+              `[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`,
+              err
+            )
+          );
+      }
+    } finally {
+      // Whatever happened above, the execution has settled: a stop, a
+      // Continue and a launcher all wait on this.
+      this.releaseActiveRunRedactor?.();
+      this.releaseActiveRunRedactor = undefined;
+      this.activeRunRedactor = undefined;
+      this.startPending = false;
+      this.resolveExecutionSettled?.();
+      this.resolveExecutionSettled = undefined;
     }
-    this.releaseActiveRunRedactor?.();
-    this.releaseActiveRunRedactor = undefined;
-    this.activeRunRedactor = undefined;
-    this.startPending = false;
-    this.resolveExecutionSettled?.();
-    this.resolveExecutionSettled = undefined;
   }
   private async releaseNamedWorktreeRetentionAfterPtyExit(): Promise<void> {
     const executionStillOwnsReservation = this.executionOwnsReservation();

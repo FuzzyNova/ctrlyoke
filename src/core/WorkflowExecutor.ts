@@ -760,10 +760,13 @@ export class WorkflowExecutor {
     RawWorkspaceState
   >();
   /**
-   * Whether the current (or last) `execute()` confirmed a pause, which ends
-   * it. Settlement reads this instead of the run's status: a Continue
+   * Whether the current (or last) execution ended on a pause `execute()`
+   * confirmed. Settlement reads this instead of the run's status: a Continue
    * pressed once the pause is confirmed makes the run RUNNING before the
-   * settlement starts, and the run still ended on that pause.
+   * settlement starts, and the run still ended on that pause. Cleared when
+   * the queue loop carries on in place after such a Continue, and when a
+   * new execution begins (`beginExecution`): a start that fails before
+   * `execute()` must not settle on an earlier execution's pause.
    */
   private pauseConfirmed = false;
 
@@ -1047,6 +1050,8 @@ export class WorkflowExecutor {
           statusAfterQueue === EXECUTION_STATES.RUNNING &&
           this.promptQueue.hasNext()
         ) {
+          // The pause it confirmed no longer ends this execution.
+          this.pauseConfirmed = false;
           continue;
         }
         if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
@@ -6826,6 +6831,15 @@ export class WorkflowExecutor {
    */
   endedOnPause(): boolean {
     return this.pauseConfirmed;
+  }
+
+  /**
+   * A new execution cycle has begun (the startup lifecycle's
+   * `beginExecution`), ahead of the runner lock, lease and integration
+   * restore that precede `execute()`: it has not ended on any pause yet.
+   */
+  beginExecution(): void {
+    this.pauseConfirmed = false;
   }
 
   /**
